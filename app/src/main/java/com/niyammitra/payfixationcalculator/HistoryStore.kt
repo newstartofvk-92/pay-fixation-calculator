@@ -1,6 +1,7 @@
 package com.niyammitra.payfixationcalculator
 
 import android.content.Context
+import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -49,9 +50,29 @@ object HistoryStore {
 
     fun add(context: Context, entry: CalculationHistory) {
         val entries = getAll(context).toMutableList()
+
+        // A calculation is uniquely identified by the official name and all
+        // calculation inputs. The save timestamp/id is deliberately ignored,
+        // so pressing Save repeatedly for the same calculation cannot create
+        // duplicate history entries.
+        val alreadySaved = entries.any { existing ->
+            existing.officialName.trim() == entry.officialName.trim() &&
+                existing.currentLevel == entry.currentLevel &&
+                existing.currentPay == entry.currentPay &&
+                existing.promotedLevel == entry.promotedLevel &&
+                existing.promotionDate == entry.promotionDate &&
+                existing.dniDate == entry.dniDate
+        }
+
+        if (alreadySaved) {
+            Toast.makeText(context, "History already saved", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         entries.removeAll { it.id == entry.id }
         entries.add(0, entry)
         save(context, entries.take(100))
+        Toast.makeText(context, "History saved", Toast.LENGTH_SHORT).show()
     }
 
     fun delete(context: Context, id: Long) {
