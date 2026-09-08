@@ -8,6 +8,7 @@ import org.json.JSONObject
 data class CalculationHistory(
     val id: Long,
     val savedAt: Long,
+    val officialName: String,
     val currentLevel: String,
     val currentPay: Int,
     val promotedLevel: String,
@@ -32,6 +33,7 @@ object HistoryStore {
                     CalculationHistory(
                         id = item.optLong("id"),
                         savedAt = item.optLong("savedAt"),
+                        officialName = item.optString("officialName"),
                         currentLevel = item.optString("currentLevel"),
                         currentPay = item.optInt("currentPay"),
                         promotedLevel = item.optString("promotedLevel"),
@@ -69,6 +71,7 @@ object HistoryStore {
             array.put(JSONObject().apply {
                 put("id", entry.id)
                 put("savedAt", entry.savedAt)
+                put("officialName", entry.officialName)
                 put("currentLevel", entry.currentLevel)
                 put("currentPay", entry.currentPay)
                 put("promotedLevel", entry.promotedLevel)
