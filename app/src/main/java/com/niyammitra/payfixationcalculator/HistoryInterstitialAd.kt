@@ -42,6 +42,16 @@ object HistoryInterstitialAd {
     fun showIfDue(activity: Activity, onContinue: () -> Unit) {
         val now = SystemClock.elapsedRealtime()
         val cooldownActive = now - lastShownAt < COOLDOWN_MILLIS
+        show(activity, cooldownActive, onContinue)
+    }
+
+    fun showOnHistoryBack(activity: Activity, onContinue: () -> Unit) {
+        // Leaving History is an explicit ad opportunity. Do not apply the
+        // normal History-entry cooldown here; if an ad is loaded, show it.
+        show(activity, false, onContinue)
+    }
+
+    private fun show(activity: Activity, cooldownActive: Boolean, onContinue: () -> Unit) {
         val ad = interstitialAd
 
         if (cooldownActive || ad == null) {
@@ -51,7 +61,7 @@ object HistoryInterstitialAd {
         }
 
         interstitialAd = null
-        lastShownAt = now
+        lastShownAt = SystemClock.elapsedRealtime()
 
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
