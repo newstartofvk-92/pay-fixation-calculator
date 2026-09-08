@@ -1,0 +1,74 @@
+package com.niyammitra.payfixationcalculator
+
+import android.app.Activity
+import android.os.SystemClock
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.interstitial.InterstitialAd
+import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
+
+object HistoryInterstitialAd {
+    private const val TEST_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
+    private const val SHOW_EVERY_HISTORY_VISITS = 3
+    private const val COOLDOWN_MILLIS = 2 * 60 * 1000L
+
+    private var interstitialAd: InterstitialAd? = null
+    private var historyVisitCount = 0
+    private var lastShownAt = 0L
+    private var isLoading = false
+
+    fun load(activity: Activity) {
+        if (interstitialAd != null || isLoading) return
+
+        isLoading = true
+        InterstitialAd.load(
+            activity,
+            TEST_INTERSTITIAL_AD_UNIT_ID,
+            AdRequest.Builder().build(),
+            object : InterstitialAdLoadCallback() {
+                override fun onAdLoaded(ad: InterstitialAd) {
+                    isLoading = false
+                    interstitialAd = ad
+                }
+
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    isLoading = false
+                    interstitialAd = null
+                }
+            }
+        )
+    }
+
+    fun showIfDue(activity: Activity, onContinue: () -> Unit) {
+        historyVisitCount++
+
+        val now = SystemClock.elapsedRealtime()
+        val cooldownActive = now - lastShownAt < COOLDOWN_MILLIS
+        val shouldShow = historyVisitCount % SHOW_EVERY_HISTORY_VISITS == 0 && !cooldownActive
+        val ad = interstitialAd
+
+        if (!shouldShow || ad == null) {
+            onContinue()
+            load(activity)
+            return
+        }
+
+        interstitialAd = null
+        lastShownAt = now
+
+        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdDismissedFullScreenContent() {
+                load(activity)
+                onContinue()
+            }
+
+            override fun onAdFailedToShowFullScreenContent(adError: com.google.android.gms.ads.AdError) {
+                load(activity)
+                onContinue()
+            }
+        }
+
+        ad.show(activity)
+    }
+}
