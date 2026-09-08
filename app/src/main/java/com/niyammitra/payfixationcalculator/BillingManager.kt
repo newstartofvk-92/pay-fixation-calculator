@@ -10,6 +10,7 @@ import com.android.billingclient.api.BillingClient
 import com.android.billingclient.api.BillingClientStateListener
 import com.android.billingclient.api.BillingFlowParams
 import com.android.billingclient.api.BillingResult
+import com.android.billingclient.api.PendingPurchasesParams
 import com.android.billingclient.api.ProductDetails
 import com.android.billingclient.api.Purchase
 import com.android.billingclient.api.PurchasesUpdatedListener
@@ -32,16 +33,21 @@ object BillingManager : PurchasesUpdatedListener {
         if (initialized) return
         initialized = true
 
-        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val appContext = context.applicationContext
+        val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         isPremium = prefs.getBoolean(KEY_PREMIUM, false)
 
-        billingClient = BillingClient.newBuilder(context.applicationContext)
+        billingClient = BillingClient.newBuilder(appContext)
             .setListener(this)
-            .enablePendingPurchases()
+            .enablePendingPurchases(
+                PendingPurchasesParams.newBuilder()
+                    .enableOneTimeProducts()
+                    .build()
+            )
             .enableAutoServiceReconnection()
             .build()
 
-        startConnection(context.applicationContext)
+        startConnection(appContext)
     }
 
     private fun startConnection(context: Context) {
@@ -54,7 +60,7 @@ object BillingManager : PurchasesUpdatedListener {
             }
 
             override fun onBillingServiceDisconnected() {
-                // BillingClient 9 supports automatic reconnection.
+                // BillingClient handles reconnection automatically.
             }
         })
     }
@@ -120,6 +126,8 @@ object BillingManager : PurchasesUpdatedListener {
         queryExistingPurchase(context.applicationContext)
     }
 
+    fun isProductAvailable(): Boolean = productDetails != null
+
     fun getPrice(): String {
         return productDetails?.oneTimePurchaseOfferDetailsList?.firstOrNull()?.formattedPrice
             ?: "₹49"
@@ -143,12 +151,16 @@ object BillingManager : PurchasesUpdatedListener {
     private fun processPurchase(context: Context?, purchase: Purchase) {
         if (!purchase.products.contains(PRODUCT_ID) || purchase.purchaseState != Purchase.PurchaseState.PURCHASED) return
 
-        val acknowledge = {
-            context?.let { setPremium(it, true) } ?: run { isPremium = true }
+        val grantEntitlement = {
+            if (context != null) {
+                setPremium(context, true)
+            } else {
+                isPremium = true
+            }
         }
 
         if (purchase.isAcknowledged) {
-            acknowledge()
+            grantEntitlement()
             return
         }
 
@@ -158,7 +170,7 @@ object BillingManager : PurchasesUpdatedListener {
 
         billingClient?.acknowledgePurchase(params) { result ->
             if (result.responseCode == BillingClient.BillingResponseCode.OK) {
-                acknowledge()
+                grantEntitlement()
             }
         }
     }
