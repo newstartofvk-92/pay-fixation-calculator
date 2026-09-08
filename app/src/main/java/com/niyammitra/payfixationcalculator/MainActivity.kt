@@ -186,5 +186,5 @@ private fun ResultCard(title: String, date: Long?, steps: List<Pair<String, Int>
     }
 }
 
-private fun formatCurrency(value: Int): String = NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(value).replace("₹", "₹")
-private fun formatDate(millis: Long): String = SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(Date(millis))
+private fun formatCurrency(value: Int): String = NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(value)
+private fun formatDate(millis: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()).format(Date(millis))
