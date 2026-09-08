@@ -16,9 +16,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.MobileAds
 import com.niyammitra.payfixationcalculator.ui.theme.PayFixationCalculatorTheme
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -29,10 +35,13 @@ private val NiyamBackground = Color(0xFFF7FAFC)
 private val NiyamTextPrimary = Color(0xFF172B4D)
 private val NiyamTextSecondary = Color(0xFF5B6B7A)
 
+private const val TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/9214589741"
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        MobileAds.initialize(this)
         setContent { PayFixationCalculatorTheme { PayFixationCalculatorScreen() } }
     }
 }
@@ -72,7 +81,10 @@ fun PayFixationCalculatorScreen() {
 
     Column(Modifier.fillMaxSize().background(NiyamBackground).statusBarsPadding()) {
         Text("Pay Fixation Tool", Modifier.padding(horizontal = 20.dp, vertical = 18.dp), color = NiyamTextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Column(
+            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
             SelectionCard("Current Status") {
                 DropdownField(
                     label = "Present Pay Level",
@@ -158,6 +170,12 @@ fun PayFixationCalculatorScreen() {
             }
             Spacer(Modifier.height(30.dp))
         }
+
+        BannerAd(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+        )
     }
 
     if (showDatePicker) {
@@ -166,6 +184,29 @@ fun PayFixationCalculatorScreen() {
             TextButton(onClick = { promotionDate = state.selectedDateMillis; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) }
         }) { DatePicker(state) }
     }
+}
+
+@Composable
+private fun BannerAd(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val adView = remember(context) {
+        AdView(context).apply {
+            adUnitId = TEST_BANNER_AD_UNIT_ID
+            val displayMetrics = context.resources.displayMetrics
+            val adWidth = (displayMetrics.widthPixels / displayMetrics.density).toInt()
+            setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, adWidth))
+            loadAd(AdRequest.Builder().build())
+        }
+    }
+
+    DisposableEffect(adView) {
+        onDispose { adView.destroy() }
+    }
+
+    AndroidView(
+        modifier = modifier.wrapContentHeight(),
+        factory = { adView }
+    )
 }
 
 @Composable
