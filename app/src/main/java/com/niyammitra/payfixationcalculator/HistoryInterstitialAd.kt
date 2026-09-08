@@ -2,6 +2,7 @@ package com.niyammitra.payfixationcalculator
 
 import android.app.Activity
 import android.os.SystemClock
+import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
@@ -10,11 +11,9 @@ import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 
 object HistoryInterstitialAd {
     private const val TEST_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
-    private const val SHOW_EVERY_HISTORY_VISITS = 3
     private const val COOLDOWN_MILLIS = 2 * 60 * 1000L
 
     private var interstitialAd: InterstitialAd? = null
-    private var historyVisitCount = 0
     private var lastShownAt = 0L
     private var isLoading = false
 
@@ -41,14 +40,11 @@ object HistoryInterstitialAd {
     }
 
     fun showIfDue(activity: Activity, onContinue: () -> Unit) {
-        historyVisitCount++
-
         val now = SystemClock.elapsedRealtime()
         val cooldownActive = now - lastShownAt < COOLDOWN_MILLIS
-        val shouldShow = historyVisitCount % SHOW_EVERY_HISTORY_VISITS == 0 && !cooldownActive
         val ad = interstitialAd
 
-        if (!shouldShow || ad == null) {
+        if (cooldownActive || ad == null) {
             onContinue()
             load(activity)
             return
@@ -63,7 +59,7 @@ object HistoryInterstitialAd {
                 onContinue()
             }
 
-            override fun onAdFailedToShowFullScreenContent(adError: com.google.android.gms.ads.AdError) {
+            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                 load(activity)
                 onContinue()
             }
