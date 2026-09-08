@@ -1,5 +1,6 @@
 package com.niyammitra.payfixationcalculator
 
+import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -44,6 +45,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         MobileAds.initialize(this)
+        HistoryInterstitialAd.load(this)
         setContent { PayFixationCalculatorTheme { PayFixationCalculatorScreen() } }
     }
 }
@@ -114,7 +116,15 @@ fun PayFixationCalculatorScreen() {
                 Text("NiyamMitra", color = NiyamBlue, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Text("Pay Fixation Calculator", color = NiyamTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
-            TextButton(onClick = { history = HistoryStore.getAll(context); showHistory = true }) { Text("History", color = NiyamBlue, fontWeight = FontWeight.Bold) }
+            TextButton(onClick = {
+                history = HistoryStore.getAll(context)
+                val activity = context as? Activity
+                if (activity != null) {
+                    HistoryInterstitialAd.showIfDue(activity) { showHistory = true }
+                } else {
+                    showHistory = true
+                }
+            }) { Text("History", color = NiyamBlue, fontWeight = FontWeight.Bold) }
         }
 
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
