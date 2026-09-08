@@ -40,9 +40,9 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PayFixationCalculatorScreen() {
-    var currentLevel by remember { mutableStateOf(PayMatrixData.levels[6]) }
-    var currentPay by remember { mutableStateOf(PayMatrixData.getPayStages(currentLevel).getOrNull(5) ?: 47600) }
-    var promotedLevel by remember { mutableStateOf(PayMatrixData.levels[7]) }
+    var currentLevel by remember { mutableStateOf<String?>(null) }
+    var currentPay by remember { mutableStateOf<Int?>(null) }
+    var promotedLevel by remember { mutableStateOf<String?>(null) }
     var promotionDate by remember { mutableStateOf<Long?>(null) }
     var dniDate by remember { mutableStateOf<Long?>(null) }
     var levelMenu by remember { mutableStateOf(false) }
@@ -51,74 +51,150 @@ fun PayFixationCalculatorScreen() {
     var dniMenu by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
 
+    val currentPayOptions = currentLevel?.let { PayMatrixData.getPayStages(it) } ?: emptyList()
     val dniOptions = remember(promotionDate) {
         promotionDate?.let { getPayFixationDniOptions(it) } ?: emptyList()
     }
-    LaunchedEffect(dniOptions) {
-        if (dniOptions.isNotEmpty() && dniDate == null) dniDate = dniOptions[0]
+
+    LaunchedEffect(promotionDate) {
+        dniDate = dniOptions.firstOrNull()
     }
-    val result = remember(currentLevel, currentPay, promotedLevel, promotionDate, dniDate) {
-        calculatePayFixation(currentLevel, currentPay, promotedLevel, promotionDate, dniDate)
+
+    val calculationReady = currentLevel != null && currentPay != null && promotedLevel != null
+    val result = if (calculationReady) {
+        remember(currentLevel, currentPay, promotedLevel, promotionDate, dniDate) {
+            calculatePayFixation(
+                currentLevel!!,
+                currentPay!!,
+                promotedLevel!!,
+                promotionDate,
+                dniDate
+            )
+        }
+    } else {
+        null
     }
 
     Column(Modifier.fillMaxSize().background(NiyamBackground).statusBarsPadding()) {
         Text("Pay Fixation Tool", Modifier.padding(horizontal = 20.dp, vertical = 18.dp), color = NiyamTextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             SelectionCard("Current Status") {
-                DropdownField("Current Pay Level", "Level $currentLevel", PayMatrixData.levels, levelMenu, { levelMenu = it }) { level ->
+                DropdownField(
+                    "Select your Present Pay Level",
+                    currentLevel?.let { "Level $it" } ?: "Select Pay Level",
+                    PayMatrixData.levels,
+                    levelMenu,
+                    { levelMenu = it }
+                ) { level ->
                     currentLevel = level
-                    currentPay = PayMatrixData.getPayStages(level).first()
+                    currentPay = null
                 }
-                DropdownField("Current Basic Pay", formatCurrency(currentPay), PayMatrixData.getPayStages(currentLevel).map { formatCurrency(it) }, payMenu, { payMenu = it }) { value ->
-                    currentPay = PayMatrixData.getPayStages(currentLevel).first { formatCurrency(it) == value }
+
+                DropdownField(
+                    "Select your Current Basic Pay",
+                    currentPay?.let { formatCurrency(it) } ?: "Select Basic Pay",
+                    currentPayOptions.map { formatCurrency(it) },
+                    payMenu,
+                    { payMenu = it },
+                    enabled = currentLevel != null
+                ) { value ->
+                    currentPay = currentPayOptions.first { formatCurrency(it) == value }
                 }
             }
 
             SelectionCard("Promotion Details") {
-                DropdownField("Promoted Pay Level", "Level $promotedLevel", PayMatrixData.levels, promotedMenu, { promotedMenu = it }) { promotedLevel = it }
+                DropdownField(
+                    "Select your Promoted Pay Level",
+                    promotedLevel?.let { "Level $it" } ?: "Select Pay Level",
+                    PayMatrixData.levels,
+                    promotedMenu,
+                    { promotedMenu = it }
+                ) { level -> promotedLevel = level }
+
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                     DateField("Date of Promotion", promotionDate, { showDatePicker = true }, Modifier.weight(1f))
                     Column(Modifier.weight(1f)) {
                         Text("Date of Next Increment", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         Box(Modifier.padding(top = 8.dp)) {
-                            OutlinedButton(onClick = { if (dniOptions.isNotEmpty()) dniMenu = true }, enabled = dniOptions.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { if (dniOptions.isNotEmpty()) dniMenu = true },
+                                enabled = dniOptions.isNotEmpty(),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
                                 Text(dniDate?.let { formatDate(it) } ?: "Select", modifier = Modifier.weight(1f))
                                 Text("▼")
                             }
                             DropdownMenu(dniMenu, { dniMenu = false }) {
-                                dniOptions.forEach { option -> DropdownMenuItem({ Text(formatDate(option)) }, { dniDate = option; dniMenu = false }) }
+                                dniOptions.forEach { option ->
+                                    DropdownMenuItem(
+                                        { Text(formatDate(option)) },
+                                        { dniDate = option; dniMenu = false }
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
 
-            Text("Fixation Illustrations", color = NiyamTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-            ResultCard("Option 1: Fixation from Date of Promotion", promotionDate, listOf(
-                "Pay in lower Level ($currentLevel)" to result.option1.lowerLevelPay,
-                "Add one increment in lower Level ($currentLevel)" to result.option1.payWithIncrement,
-                "Placement in promoted Level ($promotedLevel)" to result.option1.finalFixedPay
-            ), result.option1.finalFixedPay, result.option1.nextDni, result.option1.payAfterNextDni)
-            ResultCard("Option 2: Fixation from Date of Next Increment", dniDate, listOf(
-                "Pay from date of promotion until DNI (placed at next higher cell in Level $promotedLevel)" to result.option2.payUntilDni,
-                "On DNI, annual increment in lower Level ($currentLevel)" to result.option2.payWithAnnualIncrement,
-                "On DNI, one increment on account of promotion in Level $currentLevel" to result.option2.payWithPromotionIncrement,
-                "Final placement in promoted Level ($promotedLevel)" to result.option2.finalFixedPay
-            ), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni)
+            if (result != null) {
+                Text("Fixation Illustrations", color = NiyamTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                ResultCard(
+                    "Option 1: Fixation from Date of Promotion",
+                    promotionDate,
+                    listOf(
+                        "Pay in lower Level ($currentLevel)" to result.option1.lowerLevelPay,
+                        "Add one increment in lower Level ($currentLevel)" to result.option1.payWithIncrement,
+                        "Placement in promoted Level ($promotedLevel)" to result.option1.finalFixedPay
+                    ),
+                    result.option1.finalFixedPay,
+                    result.option1.nextDni,
+                    result.option1.payAfterNextDni
+                )
+                ResultCard(
+                    "Option 2: Fixation from Date of Next Increment",
+                    dniDate,
+                    listOf(
+                        "Pay from date of promotion until DNI (placed at next higher cell in Level $promotedLevel)" to result.option2.payUntilDni,
+                        "On DNI, annual increment in lower Level ($currentLevel)" to result.option2.payWithAnnualIncrement,
+                        "On DNI, one increment on account of promotion in Level $currentLevel" to result.option2.payWithPromotionIncrement,
+                        "Final placement in promoted Level ($promotedLevel)" to result.option2.finalFixedPay
+                    ),
+                    result.option2.finalFixedPay,
+                    result.option2.nextDni,
+                    result.option2.payAfterNextDni,
+                    result.option2.payUntilDni
+                )
 
-            val benefit = result.option2.finalFixedPay - result.option1.finalFixedPay
-            if (benefit != 0) Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(if (benefit > 0) Color(0xFFE8F5E9) else Color(0xFFFFF3E0))) {
-                Text(if (benefit > 0) "Option 2 is beneficial. It results in ₹$benefit higher basic pay after DNI." else "Option 1 appears more beneficial in this specific case.", Modifier.padding(16.dp), color = if (benefit > 0) Color(0xFF2E7D32) else Color(0xFFE65100))
+                val benefit = result.option2.finalFixedPay - result.option1.finalFixedPay
+                if (benefit != 0) Card(
+                    Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(if (benefit > 0) Color(0xFFE8F5E9) else Color(0xFFFFF3E0))
+                ) {
+                    Text(
+                        if (benefit > 0) "Option 2 is beneficial. It results in ₹$benefit higher basic pay after DNI."
+                        else "Option 1 appears more beneficial in this specific case.",
+                        Modifier.padding(16.dp),
+                        color = if (benefit > 0) Color(0xFF2E7D32) else Color(0xFFE65100)
+                    )
+                }
             }
+
             Spacer(Modifier.height(30.dp))
         }
     }
 
     if (showDatePicker) {
         val state = rememberDatePickerState(initialSelectedDateMillis = promotionDate)
-        DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = {
-            TextButton(onClick = { promotionDate = state.selectedDateMillis; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) }
-        }) { DatePicker(state) }
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    promotionDate = state.selectedDateMillis
+                    showDatePicker = false
+                }) { Text("Confirm", fontWeight = FontWeight.Bold) }
+            }
+        ) { DatePicker(state) }
     }
 }
 
@@ -133,17 +209,31 @@ private fun SelectionCard(title: String, content: @Composable ColumnScope.() -> 
 }
 
 @Composable
-private fun DropdownField(label: String, value: String, options: List<String>, expanded: Boolean, setExpanded: (Boolean) -> Unit, onSelected: (String) -> Unit) {
+private fun DropdownField(
+    label: String,
+    value: String,
+    options: List<String>,
+    expanded: Boolean,
+    setExpanded: (Boolean) -> Unit,
+    onSelected: (String) -> Unit,
+    enabled: Boolean = true
+) {
     Box {
-        OutlinedButton(onClick = { setExpanded(true) }, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(
+            onClick = { setExpanded(true) },
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
                 Text(label, fontSize = 12.sp, color = NiyamTextSecondary)
                 Text(value, color = NiyamTextPrimary, fontSize = 15.sp)
             }
             Text("▼")
         }
-        DropdownMenu(expanded, { setExpanded(false) }) {
-            options.forEach { option -> DropdownMenuItem({ Text(option) }, { onSelected(option); setExpanded(false) }) }
+        DropdownMenu(expanded && enabled, { setExpanded(false) }) {
+            options.forEach { option ->
+                DropdownMenuItem({ Text(option) }, { onSelected(option); setExpanded(false) })
+            }
         }
     }
 }
@@ -152,8 +242,19 @@ private fun DropdownField(label: String, value: String, options: List<String>, e
 private fun DateField(label: String, millis: Long?, onClick: () -> Unit, modifier: Modifier) {
     Column(modifier) {
         Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-        Box(Modifier.fillMaxWidth().padding(top = 8.dp).border(1.dp, Color.LightGray, RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(14.dp)) {
-            Text(millis?.let { formatDate(it) } ?: "Select", color = if (millis != null) NiyamTextPrimary else Color.Gray, fontSize = 14.sp)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .border(1.dp, Color.LightGray, RoundedCornerShape(12.dp))
+                .clickable(onClick = onClick)
+                .padding(14.dp)
+        ) {
+            Text(
+                millis?.let { formatDate(it) } ?: "Select Date",
+                color = if (millis != null) NiyamTextPrimary else Color.Gray,
+                fontSize = 14.sp
+            )
         }
     }
 }
