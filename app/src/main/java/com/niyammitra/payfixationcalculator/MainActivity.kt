@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -118,42 +119,13 @@ fun PayFixationCalculatorScreen() {
 
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             SelectionCard("Current Status") {
-                OutlinedTextField(
-                    value = officialName,
-                    onValueChange = { officialName = it },
-                    label = { Text("Name of Official (for History)") },
-                    placeholder = { Text("Enter name, if required") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                DropdownField(
-                    label = "Present Pay Level",
-                    value = currentLevel?.let { "Level $it" } ?: "Select your Present Pay Level",
-                    options = PayMatrixData.levels,
-                    expanded = levelMenu,
-                    onExpandedChange = { levelMenu = it },
-                    onSelected = { level -> currentLevel = level; currentPay = null; payMenu = false }
-                )
-                DropdownField(
-                    label = "Current Basic Pay",
-                    value = currentPay?.let { formatCurrency(it) } ?: "Select your Current Basic Pay",
-                    options = payStages.map { formatCurrency(it) },
-                    expanded = payMenu,
-                    onExpandedChange = { payMenu = it },
-                    enabled = currentLevel != null,
-                    onSelected = { value -> currentPay = payStages.firstOrNull { formatCurrency(it) == value } }
-                )
+                OutlinedTextField(value = officialName, onValueChange = { officialName = it }, label = { Text("Name of Official (for History)") }, placeholder = { Text("Enter name, if required") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                DropdownField("Present Pay Level", currentLevel?.let { "Level $it" } ?: "Select your Present Pay Level", PayMatrixData.levels, levelMenu, { levelMenu = it }, { level -> currentLevel = level; currentPay = null; payMenu = false })
+                DropdownField("Current Basic Pay", currentPay?.let { formatCurrency(it) } ?: "Select your Current Basic Pay", payStages.map { formatCurrency(it) }, payMenu, { payMenu = it }, { value -> currentPay = payStages.firstOrNull { formatCurrency(it) == value } }, currentLevel != null)
             }
 
             SelectionCard("Promotion Details") {
-                DropdownField(
-                    label = "Promoted Pay Level",
-                    value = promotedLevel?.let { "Level $it" } ?: "Select your Promoted Pay Level",
-                    options = PayMatrixData.levels,
-                    expanded = promotedMenu,
-                    onExpandedChange = { promotedMenu = it },
-                    onSelected = { level -> promotedLevel = level }
-                )
+                DropdownField("Promoted Pay Level", promotedLevel?.let { "Level $it" } ?: "Select your Promoted Pay Level", PayMatrixData.levels, promotedMenu, { promotedMenu = it }, { level -> promotedLevel = level })
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                     DateField("Date of Promotion", promotionDate, { showDatePicker = true }, Modifier.weight(1f))
                     Column(Modifier.weight(1f)) {
@@ -188,25 +160,11 @@ fun PayFixationCalculatorScreen() {
                 if (benefit != 0) Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(if (benefit > 0) Color(0xFFE8F5E9) else Color(0xFFFFF3E0))) {
                     Text(if (benefit > 0) "Option 2 is beneficial. It results in ₹$benefit higher basic pay after DNI." else "Option 1 appears more beneficial in this specific case.", Modifier.padding(16.dp), color = if (benefit > 0) Color(0xFF2E7D32) else Color(0xFFE65100))
                 }
-                Button(
-                    onClick = {
-                        val now = System.currentTimeMillis()
-                        HistoryStore.add(context, CalculationHistory(
-                            id = now,
-                            savedAt = now,
-                            officialName = officialName.trim(),
-                            currentLevel = currentLevel!!,
-                            currentPay = currentPay!!,
-                            promotedLevel = promotedLevel!!,
-                            promotionDate = promotionDate,
-                            dniDate = dniDate,
-                            option1FinalPay = result.option1.finalFixedPay,
-                            option2FinalPay = result.option2.finalFixedPay
-                        ))
-                        history = HistoryStore.getAll(context)
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Save Calculation to History") }
+                Button(onClick = {
+                    val now = System.currentTimeMillis()
+                    HistoryStore.add(context, CalculationHistory(now, now, officialName.trim(), currentLevel!!, currentPay!!, promotedLevel!!, promotionDate, dniDate, result.option1.finalFixedPay, result.option2.finalFixedPay))
+                    history = HistoryStore.getAll(context)
+                }, modifier = Modifier.fillMaxWidth()) { Text("Save Calculation to History") }
             }
             Spacer(Modifier.height(30.dp))
         }
@@ -256,23 +214,18 @@ private fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit,
 
 @Composable
 private fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onClose,
-        title = { Text(if (entry.officialName.isBlank()) "Saved Calculation" else entry.officialName) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Present Pay Level: Level ${entry.currentLevel}")
-                Text("Current Basic Pay: ${formatCurrency(entry.currentPay)}")
-                Text("Promoted Pay Level: Level ${entry.promotedLevel}")
-                Text("Date of Promotion: ${entry.promotionDate?.let { formatDate(it) } ?: "Not selected"}")
-                Text("Selected DNI: ${entry.dniDate?.let { formatDate(it) } ?: "Not selected"}")
-                HorizontalDivider(Modifier.padding(vertical = 6.dp))
-                Text("Option 1 Final Pay: ${formatCurrency(entry.option1FinalPay)}", fontWeight = FontWeight.Bold, color = NiyamBlue)
-                Text("Option 2 Final Pay: ${formatCurrency(entry.option2FinalPay)}", fontWeight = FontWeight.Bold, color = NiyamBlue)
-            }
-        },
-        confirmButton = { TextButton(onClick = onClose) { Text("Close") } }
-    )
+    AlertDialog(onDismissRequest = onClose, title = { Text(if (entry.officialName.isBlank()) "Saved Calculation" else entry.officialName) }, text = {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Present Pay Level: Level ${entry.currentLevel}")
+            Text("Current Basic Pay: ${formatCurrency(entry.currentPay)}")
+            Text("Promoted Pay Level: Level ${entry.promotedLevel}")
+            Text("Date of Promotion: ${entry.promotionDate?.let { formatDate(it) } ?: "Not selected"}")
+            Text("Selected DNI: ${entry.dniDate?.let { formatDate(it) } ?: "Not selected"}")
+            HorizontalDivider(Modifier.padding(vertical = 6.dp))
+            Text("Option 1 Final Pay: ${formatCurrency(entry.option1FinalPay)}", fontWeight = FontWeight.Bold, color = NiyamBlue)
+            Text("Option 2 Final Pay: ${formatCurrency(entry.option2FinalPay)}", fontWeight = FontWeight.Bold, color = NiyamBlue)
+        }
+    }, confirmButton = { TextButton(onClick = onClose) { Text("Close") } })
 }
 
 @Composable
