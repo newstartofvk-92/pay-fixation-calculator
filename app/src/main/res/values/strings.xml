@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">Pay Fixation Calculator</string>
+
+    <!-- Google test App ID. Replace with the production AdMob App ID before release. -->
+    <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
 </resources>
