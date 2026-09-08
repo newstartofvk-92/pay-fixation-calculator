@@ -72,7 +72,7 @@ object HistoryStore {
         entries.removeAll { it.id == entry.id }
         entries.add(0, entry)
         save(context, entries.take(100))
-        Toast.makeText(context, "History saved", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Fixation saved", Toast.LENGTH_SHORT).show()
     }
 
     fun delete(context: Context, id: Long) {
