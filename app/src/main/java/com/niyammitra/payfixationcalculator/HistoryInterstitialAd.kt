@@ -18,7 +18,7 @@ object HistoryInterstitialAd {
     private var isLoading = false
 
     fun load(activity: Activity) {
-        if (interstitialAd != null || isLoading) return
+        if (BillingManager.isPremium || interstitialAd != null || isLoading) return
 
         isLoading = true
         InterstitialAd.load(
@@ -40,18 +40,33 @@ object HistoryInterstitialAd {
     }
 
     fun showIfDue(activity: Activity, onContinue: () -> Unit) {
+        if (BillingManager.isPremium) {
+            onContinue()
+            return
+        }
+
         val now = SystemClock.elapsedRealtime()
         val cooldownActive = now - lastShownAt < COOLDOWN_MILLIS
         show(activity, cooldownActive, onContinue)
     }
 
     fun showOnHistoryBack(activity: Activity, onContinue: () -> Unit) {
+        if (BillingManager.isPremium) {
+            onContinue()
+            return
+        }
+
         // Leaving History is an explicit ad opportunity. Do not apply the
         // normal History-entry cooldown here; if an ad is loaded, show it.
         show(activity, false, onContinue)
     }
 
     private fun show(activity: Activity, cooldownActive: Boolean, onContinue: () -> Unit) {
+        if (BillingManager.isPremium) {
+            onContinue()
+            return
+        }
+
         val ad = interstitialAd
 
         if (cooldownActive || ad == null) {
