@@ -51,17 +51,16 @@ fun PayFixationCalculatorScreen() {
     var dniMenu by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
 
-    val currentPayOptions = currentLevel?.let { PayMatrixData.getPayStages(it) } ?: emptyList()
+    val payStages = currentLevel?.let { PayMatrixData.getPayStages(it) } ?: emptyList()
     val dniOptions = remember(promotionDate) {
         promotionDate?.let { getPayFixationDniOptions(it) } ?: emptyList()
     }
 
     LaunchedEffect(promotionDate) {
-        dniDate = dniOptions.firstOrNull()
+        dniDate = null
     }
 
-    val calculationReady = currentLevel != null && currentPay != null && promotedLevel != null
-    val result = if (calculationReady) {
+    val result = if (currentLevel != null && currentPay != null && promotedLevel != null) {
         remember(currentLevel, currentPay, promotedLevel, promotionDate, dniDate) {
             calculatePayFixation(
                 currentLevel!!,
@@ -76,52 +75,77 @@ fun PayFixationCalculatorScreen() {
     }
 
     Column(Modifier.fillMaxSize().background(NiyamBackground).statusBarsPadding()) {
-        Text("Pay Fixation Tool", Modifier.padding(horizontal = 20.dp, vertical = 18.dp), color = NiyamTextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Text(
+            "Pay Fixation Tool",
+            Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            color = NiyamTextPrimary,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold
+        )
+
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
             SelectionCard("Current Status") {
                 DropdownField(
-                    "Select your Present Pay Level",
-                    currentLevel?.let { "Level $it" } ?: "Select Pay Level",
-                    PayMatrixData.levels,
-                    levelMenu,
-                    { levelMenu = it }
+                    label = "Present Pay Level",
+                    value = currentLevel?.let { "Level $it" } ?: "Select your Present Pay Level",
+                    options = PayMatrixData.levels,
+                    expanded = levelMenu,
+                    setExpanded = { levelMenu = it }
                 ) { level ->
                     currentLevel = level
                     currentPay = null
                 }
 
                 DropdownField(
-                    "Select your Current Basic Pay",
-                    currentPay?.let { formatCurrency(it) } ?: "Select Basic Pay",
-                    currentPayOptions.map { formatCurrency(it) },
-                    payMenu,
-                    { payMenu = it },
+                    label = "Current Basic Pay",
+                    value = currentPay?.let { formatCurrency(it) } ?: "Select your Current Basic Pay",
+                    options = payStages.map { formatCurrency(it) },
+                    expanded = payMenu,
+                    setExpanded = { payMenu = it },
                     enabled = currentLevel != null
                 ) { value ->
-                    currentPay = currentPayOptions.first { formatCurrency(it) == value }
+                    currentPay = payStages.first { formatCurrency(it) == value }
                 }
             }
 
             SelectionCard("Promotion Details") {
                 DropdownField(
-                    "Select your Promoted Pay Level",
-                    promotedLevel?.let { "Level $it" } ?: "Select Pay Level",
-                    PayMatrixData.levels,
-                    promotedMenu,
-                    { promotedMenu = it }
-                ) { level -> promotedLevel = level }
+                    label = "Promoted Pay Level",
+                    value = promotedLevel?.let { "Level $it" } ?: "Select your Promoted Pay Level",
+                    options = PayMatrixData.levels,
+                    expanded = promotedMenu,
+                    setExpanded = { promotedMenu = it }
+                ) { promotedLevel = it }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    DateField("Date of Promotion", promotionDate, { showDatePicker = true }, Modifier.weight(1f))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    DateField(
+                        "Date of Promotion",
+                        promotionDate,
+                        { showDatePicker = true },
+                        Modifier.weight(1f)
+                    )
                     Column(Modifier.weight(1f)) {
-                        Text("Date of Next Increment", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Date of Next Increment",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
                         Box(Modifier.padding(top = 8.dp)) {
                             OutlinedButton(
                                 onClick = { if (dniOptions.isNotEmpty()) dniMenu = true },
                                 enabled = dniOptions.isNotEmpty(),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(dniDate?.let { formatDate(it) } ?: "Select", modifier = Modifier.weight(1f))
+                                Text(
+                                    dniDate?.let { formatDate(it) } ?: "Select",
+                                    modifier = Modifier.weight(1f)
+                                )
                                 Text("▼")
                             }
                             DropdownMenu(dniMenu, { dniMenu = false }) {
@@ -138,7 +162,12 @@ fun PayFixationCalculatorScreen() {
             }
 
             if (result != null) {
-                Text("Fixation Illustrations", color = NiyamTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                Text(
+                    "Fixation Illustrations",
+                    color = NiyamTextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
                 ResultCard(
                     "Option 1: Fixation from Date of Promotion",
                     promotionDate,
@@ -157,7 +186,7 @@ fun PayFixationCalculatorScreen() {
                     listOf(
                         "Pay from date of promotion until DNI (placed at next higher cell in Level $promotedLevel)" to result.option2.payUntilDni,
                         "On DNI, annual increment in lower Level ($currentLevel)" to result.option2.payWithAnnualIncrement,
-                        "On DNI, one increment on account of promotion in Level $currentLevel" to result.option2.payWithPromotionIncrement,
+                        "On DNI, one increment on account of promotion in Level $currentLevel)" to result.option2.payWithPromotionIncrement,
                         "Final placement in promoted Level ($promotedLevel)" to result.option2.finalFixedPay
                     ),
                     result.option2.finalFixedPay,
@@ -167,16 +196,23 @@ fun PayFixationCalculatorScreen() {
                 )
 
                 val benefit = result.option2.finalFixedPay - result.option1.finalFixedPay
-                if (benefit != 0) Card(
-                    Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(if (benefit > 0) Color(0xFFE8F5E9) else Color(0xFFFFF3E0))
-                ) {
-                    Text(
-                        if (benefit > 0) "Option 2 is beneficial. It results in ₹$benefit higher basic pay after DNI."
-                        else "Option 1 appears more beneficial in this specific case.",
-                        Modifier.padding(16.dp),
-                        color = if (benefit > 0) Color(0xFF2E7D32) else Color(0xFFE65100)
-                    )
+                if (benefit != 0) {
+                    Card(
+                        Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            if (benefit > 0) Color(0xFFE8F5E9) else Color(0xFFFFF3E0)
+                        )
+                    ) {
+                        Text(
+                            if (benefit > 0) {
+                                "Option 2 is beneficial. It results in ₹$benefit higher basic pay after DNI."
+                            } else {
+                                "Option 1 appears more beneficial in this specific case."
+                            },
+                            Modifier.padding(16.dp),
+                            color = if (benefit > 0) Color(0xFF2E7D32) else Color(0xFFE65100)
+                        )
+                    }
                 }
             }
 
@@ -189,10 +225,12 @@ fun PayFixationCalculatorScreen() {
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                TextButton(onClick = {
-                    promotionDate = state.selectedDateMillis
-                    showDatePicker = false
-                }) { Text("Confirm", fontWeight = FontWeight.Bold) }
+                TextButton(
+                    onClick = {
+                        promotionDate = state.selectedDateMillis
+                        showDatePicker = false
+                    }
+                ) { Text("Confirm", fontWeight = FontWeight.Bold) }
             }
         ) { DatePicker(state) }
     }
@@ -200,8 +238,15 @@ fun PayFixationCalculatorScreen() {
 
 @Composable
 private fun SelectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(Color.White)) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(Color.White)
+    ) {
+        Column(
+            Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
             Text(title, fontWeight = FontWeight.Bold, color = NiyamBlue)
             content()
         }
@@ -221,10 +266,13 @@ private fun DropdownField(
     Box {
         OutlinedButton(
             onClick = { setExpanded(true) },
-            enabled = enabled,
+            enabled = enabled && options.isNotEmpty(),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
+            Column(
+                Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start
+            ) {
                 Text(label, fontSize = 12.sp, color = NiyamTextSecondary)
                 Text(value, color = NiyamTextPrimary, fontSize = 15.sp)
             }
@@ -232,7 +280,13 @@ private fun DropdownField(
         }
         DropdownMenu(expanded && enabled, { setExpanded(false) }) {
             options.forEach { option ->
-                DropdownMenuItem({ Text(option) }, { onSelected(option); setExpanded(false) })
+                DropdownMenuItem(
+                    { Text(option) },
+                    {
+                        onSelected(option)
+                        setExpanded(false)
+                    }
+                )
             }
         }
     }
@@ -251,7 +305,7 @@ private fun DateField(label: String, millis: Long?, onClick: () -> Unit, modifie
                 .padding(14.dp)
         ) {
             Text(
-                millis?.let { formatDate(it) } ?: "Select Date",
+                millis?.let { formatDate(it) } ?: "Select",
                 color = if (millis != null) NiyamTextPrimary else Color.Gray,
                 fontSize = 14.sp
             )
@@ -260,11 +314,26 @@ private fun DateField(label: String, millis: Long?, onClick: () -> Unit, modifie
 }
 
 @Composable
-private fun ResultCard(title: String, date: Long?, steps: List<Pair<String, Int>>, finalPay: Int, futureDni: Long?, futurePay: Int?, interimPay: Int? = null) {
-    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(Color.White), elevation = CardDefaults.cardElevation(2.dp)) {
+private fun ResultCard(
+    title: String,
+    date: Long?,
+    steps: List<Pair<String, Int>>,
+    finalPay: Int,
+    futureDni: Long?,
+    futurePay: Int?,
+    interimPay: Int? = null
+) {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(Color.White),
+        elevation = CardDefaults.cardElevation(2.dp)
+    ) {
         Column(Modifier.padding(16.dp)) {
             Text(title, fontWeight = FontWeight.Bold, color = NiyamBlue, fontSize = 16.sp)
-            date?.let { Text("DNI Selected: ${formatDate(it)}", fontSize = 12.sp, color = Color.Gray) }
+            date?.let {
+                Text("DNI Selected: ${formatDate(it)}", fontSize = 12.sp, color = Color.Gray)
+            }
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
             steps.forEach { (description, pay) ->
                 Column(Modifier.padding(vertical = 6.dp)) {
@@ -272,9 +341,15 @@ private fun ResultCard(title: String, date: Long?, steps: List<Pair<String, Int>
                     Text("Pay: ${formatCurrency(pay)}", fontSize = 13.sp, color = NiyamBlue, fontWeight = FontWeight.Bold)
                 }
             }
-            Surface(Modifier.padding(top = 10.dp), color = NiyamBlue.copy(alpha = .05f), shape = RoundedCornerShape(12.dp)) {
+            Surface(
+                Modifier.padding(top = 10.dp),
+                color = NiyamBlue.copy(alpha = .05f),
+                shape = RoundedCornerShape(12.dp)
+            ) {
                 Column(Modifier.padding(12.dp).fillMaxWidth()) {
-                    interimPay?.let { Text("Interim Pay: ${formatCurrency(it)}", fontSize = 13.sp, color = NiyamTextSecondary) }
+                    interimPay?.let {
+                        Text("Interim Pay: ${formatCurrency(it)}", fontSize = 13.sp, color = NiyamTextSecondary)
+                    }
                     Text("Final Fixed Pay: ${formatCurrency(finalPay)}", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = NiyamBlue)
                     if (futureDni != null && futurePay != null) {
                         HorizontalDivider(Modifier.padding(vertical = 8.dp))
