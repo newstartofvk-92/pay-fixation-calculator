@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="brand_company">RKCApps</string>
+    <string name="brand_tagline">Apps • Tools • Solutions</string>
+    <string name="brand_family">NiyamMitra</string>
+    <string name="brand_product">Pay Fixation Calculator</string>
+    <string name="brand_logo_asset">rkcapps_logo</string>
+</resources>
