@@ -2,6 +2,7 @@ package com.niyammitra.payfixationcalculator
 
 import android.app.Activity
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -44,6 +45,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        BillingManager.initialize(this)
         MobileAds.initialize(this)
         HistoryInterstitialAd.load(this)
         setContent { PayFixationCalculatorTheme { PayFixationCalculatorScreen() } }
@@ -69,6 +71,7 @@ fun PayFixationCalculatorScreen() {
     var showDatePicker by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var selectedHistory by remember { mutableStateOf<CalculationHistory?>(null) }
+    var showAdFreeDialog by remember { mutableStateOf(false) }
 
     if (showHistory) {
         HistoryScreen(
@@ -135,6 +138,27 @@ fun PayFixationCalculatorScreen() {
         }
 
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            if (!BillingManager.isPremium) {
+                Card(
+                    Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(Color.White)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Go Ad-Free", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                            Text("Remove all ads permanently for ${BillingManager.getPrice()} one time.", color = NiyamTextSecondary, fontSize = 12.sp)
+                        }
+                        OutlinedButton(onClick = { showAdFreeDialog = true }) {
+                            Text("Remove Ads", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
             SelectionCard("Current Status") {
                 OutlinedTextField(value = officialName, onValueChange = { officialName = it }, label = { Text("Name of Official (for History)") }, placeholder = { Text("Enter name, if required") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 DropdownField("Present Pay Level", currentLevel?.let { "Level $it" } ?: "Select your Present Pay Level", PayMatrixData.levels, levelMenu, { levelMenu = it }, { level -> currentLevel = level; currentPay = null; payMenu = false })
@@ -185,7 +209,9 @@ fun PayFixationCalculatorScreen() {
             }
             Spacer(Modifier.height(30.dp))
         }
-        BannerAd(Modifier.fillMaxWidth().navigationBarsPadding())
+        if (!BillingManager.isPremium) {
+            BannerAd(Modifier.fillMaxWidth().navigationBarsPadding())
+        }
     }
 
     if (showDatePicker) {
@@ -194,6 +220,40 @@ fun PayFixationCalculatorScreen() {
             TextButton(onClick = { promotionDate = state.selectedDateMillis; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) }
         }) { DatePicker(state) }
     }
+
+    if (showAdFreeDialog && !BillingManager.isPremium) {
+        AdFreePurchaseDialog(context = context, onClose = { showAdFreeDialog = false })
+    }
+}
+
+@Composable
+private fun AdFreePurchaseDialog(context: android.content.Context, onClose: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("NiyamMitra Ad-Free") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Remove all advertisements from Pay Fixation Calculator permanently.")
+                Text("Lifetime ad-free access", fontWeight = FontWeight.Bold, color = NiyamBlue)
+                Text("One-time purchase: ${BillingManager.getPrice()}", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("No subscription. Your purchase can be restored on this Google Play account.", color = NiyamTextSecondary, fontSize = 13.sp)
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val activity = context as? Activity
+                if (activity == null || BillingManager.launchPurchase(activity) == null) {
+                    Toast.makeText(context, "Google Play purchase is not ready yet. Please try again in a moment.", Toast.LENGTH_SHORT).show()
+                }
+            }) { Text("Buy Ad-Free") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { BillingManager.restorePurchases(context) }) { Text("Restore Purchase") }
+                TextButton(onClick = onClose) { Text("Cancel") }
+            }
+        }
+    )
 }
 
 @Composable
@@ -232,98 +292,51 @@ private fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit,
 @Composable
 private fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) {
     val result = remember(entry) {
-        calculatePayFixation(
-            entry.currentLevel,
-            entry.currentPay,
-            entry.promotedLevel,
-            entry.promotionDate,
-            entry.dniDate
-        )
+        calculatePayFixation(entry.currentLevel, entry.currentPay, entry.promotedLevel, entry.promotionDate, entry.dniDate)
     }
     val benefit = result.option2.finalFixedPay - result.option1.finalFixedPay
 
     AlertDialog(
         onDismissRequest = onClose,
-        title = {
-            Text(if (entry.officialName.isBlank()) "Saved Calculation" else entry.officialName)
-        },
+        title = { Text(if (entry.officialName.isBlank()) "Saved Calculation" else entry.officialName) },
         text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 560.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
+            Column(modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Current Status", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 Text("Present Pay Level: Level ${entry.currentLevel}")
                 Text("Current Basic Pay: ${formatCurrency(entry.currentPay)}")
-
                 Text("Promotion Details", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.padding(top = 4.dp))
                 Text("Promoted Pay Level: Level ${entry.promotedLevel}")
                 Text("Date of Promotion: ${entry.promotionDate?.let { formatDate(it) } ?: "Not selected"}")
                 Text("Selected DNI: ${entry.dniDate?.let { formatDate(it) } ?: "Not selected"}")
-
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
                 Text("Fixation Illustrations", color = NiyamTextPrimary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-
-                ResultCard(
-                    "Option 1: Fixation from Date of Promotion",
-                    entry.promotionDate,
-                    listOf(
-                        "Pay in lower Level (${entry.currentLevel})" to result.option1.lowerLevelPay,
-                        "Add one increment in lower Level (${entry.currentLevel})" to result.option1.payWithIncrement,
-                        "Placement in promoted Level (${entry.promotedLevel})" to result.option1.finalFixedPay
-                    ),
-                    result.option1.finalFixedPay,
-                    result.option1.nextDni,
-                    result.option1.payAfterNextDni
-                )
-
-                ResultCard(
-                    "Option 2: Fixation from Date of Next Increment",
-                    entry.dniDate,
-                    listOf(
-                        "Pay from date of promotion until DNI (placed at next higher cell in Level ${entry.promotedLevel})" to result.option2.payUntilDni,
-                        "On DNI, annual increment in lower Level (${entry.currentLevel})" to result.option2.payWithAnnualIncrement,
-                        "On DNI, one increment on account of promotion in Level ${entry.currentLevel}" to result.option2.payWithPromotionIncrement,
-                        "Final placement in promoted Level (${entry.promotedLevel})" to result.option2.finalFixedPay
-                    ),
-                    result.option2.finalFixedPay,
-                    result.option2.nextDni,
-                    result.option2.payAfterNextDni,
-                    result.option2.payUntilDni
-                )
-
+                ResultCard("Option 1: Fixation from Date of Promotion", entry.promotionDate, listOf(
+                    "Pay in lower Level (${entry.currentLevel})" to result.option1.lowerLevelPay,
+                    "Add one increment in lower Level (${entry.currentLevel})" to result.option1.payWithIncrement,
+                    "Placement in promoted Level (${entry.promotedLevel})" to result.option1.finalFixedPay
+                ), result.option1.finalFixedPay, result.option1.nextDni, result.option1.payAfterNextDni)
+                ResultCard("Option 2: Fixation from Date of Next Increment", entry.dniDate, listOf(
+                    "Pay from date of promotion until DNI (placed at next higher cell in Level ${entry.promotedLevel})" to result.option2.payUntilDni,
+                    "On DNI, annual increment in lower Level (${entry.currentLevel})" to result.option2.payWithAnnualIncrement,
+                    "On DNI, one increment on account of promotion in Level ${entry.currentLevel}" to result.option2.payWithPromotionIncrement,
+                    "Final placement in promoted Level (${entry.promotedLevel})" to result.option2.finalFixedPay
+                ), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni)
                 if (benefit != 0) {
-                    Card(
-                        Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            if (benefit > 0) Color(0xFFE8F5E9) else Color(0xFFFFF3E0)
-                        )
-                    ) {
-                        Text(
-                            if (benefit > 0) {
-                                "Option 2 is beneficial. It results in ₹$benefit higher basic pay after DNI."
-                            } else {
-                                "Option 1 appears more beneficial in this specific case."
-                            },
-                            Modifier.padding(16.dp),
-                            color = if (benefit > 0) Color(0xFF2E7D32) else Color(0xFFE65100)
-                        )
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(if (benefit > 0) Color(0xFFE8F5E9) else Color(0xFFFFF3E0))) {
+                        Text(if (benefit > 0) "Option 2 is beneficial. It results in ₹$benefit higher basic pay after DNI." else "Option 1 appears more beneficial in this specific case.", Modifier.padding(16.dp), color = if (benefit > 0) Color(0xFF2E7D32) else Color(0xFFE65100))
                     }
                 }
             }
         },
-        confirmButton = {
-            TextButton(onClick = onClose) { Text("Close") }
-        }
+        confirmButton = { TextButton(onClick = onClose) { Text("Close") } }
     )
 }
 
 @Composable
 private fun BannerAd(modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    if (BillingManager.isPremium) return
+
     val adView = remember(context) { AdView(context).apply {
         adUnitId = TEST_BANNER_AD_UNIT_ID
         val displayMetrics = context.resources.displayMetrics
