@@ -224,18 +224,94 @@ private fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit,
 
 @Composable
 private fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) {
-    AlertDialog(onDismissRequest = onClose, title = { Text(if (entry.officialName.isBlank()) "Saved Calculation" else entry.officialName) }, text = {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("Present Pay Level: Level ${entry.currentLevel}")
-            Text("Current Basic Pay: ${formatCurrency(entry.currentPay)}")
-            Text("Promoted Pay Level: Level ${entry.promotedLevel}")
-            Text("Date of Promotion: ${entry.promotionDate?.let { formatDate(it) } ?: "Not selected"}")
-            Text("Selected DNI: ${entry.dniDate?.let { formatDate(it) } ?: "Not selected"}")
-            HorizontalDivider(Modifier.padding(vertical = 6.dp))
-            Text("Option 1 Final Pay: ${formatCurrency(entry.option1FinalPay)}", fontWeight = FontWeight.Bold, color = NiyamBlue)
-            Text("Option 2 Final Pay: ${formatCurrency(entry.option2FinalPay)}", fontWeight = FontWeight.Bold, color = NiyamBlue)
+    val result = remember(entry) {
+        calculatePayFixation(
+            entry.currentLevel,
+            entry.currentPay,
+            entry.promotedLevel,
+            entry.promotionDate,
+            entry.dniDate
+        )
+    }
+    val benefit = result.option2.finalFixedPay - result.option1.finalFixedPay
+
+    AlertDialog(
+        onDismissRequest = onClose,
+        title = {
+            Text(if (entry.officialName.isBlank()) "Saved Calculation" else entry.officialName)
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 560.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Current Status", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text("Present Pay Level: Level ${entry.currentLevel}")
+                Text("Current Basic Pay: ${formatCurrency(entry.currentPay)}")
+
+                Text("Promotion Details", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.padding(top = 4.dp))
+                Text("Promoted Pay Level: Level ${entry.promotedLevel}")
+                Text("Date of Promotion: ${entry.promotionDate?.let { formatDate(it) } ?: "Not selected"}")
+                Text("Selected DNI: ${entry.dniDate?.let { formatDate(it) } ?: "Not selected"}")
+
+                HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                Text("Fixation Illustrations", color = NiyamTextPrimary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+
+                ResultCard(
+                    "Option 1: Fixation from Date of Promotion",
+                    entry.promotionDate,
+                    listOf(
+                        "Pay in lower Level (${entry.currentLevel})" to result.option1.lowerLevelPay,
+                        "Add one increment in lower Level (${entry.currentLevel})" to result.option1.payWithIncrement,
+                        "Placement in promoted Level (${entry.promotedLevel})" to result.option1.finalFixedPay
+                    ),
+                    result.option1.finalFixedPay,
+                    result.option1.nextDni,
+                    result.option1.payAfterNextDni
+                )
+
+                ResultCard(
+                    "Option 2: Fixation from Date of Next Increment",
+                    entry.dniDate,
+                    listOf(
+                        "Pay from date of promotion until DNI (placed at next higher cell in Level ${entry.promotedLevel})" to result.option2.payUntilDni,
+                        "On DNI, annual increment in lower Level (${entry.currentLevel})" to result.option2.payWithAnnualIncrement,
+                        "On DNI, one increment on account of promotion in Level ${entry.currentLevel}" to result.option2.payWithPromotionIncrement,
+                        "Final placement in promoted Level (${entry.promotedLevel})" to result.option2.finalFixedPay
+                    ),
+                    result.option2.finalFixedPay,
+                    result.option2.nextDni,
+                    result.option2.payAfterNextDni,
+                    result.option2.payUntilDni
+                )
+
+                if (benefit != 0) {
+                    Card(
+                        Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            if (benefit > 0) Color(0xFFE8F5E9) else Color(0xFFFFF3E0)
+                        )
+                    ) {
+                        Text(
+                            if (benefit > 0) {
+                                "Option 2 is beneficial. It results in ₹$benefit higher basic pay after DNI."
+                            } else {
+                                "Option 1 appears more beneficial in this specific case."
+                            },
+                            Modifier.padding(16.dp),
+                            color = if (benefit > 0) Color(0xFF2E7D32) else Color(0xFFE65100)
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onClose) { Text("Close") }
         }
-    }, confirmButton = { TextButton(onClick = onClose) { Text("Close") } })
+    )
 }
 
 @Composable
