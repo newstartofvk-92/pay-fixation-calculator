@@ -73,7 +73,14 @@ fun PayFixationCalculatorScreen() {
     if (showHistory) {
         HistoryScreen(
             history = history,
-            onBack = { showHistory = false },
+            onBack = {
+                val activity = context as? Activity
+                if (activity != null) {
+                    HistoryInterstitialAd.showOnHistoryBack(activity) { showHistory = false }
+                } else {
+                    showHistory = false
+                }
+            },
             onDelete = { id ->
                 HistoryStore.delete(context, id)
                 history = HistoryStore.getAll(context)
