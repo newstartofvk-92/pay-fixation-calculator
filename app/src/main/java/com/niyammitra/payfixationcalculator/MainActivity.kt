@@ -51,6 +51,7 @@ fun PayFixationCalculatorScreen() {
     val context = LocalContext.current
     var showHistory by remember { mutableStateOf(false) }
     var history by remember { mutableStateOf(HistoryStore.getAll(context)) }
+    var officialName by remember { mutableStateOf("") }
     var currentLevel by remember { mutableStateOf<String?>(null) }
     var currentPay by remember { mutableStateOf<Int?>(null) }
     var promotedLevel by remember { mutableStateOf<String?>(null) }
@@ -90,17 +91,12 @@ fun PayFixationCalculatorScreen() {
                 dismissButton = { TextButton(onClick = { showClearHistoryDialog = false }) { Text("Cancel") } }
             )
         }
-        selectedHistory?.let { entry ->
-            HistoryDetailDialog(entry) { selectedHistory = null }
-        }
+        selectedHistory?.let { entry -> HistoryDetailDialog(entry) { selectedHistory = null } }
         return
     }
 
     val payStages = currentLevel?.let { PayMatrixData.getPayStages(it) } ?: emptyList()
-    val dniOptions = remember(promotionDate) {
-        promotionDate?.let { getPayFixationDniOptions(it) } ?: emptyList()
-    }
-
+    val dniOptions = remember(promotionDate) { promotionDate?.let { getPayFixationDniOptions(it) } ?: emptyList() }
     LaunchedEffect(promotionDate) { dniDate = dniOptions.firstOrNull() }
 
     val result = if (currentLevel != null && currentPay != null && promotedLevel != null) {
@@ -108,22 +104,21 @@ fun PayFixationCalculatorScreen() {
     } else null
 
     Column(Modifier.fillMaxSize().background(NiyamBackground).statusBarsPadding()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Pay Fixation Tool", color = NiyamTextPrimary, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            TextButton(onClick = {
-                history = HistoryStore.getAll(context)
-                showHistory = true
-            }) { Text("History", color = NiyamBlue, fontWeight = FontWeight.Bold) }
+            TextButton(onClick = { history = HistoryStore.getAll(context); showHistory = true }) { Text("History", color = NiyamBlue, fontWeight = FontWeight.Bold) }
         }
 
-        Column(
-            Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             SelectionCard("Current Status") {
+                OutlinedTextField(
+                    value = officialName,
+                    onValueChange = { officialName = it },
+                    label = { Text("Name of Official (for History)") },
+                    placeholder = { Text("Enter name, if required") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 DropdownField(
                     label = "Present Pay Level",
                     value = currentLevel?.let { "Level $it" } ?: "Select your Present Pay Level",
@@ -161,9 +156,7 @@ fun PayFixationCalculatorScreen() {
                                 Text(dniDate?.let { formatDate(it) } ?: "Select", modifier = Modifier.weight(1f)); Text("▼")
                             }
                             DropdownMenu(expanded = dniMenu, onDismissRequest = { dniMenu = false }) {
-                                dniOptions.forEach { option ->
-                                    DropdownMenuItem(text = { Text(formatDate(option)) }, onClick = { dniDate = option; dniMenu = false })
-                                }
+                                dniOptions.forEach { option -> DropdownMenuItem(text = { Text(formatDate(option)) }, onClick = { dniDate = option; dniMenu = false }) }
                             }
                         }
                     }
@@ -190,11 +183,18 @@ fun PayFixationCalculatorScreen() {
                 }
                 Button(
                     onClick = {
+                        val now = System.currentTimeMillis()
                         HistoryStore.add(context, CalculationHistory(
-                            id = System.currentTimeMillis(), savedAt = System.currentTimeMillis(),
-                            currentLevel = currentLevel!!, currentPay = currentPay!!,
-                            promotedLevel = promotedLevel!!, promotionDate = promotionDate, dniDate = dniDate,
-                            option1FinalPay = result.option1.finalFixedPay, option2FinalPay = result.option2.finalFixedPay
+                            id = now,
+                            savedAt = now,
+                            officialName = officialName.trim(),
+                            currentLevel = currentLevel!!,
+                            currentPay = currentPay!!,
+                            promotedLevel = promotedLevel!!,
+                            promotionDate = promotionDate,
+                            dniDate = dniDate,
+                            option1FinalPay = result.option1.finalFixedPay,
+                            option2FinalPay = result.option2.finalFixedPay
                         ))
                         history = HistoryStore.getAll(context)
                     },
@@ -223,9 +223,7 @@ private fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit,
             if (history.isNotEmpty()) TextButton(onClick = onClear) { Text("Clear", color = Color(0xFFD64545)) }
         }
         if (history.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No saved calculations yet.", color = NiyamTextSecondary, fontSize = 16.sp)
-            }
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No saved calculations yet.", color = NiyamTextSecondary, fontSize = 16.sp) }
         } else {
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 history.forEach { entry ->
@@ -233,7 +231,8 @@ private fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit,
                         Column(Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text("Level ${entry.currentLevel} → Level ${entry.promotedLevel}", fontWeight = FontWeight.Bold, color = NiyamBlue)
+                                    Text(entry.officialName.ifBlank { "Unnamed Official" }, fontWeight = FontWeight.Bold, color = NiyamBlue, fontSize = 16.sp)
+                                    Text("Level ${entry.currentLevel} → Level ${entry.promotedLevel}", color = NiyamTextPrimary, fontSize = 14.sp)
                                     Text("Current Pay: ${formatCurrency(entry.currentPay)}", color = NiyamTextPrimary, fontSize = 14.sp)
                                     Text("Saved: ${formatDateTime(entry.savedAt)}", color = NiyamTextSecondary, fontSize = 12.sp)
                                 }
@@ -252,7 +251,7 @@ private fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit,
 private fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) {
     AlertDialog(
         onDismissRequest = onClose,
-        title = { Text("Saved Calculation") },
+        title = { Text(if (entry.officialName.isBlank()) "Saved Calculation" else entry.officialName) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Present Pay Level: Level ${entry.currentLevel}")
@@ -320,12 +319,18 @@ private fun ResultCard(title: String, date: Long?, steps: List<Pair<String, Int>
             Text(title, fontWeight = FontWeight.Bold, color = NiyamBlue, fontSize = 16.sp)
             date?.let { Text("DNI Selected: ${formatDate(it)}", fontSize = 12.sp, color = Color.Gray) }
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
-            steps.forEach { (description, pay) -> Column(Modifier.padding(vertical = 6.dp)) { Text(description, fontSize = 13.sp, color = NiyamTextPrimary); Text("Pay: ${formatCurrency(pay)}", fontSize = 13.sp, color = NiyamBlue, fontWeight = FontWeight.Bold) } }
+            steps.forEach { (description, pay) ->
+                Column(Modifier.padding(vertical = 6.dp)) { Text(description, fontSize = 13.sp, color = NiyamTextPrimary); Text("Pay: ${formatCurrency(pay)}", fontSize = 13.sp, color = NiyamBlue, fontWeight = FontWeight.Bold) }
+            }
             Surface(Modifier.padding(top = 10.dp), color = NiyamBlue.copy(alpha = .05f), shape = RoundedCornerShape(12.dp)) {
                 Column(Modifier.padding(12.dp).fillMaxWidth()) {
                     interimPay?.let { Text("Interim Pay: ${formatCurrency(it)}", fontSize = 13.sp, color = NiyamTextSecondary) }
                     Text("Final Fixed Pay: ${formatCurrency(finalPay)}", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = NiyamBlue)
-                    if (futureDni != null && futurePay != null) { HorizontalDivider(Modifier.padding(vertical = 8.dp)); Text("Next DNI: ${formatDate(futureDni)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = NiyamTextPrimary); Text("Pay thereon: ${formatCurrency(futurePay)}", fontSize = 13.sp, color = NiyamTextSecondary) }
+                    if (futureDni != null && futurePay != null) {
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                        Text("Next DNI: ${formatDate(futureDni)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = NiyamTextPrimary)
+                        Text("Pay thereon: ${formatCurrency(futurePay)}", fontSize = 13.sp, color = NiyamTextSecondary)
+                    }
                 }
             }
         }
