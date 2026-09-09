@@ -41,8 +41,8 @@ private val NiyamBackground = Color(0xFFF7FAFC)
 private val NiyamTextPrimary = Color(0xFF172B4D)
 private val NiyamTextSecondary = Color(0xFF5B6B7A)
 
-// Google's test banner ID. Replace this with the production AdMob unit ID before release.
-private const val TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/9214589741"
+// Production banner ID created for the NiyamMitra Pay Fixation Calculator.
+private const val BANNER_AD_UNIT_ID = "ca-app-pub-1512519890788753/1856516842"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -479,7 +479,7 @@ private fun BannerAd(modifier: Modifier = Modifier) {
 
     // Create one AdView for this composition and clean it up when the composable leaves it.
     val adView = remember(context) { AdView(context).apply {
-        adUnitId = TEST_BANNER_AD_UNIT_ID
+        adUnitId = BANNER_AD_UNIT_ID
         val displayMetrics = context.resources.displayMetrics
         val adWidth = (displayMetrics.widthPixels / displayMetrics.density).toInt()
         setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, adWidth))
