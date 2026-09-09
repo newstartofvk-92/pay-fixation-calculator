@@ -264,11 +264,9 @@ fun PayFixationCalculatorScreen() {
                 // Compare the actual pay available at the selected DNI, not just the
                 // eventual final-pay values. This matters when the selected DNI is in
                 // January: Option 1 can receive its increment months before Option 2.
-                val option1PayAtSelectedDni = if (
-                    dniDate != null &&
-                    result.option1.nextDni != null &&
-                    result.option1.nextDni <= dniDate!!
-                ) {
+                val selectedDni = dniDate
+                val option1NextDni = result.option1.nextDni
+                val option1PayAtSelectedDni = if (selectedDni != null && option1NextDni != null && option1NextDni <= selectedDni) {
                     result.option1.payAfterNextDni ?: result.option1.finalFixedPay
                 } else {
                     result.option1.finalFixedPay
@@ -419,11 +417,9 @@ private fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) 
 
     // Use the same date-aware recommendation as the live calculator so a saved
     // January-DNI calculation cannot display a different recommendation in History.
-    val option1PayAtSelectedDni = if (
-        entry.dniDate != null &&
-        result.option1.nextDni != null &&
-        result.option1.nextDni <= entry.dniDate!!
-    ) {
+    val selectedDni = entry.dniDate
+    val option1NextDni = result.option1.nextDni
+    val option1PayAtSelectedDni = if (selectedDni != null && option1NextDni != null && option1NextDni <= selectedDni) {
         result.option1.payAfterNextDni ?: result.option1.finalFixedPay
     } else {
         result.option1.finalFixedPay
@@ -471,7 +467,7 @@ private fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) 
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onClose) { Text("Close") } }
+        confirmButton = { TextButton(onClick = onClose) { Text("Close") }
     )
 }
 
