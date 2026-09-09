@@ -1,15 +1,15 @@
 package com.niyammitra.payfixationcalculator
 
 /**
- * Pay Matrix data used by the Pay Fixation calculator.
+ * Pay Matrix data used by the ordinary/general employee Pay Fixation calculator.
  *
  * The raw matrix values are intentionally preserved. The columns correspond
  * to the pay levels listed below, while each row represents a successive cell
  * in the matrix. Do not edit the numeric matrix as part of UI changes.
  */
-object PayMatrixData {
-    // Pay levels supported by the calculator, in the same order as the matrix columns.
-    val levels = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "13A", "14", "15", "16", "17", "18")
+object PayMatrixData : PayMatrixProvider {
+    // Pay levels supported by the ordinary/general employee matrix.
+    override val levels = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "13A", "14", "15", "16", "17", "18")
 
     // Official pay-matrix values currently used by this standalone calculator.
     // Null values represent cells that are not available in the source matrix.
@@ -22,7 +22,7 @@ object PayMatrixData {
         6 to listOf(20900,23100,25200,29600,33900,41100,52000,55200,61500,65000,78500,91400,137500,152000,167200,211300,null,null),
         7 to listOf(21500,23800,26000,30500,34900,42300,53600,56900,63300,67000,80900,94100,141600,156600,172200,217600,null,null),
         8 to listOf(22100,24500,26800,31400,35900,43600,55200,58600,65200,69000,83300,96900,145800,161300,177400,224100,null,null),
-        9 to listOf(22800,25200,27600,32300,37000,44900,56900,60400,67200,71100,85800,99800,150200,166100,182700, null, null, null),
+        9 to listOf(22800,25200,27600,32300,37000,44900,56900,60400,67200,71100,85800,99800,150200,166100,182700,null,null,null),
         10 to listOf(23500,26000,28400,33300,38100,46200,58600,62200,69200,73200,88400,102800,154700,171100,188200,null,null,null),
         11 to listOf(24200,26800,29300,34300,39200,47600,60400,64100,71300,75400,91100,105900,159300,176200,193800,null,null,null),
         12 to listOf(24900,27600,30200,35300,40400,49000,62200,66000,73400,77700,93800,109100,164100,181500,199600,null,null,null),
@@ -49,10 +49,10 @@ object PayMatrixData {
         33 to listOf(46200,51500,56200,65900,75000,91400,115800,122900,136500,144300,174800,203100,null,null,null,null,null,null),
         34 to listOf(47600,53000,57900,67900,77300,94100,119300,126600,140600,148600,180000,209200,null,null,null,null,null,null),
         35 to listOf(49000,54600,59600,69900,79600,96900,122900,130400,144800,153100,185400,null,null,null,null,null,null,null),
-        36 to listOf(50500,56200,61400,72000,82000,99800,126600,134300,149100,157700,191000,null,null,null,null,null,null),
-        37 to listOf(52000,57900,63200,74200,84500,102800,130400,138300,153600,162400,196700,null,null,null,null,null,null),
-        38 to listOf(53600,59600,65100,76400,87000,105900,134300,142400,158200,167300,202600,null,null,null,null,null,null),
-        39 to listOf(55200,61400,67100,78700,89600,109100,138300,146700,162900,172300,208700,null,null,null,null,null,null),
+        36 to listOf(50500,56200,61400,72000,82000,99800,126600,134300,149100,157700,191000,null,null,null,null,null,null,null),
+        37 to listOf(52000,57900,63200,74200,84500,102800,130400,138300,153600,162400,196700,null,null,null,null,null,null,null),
+        38 to listOf(53600,59600,65100,76400,87000,105900,134300,142400,158200,167300,202600,null,null,null,null,null,null,null),
+        39 to listOf(55200,61400,67100,78700,89600,109100,138300,146700,162900,172300,208700,null,null,null,null,null,null,null),
         40 to listOf(56900,63200,69100,81100,92300,112400,142400,151100,167800,177500,null,225000,null,null,null,null,null,null)
     )
 
@@ -63,24 +63,24 @@ object PayMatrixData {
     }.toMap()
 
     /** Returns all available pay-matrix stages for the requested level. */
-    fun getPayStages(level: String): List<Int> = levelStages[level].orEmpty()
+    override fun getPayStages(level: String): List<Int> = levelStages[level].orEmpty()
 
     /** Returns the next cell after the employee's current basic pay. */
-    fun getNextIncrement(level: String, currentPay: Int): Int? {
+    override fun getNextIncrement(level: String, currentPay: Int): Int? {
         val stages = getPayStages(level)
         val index = stages.indexOf(currentPay)
         return if (index >= 0 && index < stages.size - 1) stages[index + 1] else null
     }
 
     /** Finds the first cell equal to or above the supplied pay value. */
-    fun findEqualOrNextHigher(level: String, pay: Int): Int? =
+    override fun findEqualOrNextHigher(level: String, pay: Int): Int? =
         getPayStages(level).firstOrNull { it >= pay } ?: getPayStages(level).lastOrNull()
 
     /** Finds the last cell equal to or below the supplied pay value. */
-    fun findEqualOrNextLower(level: String, pay: Int): Int? =
+    override fun findEqualOrNextLower(level: String, pay: Int): Int? =
         getPayStages(level).findLast { it <= pay } ?: getPayStages(level).firstOrNull()
 
     /** Compares two levels according to their position in the supported level list. */
-    fun isHigherLevel(levelA: String, levelB: String): Boolean =
+    override fun isHigherLevel(levelA: String, levelB: String): Boolean =
         levels.indexOf(levelA) > levels.indexOf(levelB)
 }
