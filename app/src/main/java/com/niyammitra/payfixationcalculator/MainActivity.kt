@@ -261,15 +261,33 @@ fun PayFixationCalculatorScreen() {
                     "Final placement in promoted Level ($promotedLevel)" to result.option2.finalFixedPay
                 ), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni)
 
-                // Compare the two final pay values. A tie is handled explicitly so
-                // the user always receives a recommendation instead of an empty area.
-                val benefit = result.option2.finalFixedPay - result.option1.finalFixedPay
-                val recommendationText = when {
-                    benefit > 0 -> "Recommended: Option 2. It results in ₹${benefit} higher basic pay after DNI."
-                    benefit < 0 -> "Recommended: Option 1. It results in ₹${-benefit} higher basic pay after DNI."
-                    else -> "Recommended: Option 1. Both options have the same financial effect; Option 1 provides fixation from the date of promotion."
+                // Compare the actual pay available at the selected DNI, not just the
+                // eventual final-pay values. This matters when the selected DNI is in
+                // January: Option 1 can receive its increment months before Option 2.
+                val option1PayAtSelectedDni = if (
+                    dniDate != null &&
+                    result.option1.nextDni != null &&
+                    result.option1.nextDni <= dniDate!!
+                ) {
+                    result.option1.payAfterNextDni ?: result.option1.finalFixedPay
+                } else {
+                    result.option1.finalFixedPay
                 }
-                val recommendationColor = if (benefit > 0) Color(0xFFE8F5E9) else Color(0xFFE8F5E9)
+                val option2PayAtSelectedDni = result.option2.finalFixedPay
+                val dniPayDifference = option2PayAtSelectedDni - option1PayAtSelectedDni
+                val preDniDifference = result.option2.payUntilDni - result.option1.finalFixedPay
+
+                // If pay differs before the selected DNI, that difference is a real
+                // financial advantage for the period leading up to the DNI. Otherwise,
+                // compare the pay actually received on the selected DNI itself.
+                val recommendationText = when {
+                    preDniDifference > 0 -> "Recommended: Option 2. It gives ₹${preDniDifference} higher basic pay from the date of promotion until the selected DNI."
+                    preDniDifference < 0 -> "Recommended: Option 1. It gives ₹${-preDniDifference} higher basic pay from the date of promotion until the selected DNI."
+                    dniPayDifference > 0 -> "Recommended: Option 2. At the selected DNI, it gives ₹${dniPayDifference} higher basic pay than Option 1."
+                    dniPayDifference < 0 -> "Recommended: Option 1. At the selected DNI, it gives ₹${-dniPayDifference} higher basic pay than Option 2."
+                    else -> "Recommended: Option 1. Both options have the same basic pay at the selected DNI; Option 1 provides fixation from the date of promotion."
+                }
+                val recommendationColor = Color(0xFFE8F5E9)
                 val recommendationTextColor = Color(0xFF2E7D32)
 
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(recommendationColor)) {
@@ -398,11 +416,27 @@ private fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) 
     val result = remember(entry) {
         calculatePayFixation(entry.currentLevel, entry.currentPay, entry.promotedLevel, entry.promotionDate, entry.dniDate, entry.employeeCategory)
     }
-    val benefit = result.option2.finalFixedPay - result.option1.finalFixedPay
+
+    // Use the same date-aware recommendation as the live calculator so a saved
+    // January-DNI calculation cannot display a different recommendation in History.
+    val option1PayAtSelectedDni = if (
+        entry.dniDate != null &&
+        result.option1.nextDni != null &&
+        result.option1.nextDni <= entry.dniDate!!
+    ) {
+        result.option1.payAfterNextDni ?: result.option1.finalFixedPay
+    } else {
+        result.option1.finalFixedPay
+    }
+    val option2PayAtSelectedDni = result.option2.finalFixedPay
+    val dniPayDifference = option2PayAtSelectedDni - option1PayAtSelectedDni
+    val preDniDifference = result.option2.payUntilDni - result.option1.finalFixedPay
     val recommendationText = when {
-        benefit > 0 -> "Recommended: Option 2. It results in ₹${benefit} higher basic pay after DNI."
-        benefit < 0 -> "Recommended: Option 1. It results in ₹${-benefit} higher basic pay after DNI."
-        else -> "Recommended: Option 1. Both options have the same financial effect; Option 1 provides fixation from the date of promotion."
+        preDniDifference > 0 -> "Recommended: Option 2. It gives ₹${preDniDifference} higher basic pay from the date of promotion until the selected DNI."
+        preDniDifference < 0 -> "Recommended: Option 1. It gives ₹${-preDniDifference} higher basic pay from the date of promotion until the selected DNI."
+        dniPayDifference > 0 -> "Recommended: Option 2. At the selected DNI, it gives ₹${dniPayDifference} higher basic pay than Option 1."
+        dniPayDifference < 0 -> "Recommended: Option 1. At the selected DNI, it gives ₹${-dniPayDifference} higher basic pay than Option 2."
+        else -> "Recommended: Option 1. Both options have the same basic pay at the selected DNI; Option 1 provides fixation from the date of promotion."
     }
 
     AlertDialog(
