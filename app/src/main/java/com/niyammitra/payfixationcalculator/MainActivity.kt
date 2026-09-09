@@ -136,10 +136,7 @@ fun PayFixationCalculatorScreen() {
 
     // Select the same data-provider used by the calculation engine so the input
     // levels and pay cells always match the chosen employee category.
-    val matrix = when (employeeCategory) {
-        EmployeeCategory.ORDINARY -> PayMatrixData
-        EmployeeCategory.FACULTY -> FacultyPayMatrixData
-    }
+    val matrix = PayMatrixSelection.forCategory(employeeCategory)
 
     // Pay stages are derived from the selected present level. Changing the level
     // also clears the previously selected basic pay in the input section.
