@@ -17,11 +17,22 @@ import com.android.billingclient.api.PurchasesUpdatedListener
 import com.android.billingclient.api.QueryProductDetailsParams
 import com.android.billingclient.api.QueryPurchasesParams
 
+/**
+ * Handles Google Play Billing for the app's lifetime ad-free purchase.
+ *
+ * The product is non-consumable: one successful purchase grants permanent
+ * ad-free access to this app for the user's Google Play account.
+ */
 object BillingManager : PurchasesUpdatedListener {
+    // This ID must exactly match the one-time product configured in Google Play Console.
     private const val PRODUCT_ID = "remove_ads_lifetime"
+
+    // Local cache used to keep the UI responsive while Play Billing is initializing.
+    // The actual Play purchase is re-checked when BillingClient connects.
     private const val PREFS_NAME = "billing_prefs"
     private const val KEY_PREMIUM = "premium_purchased"
 
+    /** True when the user currently has lifetime ad-free entitlement. */
     var isPremium by mutableStateOf(false)
         private set
 
@@ -29,6 +40,7 @@ object BillingManager : PurchasesUpdatedListener {
     private var productDetails: ProductDetails? = null
     private var initialized = false
 
+    /** Initializes BillingClient and restores any existing purchase. */
     fun initialize(context: Context) {
         if (initialized) return
         initialized = true
@@ -50,6 +62,7 @@ object BillingManager : PurchasesUpdatedListener {
         startConnection(appContext)
     }
 
+    /** Connects to Google Play Billing before querying products or purchases. */
     private fun startConnection(context: Context) {
         billingClient?.startConnection(object : BillingClientStateListener {
             override fun onBillingSetupFinished(billingResult: BillingResult) {
@@ -65,6 +78,7 @@ object BillingManager : PurchasesUpdatedListener {
         })
     }
 
+    /** Retrieves the configured lifetime ad-free product and its Play Store price. */
     private fun queryProduct() {
         val params = QueryProductDetailsParams.newBuilder()
             .setProductList(
@@ -84,6 +98,11 @@ object BillingManager : PurchasesUpdatedListener {
         }
     }
 
+    /**
+     * Checks Google Play for an already-owned non-consumable purchase.
+     * This is what allows ad-free access to survive reinstall/login changes
+     * on the same Google Play account.
+     */
     private fun queryExistingPurchase(context: Context) {
         val params = QueryPurchasesParams.newBuilder()
             .setProductType(BillingClient.ProductType.INAPP)
@@ -99,12 +118,14 @@ object BillingManager : PurchasesUpdatedListener {
 
             setPremium(context, owned)
 
+            // Any purchased but not-yet-acknowledged item must be processed.
             purchases
                 .filter { it.products.contains(PRODUCT_ID) && it.purchaseState == Purchase.PurchaseState.PURCHASED }
                 .forEach { processPurchase(context, it) }
         }
     }
 
+    /** Opens the Google Play purchase flow for the lifetime ad-free product. */
     fun launchPurchase(activity: Activity): BillingResult? {
         val details = productDetails ?: return null
         val offerToken = details.oneTimePurchaseOfferDetailsList?.firstOrNull()?.offerToken
@@ -122,17 +143,21 @@ object BillingManager : PurchasesUpdatedListener {
         return billingClient?.launchBillingFlow(activity, flowParams)
     }
 
+    /** Re-checks the user's Google Play ownership when Restore Purchase is pressed. */
     fun restorePurchases(context: Context) {
         queryExistingPurchase(context.applicationContext)
     }
 
+    /** Lets the UI know whether the Play Store product has been loaded. */
     fun isProductAvailable(): Boolean = productDetails != null
 
+    /** Returns the localized Play Store price, with ₹49 as the UI fallback. */
     fun getPrice(): String {
         return productDetails?.oneTimePurchaseOfferDetailsList?.firstOrNull()?.formattedPrice
             ?: "₹49"
     }
 
+    /** Receives the result of a purchase flow started from the app. */
     override fun onPurchasesUpdated(
         billingResult: BillingResult,
         purchases: MutableList<Purchase>?
@@ -148,6 +173,10 @@ object BillingManager : PurchasesUpdatedListener {
             }
     }
 
+    /**
+     * Grants the ad-free entitlement only for a completed purchase and
+     * acknowledges the purchase when required by Google Play.
+     */
     private fun processPurchase(context: Context?, purchase: Purchase) {
         if (!purchase.products.contains(PRODUCT_ID) || purchase.purchaseState != Purchase.PurchaseState.PURCHASED) return
 
@@ -175,6 +204,7 @@ object BillingManager : PurchasesUpdatedListener {
         }
     }
 
+    /** Updates the reactive UI state and persists the current entitlement locally. */
     private fun setPremium(context: Context, value: Boolean) {
         isPremium = value
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
