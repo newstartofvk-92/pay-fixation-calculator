@@ -237,6 +237,10 @@ object BillingManager : PurchasesUpdatedListener {
                                 // Do not grant ad-free access while payment is pending.
                                 statusMessage = "Purchase is pending. Ad-free access will activate after Google Play confirms payment."
                             }
+                            else -> {
+                                // An unspecified/non-completed state does not grant entitlement.
+                                statusMessage = "The purchase has not completed yet."
+                            }
                         }
                     }
             }
