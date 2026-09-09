@@ -17,8 +17,8 @@ import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
  * from History is treated as a separate explicit ad opportunity.
  */
 object HistoryInterstitialAd {
-    // Google's test interstitial ID. Replace with the production AdMob ID before release.
-    private const val TEST_INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
+    // Production interstitial ID created for the NiyamMitra Pay Fixation Calculator.
+    private const val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-1512519890788753/3097446327"
 
     // Prevents the History-entry ad from appearing too frequently for free users.
     private const val COOLDOWN_MILLIS = 2 * 60 * 1000L
@@ -35,7 +35,7 @@ object HistoryInterstitialAd {
         isLoading = true
         InterstitialAd.load(
             activity,
-            TEST_INTERSTITIAL_AD_UNIT_ID,
+            INTERSTITIAL_AD_UNIT_ID,
             AdRequest.Builder().build(),
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
