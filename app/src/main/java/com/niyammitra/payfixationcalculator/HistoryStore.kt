@@ -5,7 +5,12 @@ import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Local-only history for completed pay-fixation calculations. */
+/**
+ * Local-only history for completed pay-fixation calculations.
+ *
+ * History is stored on the user's device with SharedPreferences. No account,
+ * server, or cloud synchronization is involved in this implementation.
+ */
 data class CalculationHistory(
     val id: Long,
     val savedAt: Long,
@@ -23,10 +28,14 @@ object HistoryStore {
     private const val PREFS = "pay_fixation_history"
     private const val KEY_HISTORY = "entries"
 
+    /** Reads all saved calculations and returns the newest entries first. */
     fun getAll(context: Context): List<CalculationHistory> {
         val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_HISTORY, "[]") ?: "[]"
+
+        // Invalid/corrupt stored JSON should not crash the calculator.
         val array = runCatching { JSONArray(raw) }.getOrElse { JSONArray() }
+
         return buildList {
             for (i in 0 until array.length()) {
                 val item = array.optJSONObject(i) ?: continue
@@ -34,6 +43,8 @@ object HistoryStore {
                     CalculationHistory(
                         id = item.optLong("id"),
                         savedAt = item.optLong("savedAt"),
+                        // optString keeps older saved records compatible when
+                        // the official-name field did not exist yet.
                         officialName = item.optString("officialName"),
                         currentLevel = item.optString("currentLevel"),
                         currentPay = item.optInt("currentPay"),
@@ -48,13 +59,16 @@ object HistoryStore {
         }.sortedByDescending { it.savedAt }
     }
 
+    /**
+     * Saves a calculation unless the same calculation is already present.
+     * The duplicate check deliberately ignores the generated id/timestamp.
+     */
     fun add(context: Context, entry: CalculationHistory) {
         val entries = getAll(context).toMutableList()
 
         // A calculation is uniquely identified by the official name and all
-        // calculation inputs. The save timestamp/id is deliberately ignored,
-        // so pressing Save repeatedly for the same calculation cannot create
-        // duplicate history entries.
+        // calculation inputs. This prevents repeated Save taps from creating
+        // duplicate history entries for the same calculation.
         val alreadySaved = entries.any { existing ->
             existing.officialName.trim() == entry.officialName.trim() &&
                 existing.currentLevel == entry.currentLevel &&
@@ -69,16 +83,19 @@ object HistoryStore {
             return
         }
 
+        // New entries are placed first, while the history is capped at 100.
         entries.removeAll { it.id == entry.id }
         entries.add(0, entry)
         save(context, entries.take(100))
         Toast.makeText(context, "Fixation saved", Toast.LENGTH_SHORT).show()
     }
 
+    /** Deletes one saved calculation by its generated id. */
     fun delete(context: Context, id: Long) {
         save(context, getAll(context).filterNot { it.id == id })
     }
 
+    /** Removes the entire local history from the device. */
     fun clear(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .edit()
@@ -86,6 +103,7 @@ object HistoryStore {
             .apply()
     }
 
+    /** Serializes the history list back into SharedPreferences as JSON. */
     private fun save(context: Context, entries: List<CalculationHistory>) {
         val array = JSONArray()
         entries.forEach { entry ->
