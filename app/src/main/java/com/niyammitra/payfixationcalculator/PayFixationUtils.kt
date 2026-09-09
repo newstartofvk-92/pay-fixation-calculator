@@ -129,10 +129,7 @@ fun calculatePayFixation(
     employeeCategory: EmployeeCategory = EmployeeCategory.ORDINARY
 ): FixationResult {
     // Select the appropriate matrix without creating a second fixation algorithm.
-    val matrix = when (employeeCategory) {
-        EmployeeCategory.ORDINARY -> PayMatrixData
-        EmployeeCategory.FACULTY -> FacultyPayMatrixData
-    }
+    val matrix = PayMatrixSelection.forCategory(employeeCategory)
 
     val promotedLevelMax =
         matrix
