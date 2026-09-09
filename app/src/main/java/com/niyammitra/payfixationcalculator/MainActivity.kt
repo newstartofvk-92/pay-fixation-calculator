@@ -467,7 +467,7 @@ private fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) 
                 }
             }
         },
-        confirmButton = { TextButton(onClick = onClose) { Text("Close") }
+        confirmButton = { TextButton(onClick = onClose) { Text("Close") } },
     )
 }
 
