@@ -6,9 +6,14 @@ import java.util.Calendar
  * Utility functions used by the Pay Fixation calculator.
  *
  * The calculation behavior is intentionally kept aligned with the existing
- * NiyamMitra Pay Fixation implementation.
+ * NiyamMitra Pay Fixation implementation. Keep changes to this file limited
+ * to the calculation rules that are deliberately approved for the app.
  */
 
+/**
+ * Builds the two possible DNI dates offered to the user after promotion:
+ * the next 1 July and the next 1 January, ordered chronologically.
+ */
 private fun calculateDniOptions(
     promotionDate: Long
 ): List<Long> {
@@ -38,18 +43,23 @@ private fun calculateDniOptions(
     ).sorted()
 }
 
+/**
+ * Calculates the next DNI after a fixation date using the existing
+ * six-month/January-July rule used by the calculator.
+ */
 private fun calculateNextDni(
     fixationDate: Long
 ): Long {
     val cal = Calendar.getInstance()
     cal.timeInMillis = fixationDate
 
-    // Step 1: Count six months from fixation
+    // Step 1: Count six months from the fixation date.
     cal.add(Calendar.MONTH, 6)
 
     val month = cal.get(Calendar.MONTH)
     val day = cal.get(Calendar.DAY_OF_MONTH)
 
+    // Step 2: Move the result to the applicable 1 January or 1 July DNI.
     when {
         month == Calendar.JANUARY && day <= 1 -> {
             cal.set(Calendar.MONTH, Calendar.JANUARY)
@@ -72,12 +82,14 @@ private fun calculateNextDni(
     return cal.timeInMillis
 }
 
+/** A single illustrated step in the fixation result. */
 data class FixationStep(
     val description: String,
     val pay: Int,
     val date: Long?
 )
 
+/** Contains the two alternative fixation results shown to the user. */
 data class FixationResult(
     val option1: Option1Detail,
     val option2: Option2Detail
@@ -103,8 +115,10 @@ data class Option2Detail(
 /**
  * Performs the existing NiyamMitra Pay Fixation calculation.
  *
- * PayMatrixData is intentionally referenced from the standalone app's
- * package so that the calculation layer can be tested independently of UI.
+ * IMPORTANT: This is the calculation engine. UI changes should not alter
+ * these formulas. In particular, the 3% fallbacks and the currentPay + 1
+ * placement rule below are part of the existing app behavior and must be
+ * preserved unless the calculation itself is intentionally revised.
  */
 fun calculatePayFixation(
     currentLevel: String,
@@ -119,13 +133,16 @@ fun calculatePayFixation(
             .lastOrNull()
             ?: Int.MAX_VALUE
 
-    // OPTION 1
+    // OPTION 1: fixation is calculated from the date of promotion.
+    // First take one increment in the employee's existing pay level.
     val payWithOneIncrement =
         PayMatrixData.getNextIncrement(
             currentLevel,
             currentPay
         ) ?: (currentPay * 1.03).toInt()
 
+    // Place the incremented pay at the equal-or-next-higher cell in the
+    // promoted level, while respecting that level's maximum available cell.
     val option1Pay =
         minOf(
             PayMatrixData.findEqualOrNextHigher(
@@ -135,11 +152,13 @@ fun calculatePayFixation(
             promotedLevelMax
         )
 
+    // Calculate the next DNI from the promotion/fixation date for Option 1.
     val opt1NextDni =
         promotionDate?.let {
             calculateNextDni(it)
         }
 
+    // At the next DNI, move one cell forward in the promoted level.
     val opt1PayAfterNextDni =
         opt1NextDni?.let {
             PayMatrixData.getNextIncrement(
@@ -148,7 +167,9 @@ fun calculatePayFixation(
             )
         } ?: option1Pay
 
-    // OPTION 2
+    // OPTION 2: fixation is deferred to the selected DNI.
+    // Until DNI, place current pay at the next higher cell in the promoted
+    // level. The +1 below is intentionally retained from the existing logic.
     val option2PayBeforeDni =
         minOf(
             PayMatrixData.findEqualOrNextHigher(
@@ -158,18 +179,22 @@ fun calculatePayFixation(
             promotedLevelMax
         )
 
+    // Calculate the normal annual increment in the current/lower level.
     val annualIncrement =
         PayMatrixData.getNextIncrement(
             currentLevel,
             currentPay
         ) ?: (currentPay * 1.03).toInt()
 
+    // Calculate the additional promotion increment after the annual increment.
     val promotionIncrement =
         PayMatrixData.getNextIncrement(
             currentLevel,
             annualIncrement
         ) ?: (annualIncrement * 1.03).toInt()
 
+    // Place the resulting promotion pay at the equal-or-next-higher cell in
+    // the promoted level, again respecting the level maximum.
     val option2PayAfterDni =
         minOf(
             PayMatrixData.findEqualOrNextHigher(
@@ -179,11 +204,13 @@ fun calculatePayFixation(
             promotedLevelMax
         )
 
+    // Calculate the next DNI after the selected DNI for Option 2.
     val opt2NextDni =
         dniDate?.let {
             calculateNextDni(it)
         }
 
+    // Calculate the promoted-level pay after that future DNI.
     val opt2PayAfterNextDni =
         opt2NextDni?.let {
             PayMatrixData.getNextIncrement(
@@ -211,14 +238,10 @@ fun calculatePayFixation(
     )
 }
 
-/**
- * Exposes the same DNI-option calculation used by the existing calculator UI.
- */
+/** Returns the two DNI choices used by the calculator UI. */
 fun getPayFixationDniOptions(promotionDate: Long): List<Long> =
     calculateDniOptions(promotionDate)
 
-/**
- * Exposes the same next-DNI calculation used by the existing calculator UI.
- */
+/** Returns the next DNI calculated from a fixation date. */
 fun getPayFixationNextDni(fixationDate: Long): Long =
     calculateNextDni(fixationDate)
