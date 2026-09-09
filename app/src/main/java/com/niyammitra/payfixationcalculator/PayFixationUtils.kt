@@ -115,20 +115,27 @@ data class Option2Detail(
 /**
  * Performs the existing NiyamMitra Pay Fixation calculation.
  *
- * IMPORTANT: This is the calculation engine. UI changes should not alter
- * these formulas. In particular, the 3% fallbacks and the currentPay + 1
- * placement rule below are part of the existing app behavior and must be
- * preserved unless the calculation itself is intentionally revised.
+ * IMPORTANT: The fixation procedure is the same for ordinary employees and
+ * faculty. The employee category only selects which pay-matrix cells are used.
+ * In particular, the 3% fallbacks and currentPay + 1 placement rule below are
+ * preserved from the existing calculator.
  */
 fun calculatePayFixation(
     currentLevel: String,
     currentPay: Int,
     promotedLevel: String,
     promotionDate: Long?,
-    dniDate: Long?
+    dniDate: Long?,
+    employeeCategory: EmployeeCategory = EmployeeCategory.ORDINARY
 ): FixationResult {
+    // Select the appropriate matrix without creating a second fixation algorithm.
+    val matrix = when (employeeCategory) {
+        EmployeeCategory.ORDINARY -> PayMatrixData
+        EmployeeCategory.FACULTY -> FacultyPayMatrixData
+    }
+
     val promotedLevelMax =
-        PayMatrixData
+        matrix
             .getPayStages(promotedLevel)
             .lastOrNull()
             ?: Int.MAX_VALUE
@@ -136,7 +143,7 @@ fun calculatePayFixation(
     // OPTION 1: fixation is calculated from the date of promotion.
     // First take one increment in the employee's existing pay level.
     val payWithOneIncrement =
-        PayMatrixData.getNextIncrement(
+        matrix.getNextIncrement(
             currentLevel,
             currentPay
         ) ?: (currentPay * 1.03).toInt()
@@ -145,7 +152,7 @@ fun calculatePayFixation(
     // promoted level, while respecting that level's maximum available cell.
     val option1Pay =
         minOf(
-            PayMatrixData.findEqualOrNextHigher(
+            matrix.findEqualOrNextHigher(
                 promotedLevel,
                 payWithOneIncrement
             ) ?: payWithOneIncrement,
@@ -161,7 +168,7 @@ fun calculatePayFixation(
     // At the next DNI, move one cell forward in the promoted level.
     val opt1PayAfterNextDni =
         opt1NextDni?.let {
-            PayMatrixData.getNextIncrement(
+            matrix.getNextIncrement(
                 promotedLevel,
                 option1Pay
             )
@@ -172,7 +179,7 @@ fun calculatePayFixation(
     // level. The +1 below is intentionally retained from the existing logic.
     val option2PayBeforeDni =
         minOf(
-            PayMatrixData.findEqualOrNextHigher(
+            matrix.findEqualOrNextHigher(
                 promotedLevel,
                 currentPay + 1
             ) ?: currentPay,
@@ -181,14 +188,14 @@ fun calculatePayFixation(
 
     // Calculate the normal annual increment in the current/lower level.
     val annualIncrement =
-        PayMatrixData.getNextIncrement(
+        matrix.getNextIncrement(
             currentLevel,
             currentPay
         ) ?: (currentPay * 1.03).toInt()
 
     // Calculate the additional promotion increment after the annual increment.
     val promotionIncrement =
-        PayMatrixData.getNextIncrement(
+        matrix.getNextIncrement(
             currentLevel,
             annualIncrement
         ) ?: (annualIncrement * 1.03).toInt()
@@ -197,7 +204,7 @@ fun calculatePayFixation(
     // the promoted level, again respecting the level maximum.
     val option2PayAfterDni =
         minOf(
-            PayMatrixData.findEqualOrNextHigher(
+            matrix.findEqualOrNextHigher(
                 promotedLevel,
                 promotionIncrement
             ) ?: promotionIncrement,
@@ -213,7 +220,7 @@ fun calculatePayFixation(
     // Calculate the promoted-level pay after that future DNI.
     val opt2PayAfterNextDni =
         opt2NextDni?.let {
-            PayMatrixData.getNextIncrement(
+            matrix.getNextIncrement(
                 promotedLevel,
                 option2PayAfterDni
             )
