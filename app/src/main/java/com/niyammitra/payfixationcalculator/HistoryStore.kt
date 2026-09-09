@@ -15,6 +15,7 @@ data class CalculationHistory(
     val id: Long,
     val savedAt: Long,
     val officialName: String,
+    val employeeCategory: EmployeeCategory,
     val currentLevel: String,
     val currentPay: Int,
     val promotedLevel: String,
@@ -43,6 +44,11 @@ object HistoryStore {
                     CalculationHistory(
                         id = item.optLong("id"),
                         savedAt = item.optLong("savedAt"),
+                        // Older history records predate employee-category selection,
+                        // so they are treated as ordinary/general employee records.
+                        employeeCategory = runCatching {
+                            EmployeeCategory.valueOf(item.optString("employeeCategory"))
+                        }.getOrDefault(EmployeeCategory.ORDINARY),
                         // optString keeps older saved records compatible when
                         // the official-name field did not exist yet.
                         officialName = item.optString("officialName"),
@@ -66,11 +72,12 @@ object HistoryStore {
     fun add(context: Context, entry: CalculationHistory) {
         val entries = getAll(context).toMutableList()
 
-        // A calculation is uniquely identified by the official name and all
-        // calculation inputs. This prevents repeated Save taps from creating
-        // duplicate history entries for the same calculation.
+        // A calculation is uniquely identified by category, official name, and
+        // all calculation inputs. Category is included so ordinary and faculty
+        // calculations with otherwise identical inputs remain separate records.
         val alreadySaved = entries.any { existing ->
-            existing.officialName.trim() == entry.officialName.trim() &&
+            existing.employeeCategory == entry.employeeCategory &&
+                existing.officialName.trim() == entry.officialName.trim() &&
                 existing.currentLevel == entry.currentLevel &&
                 existing.currentPay == entry.currentPay &&
                 existing.promotedLevel == entry.promotedLevel &&
@@ -111,6 +118,7 @@ object HistoryStore {
                 put("id", entry.id)
                 put("savedAt", entry.savedAt)
                 put("officialName", entry.officialName)
+                put("employeeCategory", entry.employeeCategory.name)
                 put("currentLevel", entry.currentLevel)
                 put("currentPay", entry.currentPay)
                 put("promotedLevel", entry.promotedLevel)
