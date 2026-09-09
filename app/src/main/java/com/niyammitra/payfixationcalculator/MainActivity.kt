@@ -261,11 +261,16 @@ fun PayFixationCalculatorScreen() {
                     "Final placement in promoted Level ($promotedLevel)" to result.option2.finalFixedPay
                 ), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni)
 
-                // Positive benefit means Option 2 produces a higher final basic pay.
-                val benefit = result.option2.finalFixedPay - result.option1.finalFixedPay
-                if (benefit != 0) Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(if (benefit > 0) Color(0xFFE8F5E9) else Color(0xFFFFF3E0))) {
-                    Text(if (benefit > 0) "Option 2 is beneficial. It results in ₹$benefit higher basic pay after DNI." else "Option 1 appears more beneficial in this specific case.", Modifier.padding(16.dp), color = if (benefit > 0) Color(0xFF2E7D32) else Color(0xFFE65100))
-                }
+                // Compare the pay at the selected DNI and the eventual fixed pay.
+                // This is deliberately date-aware: a higher final pay alone is not
+                // enough when another option gives a higher pay earlier.
+                val recommendation = getOptionRecommendation(
+                    result = result,
+                    promotionDate = promotionDate,
+                    selectedDni = dniDate
+                )
+
+                RecommendationCard(recommendation)
 
                 // Save stores the selected matrix category together with the calculation
                 // so History can reconstruct the result using the same matrix later.
@@ -389,7 +394,10 @@ private fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) 
     val result = remember(entry) {
         calculatePayFixation(entry.currentLevel, entry.currentPay, entry.promotedLevel, entry.promotionDate, entry.dniDate, entry.employeeCategory)
     }
-    val benefit = result.option2.finalFixedPay - result.option1.finalFixedPay
+
+    // Use the same date-aware recommendation shown on the main calculator screen
+    // so a saved calculation cannot display a different recommendation from the original.
+    val recommendation = getOptionRecommendation(result, entry.promotionDate, entry.dniDate)
 
     AlertDialog(
         onDismissRequest = onClose,
@@ -418,15 +426,100 @@ private fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) 
                     "On DNI, one increment on account of promotion in Level ${entry.currentLevel}" to result.option2.payWithPromotionIncrement,
                     "Final placement in promoted Level (${entry.promotedLevel})" to result.option2.finalFixedPay
                 ), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni)
-                if (benefit != 0) {
-                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(if (benefit > 0) Color(0xFFE8F5E9) else Color(0xFFFFF3E0))) {
-                        Text(if (benefit > 0) "Option 2 is beneficial. It results in ₹$benefit higher basic pay after DNI." else "Option 1 appears more beneficial in this specific case.", Modifier.padding(16.dp), color = if (benefit > 0) Color(0xFF2E7D32) else Color(0xFFE65100))
-                    }
-                }
+                RecommendationCard(recommendation)
             }
         },
         confirmButton = { TextButton(onClick = onClose) { Text("Close") } }
     )
+}
+
+/**
+ * Describes which option is financially preferable using the dates shown by the
+ * calculator, rather than comparing only the eventual final basic pay.
+ */
+private data class OptionRecommendation(
+    val title: String,
+    val explanation: String,
+    val optionNumber: Int?
+)
+
+/**
+ * Compares the two fixation paths at the selected DNI and at the eventual fixed pay.
+ *
+ * The comparison deliberately does not change the underlying fixation formulas.
+ * If one option has a higher pay before DNI, that earlier benefit is considered;
+ * if final pay differs, the higher final pay decides; if both pay and timing match,
+ * the result is reported as equal.
+ */
+private fun getOptionRecommendation(
+    result: FixationResult,
+    promotionDate: Long?,
+    selectedDni: Long?
+): OptionRecommendation {
+    val option1Final = result.option1.finalFixedPay
+    val option2Final = result.option2.finalFixedPay
+    val option1PayAtSelectedDni = option1Final
+    val option2PayBeforeSelectedDni = result.option2.payUntilDni
+
+    // First compare the pay actually available during the period between promotion
+    // and the selected DNI. This captures the important benefit of immediate fixation.
+    val earlyDifference = option1PayAtSelectedDni - option2PayBeforeSelectedDni
+
+    return when {
+        option1Final > option2Final -> OptionRecommendation(
+            title = "Option 1 is Recommended",
+            explanation = "Option 1 provides the higher final basic pay and gives the higher promoted-level pay from the date of promotion.",
+            optionNumber = 1
+        )
+
+        option2Final > option1Final -> OptionRecommendation(
+            title = "Option 2 is Recommended",
+            explanation = "Option 2 provides the higher final basic pay after the selected DNI.",
+            optionNumber = 2
+        )
+
+        earlyDifference > 0 && promotionDate != null && selectedDni != null -> OptionRecommendation(
+            title = "Option 1 is Recommended",
+            explanation = "Both options eventually reach ${formatCurrency(option1Final)}, but Option 1 provides ${formatCurrency(earlyDifference)} higher basic pay from the date of promotion until the selected DNI.",
+            optionNumber = 1
+        )
+
+        earlyDifference < 0 && promotionDate != null && selectedDni != null -> OptionRecommendation(
+            title = "Option 2 is Recommended",
+            explanation = "Both options eventually reach ${formatCurrency(option1Final)}, but Option 2 provides the higher basic pay during the period up to the selected DNI.",
+            optionNumber = 2
+        )
+
+        else -> OptionRecommendation(
+            title = "Both Options are Equal",
+            explanation = "Both options result in the same final basic pay of ${formatCurrency(option1Final)}, with no date-wise pay advantage identified by this comparison.",
+            optionNumber = null
+        )
+    }
+}
+
+/** Displays the recommendation and the reason so the user can understand the choice. */
+@Composable
+private fun RecommendationCard(recommendation: OptionRecommendation) {
+    val isOption1 = recommendation.optionNumber == 1
+    val isOption2 = recommendation.optionNumber == 2
+    val background = when {
+        isOption1 -> Color(0xFFE8F5E9)
+        isOption2 -> Color(0xFFE3F2FD)
+        else -> Color(0xFFFFF8E1)
+    }
+    val textColor = when {
+        isOption1 -> Color(0xFF2E7D32)
+        isOption2 -> Color(0xFF1565C0)
+        else -> Color(0xFF8D6E00)
+    }
+
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(background)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(recommendation.title, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp, color = textColor)
+            Text(recommendation.explanation, fontSize = 13.sp, color = NiyamTextPrimary)
+        }
+    }
 }
 
 /** Renders the anchored adaptive banner used by free users. */
