@@ -312,6 +312,12 @@ fun PayFixationCalculatorScreen() {
                     history = HistoryStore.getAll(context)
                 }, modifier = Modifier.fillMaxWidth()) { Text("Save Calculation to History") }
             }
+
+            // This disclaimer is intentionally visible on the main calculator screen
+            // so users see that results are assistive/reference calculations before relying
+            // on them for any official service or financial purpose.
+            PayFixationDisclaimer()
+
             Spacer(Modifier.height(30.dp))
         }
 
@@ -333,6 +339,34 @@ fun PayFixationCalculatorScreen() {
     // The purchase dialog is hidden after the entitlement is granted.
     if (showAdFreeDialog && !BillingManager.isPremium) {
         AdFreePurchaseDialog(context = context, onClose = { showAdFreeDialog = false })
+    }
+}
+
+/**
+ * Presents the legal-use disclaimer for the calculator without changing any
+ * calculation formulas. It clarifies that results are indicative and should be
+ * verified against applicable rules/orders and by the competent authority.
+ */
+@Composable
+private fun PayFixationDisclaimer() {
+    Card(
+        Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(Color(0xFFFFF8E1))
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Important Disclaimer", color = NiyamTextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text(
+                "This application is intended solely as an assistive and reference tool for working out indicative pay-fixation calculations based on the information and rules provided by the user. The results are not an official determination of pay, entitlement, or financial benefit and should not be treated as a substitute for applicable Government rules, regulations, orders, clarifications, or decisions of the competent authority.",
+                color = NiyamTextPrimary,
+                fontSize = 12.sp
+            )
+            Text(
+                "Users should verify the results with the applicable rules/orders and the competent administrative or accounts authority before using them for any official, service, or financial purpose. The developer does not assume responsibility for any decision, claim, loss, liability, or consequence arising from reliance solely on the calculations provided by this application.",
+                color = NiyamTextSecondary,
+                fontSize = 12.sp
+            )
+        }
     }
 }
 
