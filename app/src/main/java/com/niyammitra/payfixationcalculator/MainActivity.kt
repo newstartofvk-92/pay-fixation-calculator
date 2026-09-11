@@ -91,6 +91,9 @@ fun PayFixationCalculatorScreen() {
     var selectedHistory by remember { mutableStateOf<CalculationHistory?>(null) }
     var showAdFreeDialog by remember { mutableStateOf(false) }
 
+    // Controls visibility of the About dialog without affecting calculator state.
+    var showAboutDialog by remember { mutableStateOf(false) }
+
     if (showHistory) {
         HistoryScreen(
             history = history,
@@ -154,7 +157,7 @@ fun PayFixationCalculatorScreen() {
     } else null
 
     Column(Modifier.fillMaxSize().background(NiyamBackground).statusBarsPadding()) {
-        // App header and History navigation.
+        // App header and History/About navigation.
         Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(R.drawable.rkcapps_logo), "RKCApps", Modifier.size(width = 72.dp, height = 52.dp), contentScale = ContentScale.Fit)
             Spacer(Modifier.width(10.dp))
@@ -162,17 +165,25 @@ fun PayFixationCalculatorScreen() {
                 Text("NiyamMitra", color = NiyamBlue, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Text("Pay Fixation Calculator", color = NiyamTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             }
-            TextButton(onClick = {
-                // Refresh history before opening it so the newest save/delete state is shown.
-                history = HistoryStore.getAll(context)
-                val activity = context as? Activity
-                if (activity != null) {
-                    // Free users may see the History-entry interstitial; premium users bypass it.
-                    HistoryInterstitialAd.showIfDue(activity) { showHistory = true }
-                } else {
-                    showHistory = true
+            Row {
+                // History opens the saved local calculations without changing the current inputs.
+                TextButton(onClick = {
+                    // Refresh history before opening it so the newest save/delete state is shown.
+                    history = HistoryStore.getAll(context)
+                    val activity = context as? Activity
+                    if (activity != null) {
+                        // Free users may see the History-entry interstitial; premium users bypass it.
+                        HistoryInterstitialAd.showIfDue(activity) { showHistory = true }
+                    } else {
+                        showHistory = true
+                    }
+                }) { Text("History", color = NiyamBlue, fontWeight = FontWeight.Bold) }
+
+                // About opens the app information/legal dialog and does not alter calculation state.
+                TextButton(onClick = { showAboutDialog = true }) {
+                    Text("About", color = NiyamBlue, fontWeight = FontWeight.Bold)
                 }
-            }) { Text("History", color = NiyamBlue, fontWeight = FontWeight.Bold) }
+            }
         }
 
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -334,6 +345,11 @@ fun PayFixationCalculatorScreen() {
         DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = {
             TextButton(onClick = { promotionDate = state.selectedDateMillis; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) }
         }) { DatePicker(state) }
+    }
+
+    // Shows app information and the privacy-policy link without changing calculation or billing behavior.
+    if (showAboutDialog) {
+        AboutDialog(onClose = { showAboutDialog = false })
     }
 
     // The purchase dialog is hidden after the entitlement is granted.
