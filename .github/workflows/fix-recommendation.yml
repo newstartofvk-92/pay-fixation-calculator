@@ -1,0 +1,75 @@
+name: Fix recommendation wording
+
+# This one-time workflow updates only the recommendation presentation logic.
+# The underlying pay-fixation calculation engine is intentionally untouched.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/fix-recommendation.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update-recommendation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Update recommendation logic
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('app/src/main/java/com/niyammitra/payfixationcalculator/MainActivity.kt')
+          text = path.read_text(encoding='utf-8')
+
+          old = '''                // If pay differs before the selected DNI, that difference is a real
+                // financial advantage for the period leading up to the DNI. Otherwise,
+                // compare the pay actually received on the selected DNI itself.
+                val recommendationText = when {
+                    preDniDifference > 0 -> "Recommended: Option 2. It gives ₹${preDniDifference} higher basic pay from the date of promotion until the selected DNI."
+                    preDniDifference < 0 -> "Recommended: Option 1. It gives ₹${-preDniDifference} higher basic pay from the date of promotion until the selected DNI."
+                    dniPayDifference > 0 -> "Recommended: Option 2. At the selected DNI, it gives ₹${dniPayDifference} higher basic pay than Option 1."
+                    dniPayDifference < 0 -> "Recommended: Option 1. At the selected DNI, it gives ₹${-dniPayDifference} higher basic pay than Option 2."
+                    else -> "Recommended: Option 1. Both options have the same basic pay at the selected DNI; Option 1 provides fixation from the date of promotion."
+                }
+'''
+
+          new = '''                // The recommendation must explain both phases when the options trade places:
+                // Option 1 can pay more between promotion and DNI, while Option 2 can pay
+                // more from the selected DNI onward. The user should not be told that one
+                // option is simply better based on the pre-DNI period alone.
+                val recommendationText = when {
+                    preDniDifference < 0 && dniPayDifference > 0 ->
+                        "Recommended: Option 2. Option 1 gives ₹${-preDniDifference} higher basic pay from the date of promotion until the selected DNI, but Option 2 gives ₹${dniPayDifference} higher basic pay from the selected DNI onward."
+                    preDniDifference > 0 && dniPayDifference < 0 ->
+                        "Recommended: Option 1. Option 2 gives ₹${preDniDifference} higher basic pay from the date of promotion until the selected DNI, but Option 1 gives ₹${-dniPayDifference} higher basic pay from the selected DNI onward."
+                    preDniDifference > 0 ->
+                        "Recommended: Option 1. It gives ₹${preDniDifference} higher basic pay from the date of promotion until the selected DNI, with no lower pay at the selected DNI."
+                    preDniDifference < 0 ->
+                        "Recommended: Option 2. It gives ₹${-preDniDifference} lower basic pay from the date of promotion until the selected DNI, but the selected DNI comparison does not show a higher Option 1 pay."
+                    dniPayDifference > 0 ->
+                        "Recommended: Option 2. At the selected DNI, it gives ₹${dniPayDifference} higher basic pay than Option 1."
+                    dniPayDifference < 0 ->
+                        "Recommended: Option 1. At the selected DNI, it gives ₹${-dniPayDifference} higher basic pay than Option 2."
+                    else ->
+                        "Recommended: Both options have the same basic pay at the selected DNI; Option 1 provides fixation from the date of promotion."
+                }
+'''
+
+          if old not in text:
+              raise SystemExit('Expected recommendation block was not found; no changes made.')
+
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+      
+      - name: Commit recommendation fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/niyammitra/payfixationcalculator/MainActivity.kt
+          git commit -m "Correct recommendation trade-off wording"
+          git push
