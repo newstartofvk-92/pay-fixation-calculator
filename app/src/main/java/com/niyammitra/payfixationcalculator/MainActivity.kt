@@ -208,8 +208,9 @@ fun PayFixationCalculatorScreen() {
                             }
                         }
                     ) {
+                        // History is intentionally the larger of the two header actions for easier recognition and access.
                         Text("◷", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                        Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Text("History", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
 
                     Box(
@@ -227,8 +228,9 @@ fun PayFixationCalculatorScreen() {
                             showAboutDialog = true
                         }
                     ) {
-                        Text("ⓘ", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                        Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        // About is intentionally smaller so it remains secondary to History in the header.
+                        Text("ⓘ", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text("About", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
