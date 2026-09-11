@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -35,10 +37,14 @@ fun AboutDialog(onClose: () -> Unit) {
             }
         },
         text = {
+            // Keep the full About content accessible on smaller phones by making
+            // the dialog body vertically scrollable instead of allowing its lower
+            // content, including the version and Privacy Policy button, to be clipped.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 520.dp),
+                    .heightIn(max = 520.dp)
+                    .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text("RKCApps", fontWeight = FontWeight.Bold)
@@ -66,7 +72,9 @@ fun AboutDialog(onClose: () -> Unit) {
                         "applicable rules/orders and with the competent authority before official use."
                 )
 
-                Text("Version 1.0", style = MaterialTheme.typography.bodySmall)
+                // Show the application version explicitly in the About section so users
+                // can identify which app release they are using when seeking support.
+                Text("Version 1.0", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
 
                 // Opens the already-published privacy policy in the user's default browser.
                 Button(onClick = {
