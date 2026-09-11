@@ -186,8 +186,9 @@ fun PayFixationCalculatorScreen() {
                 Spacer(Modifier.width(12.dp))
 
                 Column(Modifier.weight(1f)) {
-                    Text("NiyamMitra", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Pay Fixation Calculator", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                    // The calculator name is the primary header title; NiyamMitra is the brand subtitle.
+                    Text("Pay Fixation Calculator", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("NiyamMitra", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
 
                 // Compact action controls keep History and About visible without competing
