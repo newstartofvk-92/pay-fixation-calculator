@@ -1,0 +1,55 @@
+# This temporary workflow applies a narrowly scoped UI fix without rewriting the rest of MainActivity.kt.
+# It removes itself after the fix so no permanent automation is added to the project.
+name: Temporary header icon fix
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    # Run only for the commit that installs this temporary workflow.
+    if: github.event.head_commit.message == 'Install temporary header icon fix'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Replace Unicode header glyphs with equal Material icons
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/src/main/java/com/niyammitra/payfixationcalculator/MainActivity.kt')
+          text = path.read_text(encoding='utf-8')
+
+          # Add the Material History and Info icons so both actions use the same 24dp icon box.
+          imports = '''import androidx.compose.material.icons.Icons\nimport androidx.compose.material.icons.filled.History\nimport androidx.compose.material.icons.filled.Info\n'''
+          marker = 'import androidx.compose.material3.*\n'
+          if imports not in text:
+              text = text.replace(marker, marker + imports, 1)
+
+          # Replace the visually mismatched Unicode glyphs while preserving the existing click behavior.
+          text = text.replace('''                        Text("◷", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)\n                        Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)''', '''                        // Both header actions use a fixed 24dp Material icon box, making their visual size equal.\n                        Icon(\n                            imageVector = Icons.Default.History,\n                            contentDescription = "History",\n                            modifier = Modifier.size(24.dp),\n                            tint = Color.White\n                        )\n                        Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)''')
+
+          text = text.replace('''                        Text("ⓘ", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)\n                        Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)''', '''                        // The About icon uses the identical 24dp box and label size as History.\n                        Icon(\n                            imageVector = Icons.Default.Info,\n                            contentDescription = "About",\n                            modifier = Modifier.size(24.dp),\n                            tint = Color.White\n                        )\n                        Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)''')
+
+          # Keep the two clickable action areas the same width so alignment remains balanced.
+          text = text.replace('''                    Column(\n                        horizontalAlignment = Alignment.CenterHorizontally,\n                        modifier = Modifier.clickable {\n                            // Refresh history before opening it so the newest save/delete state is shown.''', '''                    Column(\n                        horizontalAlignment = Alignment.CenterHorizontally,\n                        modifier = Modifier\n                            .width(52.dp)\n                            .clickable {\n                            // Refresh history before opening it so the newest save/delete state is shown.''', 1)
+
+          text = text.replace('''                    Column(\n                        horizontalAlignment = Alignment.CenterHorizontally,\n                        modifier = Modifier.clickable {\n                            // About opens the app information/legal dialog and does not alter calculation state.''', '''                    Column(\n                        horizontalAlignment = Alignment.CenterHorizontally,\n                        modifier = Modifier\n                            .width(52.dp)\n                            .clickable {\n                            // About opens the app information/legal dialog and does not alter calculation state.''', 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/java/com/niyammitra/payfixationcalculator/MainActivity.kt
+          git commit -m "Use equal Material icons in header"
+          git rm .github/workflows/temporary_header_icon_fix.yml
+          git commit -m "Remove temporary header icon workflow"
+          git push
