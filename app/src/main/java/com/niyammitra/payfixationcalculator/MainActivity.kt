@@ -113,7 +113,8 @@ fun PayFixationCalculatorScreen() {
                 history = HistoryStore.getAll(context)
             },
             onClear = { showClearHistoryDialog = true },
-            onOpen = { selectedHistory = it }
+            onOpen = { selectedHistory = it },
+            onAbout = { showAboutDialog = true }
         )
 
         if (showClearHistoryDialog) {
@@ -135,6 +136,12 @@ fun PayFixationCalculatorScreen() {
 
         // Tapping a saved record opens its complete reconstructed calculation.
         selectedHistory?.let { entry -> HistoryDetailDialog(entry) { selectedHistory = null } }
+
+        // The same About dialog remains available from the History header so both
+        // major app screens provide consistent access to app information and privacy policy.
+        if (showAboutDialog) {
+            AboutDialog(onClose = { showAboutDialog = false })
+        }
         return
     }
 
@@ -191,8 +198,8 @@ fun PayFixationCalculatorScreen() {
                     Text("NiyamMitra", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
 
-                // Compact action controls keep History and About visible without competing
-                // with the app title or consuming excessive horizontal space.
+                // History and About deliberately use identical icon and label sizes so
+                // neither action appears visually more important than the other.
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -208,9 +215,8 @@ fun PayFixationCalculatorScreen() {
                             }
                         }
                     ) {
-                        // History is intentionally the larger of the two header actions for easier recognition and access.
                         Text("◷", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                        Text("History", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
                     Box(
@@ -228,9 +234,8 @@ fun PayFixationCalculatorScreen() {
                             showAboutDialog = true
                         }
                     ) {
-                        // About is intentionally smaller so it remains secondary to History in the header.
-                        Text("ⓘ", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                        Text("About", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Text("ⓘ", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                        Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -479,17 +484,71 @@ private fun AdFreePurchaseDialog(context: android.content.Context, onClose: () -
 
 /** Displays the locally saved calculations and provides delete/open actions. */
 @Composable
-private fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit, onDelete: (Long) -> Unit, onClear: () -> Unit, onOpen: (CalculationHistory) -> Unit) {
-    Column(Modifier.fillMaxSize().background(NiyamBackground).statusBarsPadding()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onBack) { Text("‹ Back", color = NiyamBlue, fontWeight = FontWeight.Bold) }
-            Text("Calculation History", Modifier.weight(1f), color = NiyamTextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-            if (history.isNotEmpty()) TextButton(onClick = onClear) { Text("Clear", color = Color(0xFFD64545)) }
+private fun HistoryScreen(
+    history: List<CalculationHistory>,
+    onBack: () -> Unit,
+    onDelete: (Long) -> Unit,
+    onClear: () -> Unit,
+    onOpen: (CalculationHistory) -> Unit,
+    onAbout: () -> Unit
+) {
+    Column(Modifier.fillMaxSize().background(NiyamBackground)) {
+        // The History screen uses the same blue app header so navigation feels like
+        // part of the same application rather than a separate screen style.
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = NiyamHeaderBlue,
+            shadowElevation = 3.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Back remains the primary navigation control on the History screen.
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable(onClick = onBack)
+                ) {
+                    Text("‹", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                    Text("Back", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(Modifier.width(16.dp))
+
+                Column(Modifier.weight(1f)) {
+                    Text("Calculation History", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Saved calculations", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+
+                // About uses exactly the same icon and label sizing as the Home header.
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.clickable(onClick = onAbout)
+                ) {
+                    Text("ⓘ", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
-        if (history.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No saved calculations yet.", color = NiyamTextSecondary, fontSize = 16.sp) }
-        } else {
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (history.isNotEmpty()) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onClear) { Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold) }
+                }
+            }
+
+            if (history.isEmpty()) {
+                Box(Modifier.fillMaxSize().padding(top = 80.dp), contentAlignment = Alignment.Center) {
+                    Text("No saved calculations yet.", color = NiyamTextSecondary, fontSize = 16.sp)
+                }
+            } else {
                 history.forEach { entry ->
                     Card(Modifier.fillMaxWidth().clickable { onOpen(entry) }, colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(16.dp)) {
                         Column(Modifier.padding(16.dp)) {
