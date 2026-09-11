@@ -37,6 +37,7 @@ import java.util.*
 
 // Main NiyamMitra UI colors used throughout the calculator screen.
 private val NiyamBlue = Color(0xFF1769AA)
+private val NiyamHeaderBlue = Color(0xFF1976B8)
 private val NiyamBackground = Color(0xFFF7FAFC)
 private val NiyamTextPrimary = Color(0xFF172B4D)
 private val NiyamTextSecondary = Color(0xFF5B6B7A)
@@ -156,32 +157,78 @@ fun PayFixationCalculatorScreen() {
         calculatePayFixation(currentLevel!!, currentPay!!, promotedLevel!!, promotionDate, dniDate, employeeCategory)
     } else null
 
-    Column(Modifier.fillMaxSize().background(NiyamBackground).statusBarsPadding()) {
-        // App header and History/About navigation.
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Image(painterResource(R.drawable.rkcapps_logo), "RKCApps", Modifier.size(width = 72.dp, height = 52.dp), contentScale = ContentScale.Fit)
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text("NiyamMitra", color = NiyamBlue, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text("Pay Fixation Calculator", color = NiyamTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            }
-            Row {
-                // History opens the saved local calculations without changing the current inputs.
-                TextButton(onClick = {
-                    // Refresh history before opening it so the newest save/delete state is shown.
-                    history = HistoryStore.getAll(context)
-                    val activity = context as? Activity
-                    if (activity != null) {
-                        // Free users may see the History-entry interstitial; premium users bypass it.
-                        HistoryInterstitialAd.showIfDue(activity) { showHistory = true }
-                    } else {
-                        showHistory = true
-                    }
-                }) { Text("History", color = NiyamBlue, fontWeight = FontWeight.Bold) }
+    Column(Modifier.fillMaxSize().background(NiyamBackground)) {
+        // A dedicated blue header gives the home screen a clear visual identity and
+        // replaces the previous photo-like logo row with a compact, professional mark.
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = NiyamHeaderBlue,
+            shadowElevation = 3.dp
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // The simple NM mark remains crisp at every screen density and avoids
+                // the clutter caused by the photographic RKCApps logo in the header.
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(Color.White, RoundedCornerShape(14.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("NM", color = NiyamHeaderBlue, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                }
 
-                // About opens the app information/legal dialog and does not alter calculation state.
-                TextButton(onClick = { showAboutDialog = true }) {
-                    Text("About", color = NiyamBlue, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(12.dp))
+
+                Column(Modifier.weight(1f)) {
+                    Text("NiyamMitra", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Pay Fixation Calculator", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+
+                // Compact action controls keep History and About visible without competing
+                // with the app title or consuming excessive horizontal space.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.clickable {
+                            // Refresh history before opening it so the newest save/delete state is shown.
+                            history = HistoryStore.getAll(context)
+                            val activity = context as? Activity
+                            if (activity != null) {
+                                // Free users may see the History-entry interstitial; premium users bypass it.
+                                HistoryInterstitialAd.showIfDue(activity) { showHistory = true }
+                            } else {
+                                showHistory = true
+                            }
+                        }
+                    ) {
+                        Text("◷", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                        Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 10.dp)
+                            .height(34.dp)
+                            .width(1.dp)
+                            .background(Color.White.copy(alpha = 0.35f))
+                    )
+
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.clickable {
+                            // About opens the app information/legal dialog and does not alter calculation state.
+                            showAboutDialog = true
+                        }
+                    ) {
+                        Text("ⓘ", color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                        Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -192,18 +239,25 @@ fun PayFixationCalculatorScreen() {
             if (!BillingManager.isPremium) {
                 Card(
                     Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(Color.White)
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(Color(0xFFEAF5FC))
                 ) {
                     Row(
-                        Modifier.fillMaxWidth().padding(14.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(Modifier.weight(1f)) {
-                            Text("Go Ad-Free", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text("Remove all ads permanently for ${BillingManager.getPrice()} one time.", color = NiyamTextSecondary, fontSize = 12.sp)
+                            Text("Go Ad-Free", color = NiyamBlue, fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
+                            Spacer(Modifier.height(4.dp))
+                            Text("Remove all ads permanently for ${BillingManager.getPrice()} one time.", color = NiyamTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
-                        OutlinedButton(onClick = { showAdFreeDialog = true }) {
+                        Spacer(Modifier.width(12.dp))
+                        Button(
+                            onClick = { showAdFreeDialog = true },
+                            shape = RoundedCornerShape(24.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = NiyamBlue),
+                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 11.dp)
+                        ) {
                             Text("Remove Ads", fontWeight = FontWeight.Bold)
                         }
                     }
