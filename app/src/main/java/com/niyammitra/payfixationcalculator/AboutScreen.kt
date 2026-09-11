@@ -72,9 +72,9 @@ fun AboutDialog(onClose: () -> Unit) {
                         "applicable rules/orders and with the competent authority before official use."
                 )
 
-                // Show the application version explicitly in the About section so users
-                // can identify which app release they are using when seeking support.
-                Text("Version 1.0", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                // Keep the About screen synchronized with the Gradle app version so
+                // the version shown to users matches the release being tested.
+                Text("Version 1.1", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
 
                 // Opens the already-published privacy policy in the user's default browser.
                 Button(onClick = {
