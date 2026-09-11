@@ -15,6 +15,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -203,7 +206,9 @@ fun PayFixationCalculatorScreen() {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable {
+                        modifier = Modifier
+                            .width(52.dp)
+                            .clickable {
                             // Refresh history before opening it so the newest save/delete state is shown.
                             history = HistoryStore.getAll(context)
                             val activity = context as? Activity
@@ -215,7 +220,13 @@ fun PayFixationCalculatorScreen() {
                             }
                         }
                     ) {
-                        Text("◷", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                        // Both header actions use a fixed 24dp Material icon box, making their visual size equal.
+                        Icon(
+                            imageVector = Icons.Default.History,
+                            contentDescription = "History",
+                            modifier = Modifier.size(24.dp),
+                            tint = Color.White
+                        )
                         Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
 
@@ -229,12 +240,20 @@ fun PayFixationCalculatorScreen() {
 
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable {
+                        modifier = Modifier
+                            .width(52.dp)
+                            .clickable {
                             // About opens the app information/legal dialog and does not alter calculation state.
                             showAboutDialog = true
                         }
                     ) {
-                        Text("ⓘ", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                        // The About icon uses the identical 24dp box and label size as History.
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "About",
+                            modifier = Modifier.size(24.dp),
+                            tint = Color.White
+                        )
                         Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
