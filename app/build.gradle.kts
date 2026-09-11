@@ -13,8 +13,11 @@ android {
         applicationId = "com.niyammitra.payfixationcalculator"
         minSdk = 24
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0"
+        // Increment the version code for the next Google Play test release.
+        // Play Console requires every uploaded app bundle to use a new version code.
+        versionCode = 2
+        // Version 1.1 identifies this test build as the second app release.
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
