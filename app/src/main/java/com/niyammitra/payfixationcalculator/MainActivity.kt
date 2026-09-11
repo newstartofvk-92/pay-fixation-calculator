@@ -99,6 +99,17 @@ fun PayFixationCalculatorScreen() {
     var showAboutDialog by remember { mutableStateOf(false) }
 
     if (showHistory) {
+        // Intercept the Android system Back button while History is displayed so it
+        // returns to the calculator instead of finishing MainActivity. The same
+        // HistoryInterstitialAd flow is used as the visible History back control.
+        androidx.activity.compose.BackHandler {
+            val activity = context as? Activity
+            if (activity != null) {
+                HistoryInterstitialAd.showOnHistoryBack(activity) { showHistory = false }
+            } else {
+                showHistory = false
+            }
+        }
         HistoryScreen(
             history = history,
             onBack = {
