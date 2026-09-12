@@ -187,34 +187,45 @@ fun SixthToSeventhCpcScreen(onBack: () -> Unit) {
                     }
                 }
 
+                Text("What do you want to calculate next?", color = SixSevenTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = {
+                            nextAction = SeventhCpcNextAction.NEXT_INCREMENT
+                            if (incrementPays.isEmpty()) {
+                                getSixthToSeventhNextCell(calculation.level, calculation.revisedBasicPay)?.let { nextPay ->
+                                    incrementPays = listOf(nextPay)
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Next Increment", fontWeight = FontWeight.Bold) }
+                    Button(
+                        onClick = { nextAction = SeventhCpcNextAction.PROMOTION_MACP },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Promotion / MACP", fontWeight = FontWeight.Bold) }
+                }
+
                 if (nextAction == SeventhCpcNextAction.NEXT_INCREMENT) {
-                    NextIncrementProgression(calculation = calculation, incrementPays = incrementPays, onNext = {
-                        val currentPay = incrementPays.lastOrNull() ?: calculation.revisedBasicPay
-                        val nextPay = getSixthToSeventhNextCell(calculation.level, currentPay)
-                        if (nextPay != null) incrementPays = incrementPays + nextPay
-                    })
+                    NextIncrementProgression(
+                        calculation = calculation,
+                        incrementPays = incrementPays,
+                        onNext = {
+                            val currentPay = incrementPays.lastOrNull() ?: calculation.revisedBasicPay
+                            val nextPay = getSixthToSeventhNextCell(calculation.level, currentPay)
+                            if (nextPay != null) incrementPays = incrementPays + nextPay
+                        }
+                    )
                 } else if (nextAction == SeventhCpcNextAction.PROMOTION_MACP) {
                     PromotionMacpFromConversion(
                         currentLevel = calculation.level,
                         currentPay = calculation.revisedBasicPay,
                         onBackToOptions = { nextAction = null }
                     )
-                } else {
-                    Text("What do you want to calculate next?", color = SixSevenTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(
-                            onClick = { nextAction = SeventhCpcNextAction.NEXT_INCREMENT },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue),
-                            shape = RoundedCornerShape(12.dp)
-                        ) { Text("Next Increment", fontWeight = FontWeight.Bold) }
-                        Button(
-                            onClick = { nextAction = SeventhCpcNextAction.PROMOTION_MACP },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue),
-                            shape = RoundedCornerShape(12.dp)
-                        ) { Text("Promotion / MACP", fontWeight = FontWeight.Bold) }
-                    }
                 }
             }
 
@@ -259,9 +270,6 @@ private fun NextIncrementProgression(
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue)
             ) { Text("Next Increment", fontWeight = FontWeight.Bold) }
-            OutlinedButton(onClick = { }, enabled = false, modifier = Modifier.fillMaxWidth()) {
-                Text("Promotion / MACP")
-            }
         }
     }
 }
@@ -278,6 +286,7 @@ private fun PromotionMacpFromConversion(
     var dniDate by remember { mutableStateOf<Long?>(null) }
     var promotedMenu by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var dniMenu by remember { mutableStateOf(false) }
     var basis by remember { mutableStateOf(PromotionFixationBasis.EVENT_DATE) }
 
     val matrix = PayMatrixSelection.forCategory(EmployeeCategory.ORDINARY)
@@ -291,7 +300,6 @@ private fun PromotionMacpFromConversion(
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Pay carried forward from conversion", color = SixSevenBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                ConversionRow("Present Pay Level", currentLevel.toIntOrNull() ?: 0)
                 Text("Present Pay Level: Level $currentLevel", color = SixSevenTextSecondary, fontSize = 13.sp)
                 ConversionRow("Current Basic Pay", currentPay)
                 Text("Select the Level to which promotion / MACP is granted.", color = SixSevenTextSecondary, fontSize = 13.sp)
@@ -314,7 +322,7 @@ private fun PromotionMacpFromConversion(
 
                 Text("Fixation option", color = SixSevenTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = basis == PromotionFixationBasis.EVENT_DATE, onClick = { basis = PromotionFixationBasis.EVENT_DATE })
+                    RadioButton(selected = basis == PromotionFixationBasis.EVENT_DATE, onClick = { basis = PromotionFixationBasis.EVENT_DATE; dniDate = null })
                     Text("From date of event", color = SixSevenTextPrimary, fontSize = 13.sp)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -325,17 +333,19 @@ private fun PromotionMacpFromConversion(
                 if (basis == PromotionFixationBasis.DNI) {
                     Text("Date of Next Increment (DNI)", color = SixSevenTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Box {
-                        OutlinedButton(onClick = { if (dniOptions.isNotEmpty()) dniDate = dniDate ?: dniOptions.first() }, enabled = dniOptions.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { if (dniOptions.isNotEmpty()) dniMenu = true },
+                            enabled = dniOptions.isNotEmpty(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Text(dniDate?.let { formatSixSevenDate(it) } ?: "Select DNI", modifier = Modifier.weight(1f))
+                            Text("▼")
                         }
-                        DropdownMenu(expanded = dniOptions.isNotEmpty() && dniDate != null, onDismissRequest = { }) {
+                        DropdownMenu(expanded = dniMenu, onDismissRequest = { dniMenu = false }) {
                             dniOptions.forEach { option ->
-                                DropdownMenuItem(text = { Text(formatSixSevenDate(option)) }, onClick = { dniDate = option })
+                                DropdownMenuItem(text = { Text(formatSixSevenDate(option)) }, onClick = { dniDate = option; dniMenu = false })
                             }
                         }
-                    }
-                    if (dniOptions.isNotEmpty()) {
-                        Text("Available DNI choices: ${dniOptions.joinToString(" / ") { formatSixSevenDate(it) }}", color = SixSevenTextSecondary, fontSize = 12.sp)
                     }
                 }
             }
@@ -364,10 +374,7 @@ private fun PromotionMacpFromConversion(
             }
         }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = onBackToOptions, modifier = Modifier.weight(1f)) { Text("Back to Options") }
-            Button(onClick = { }, enabled = false, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue)) { Text("Result") }
-        }
+        OutlinedButton(onClick = onBackToOptions, modifier = Modifier.fillMaxWidth()) { Text("Back to Options") }
     }
 
     if (showDatePicker) {
@@ -375,7 +382,7 @@ private fun PromotionMacpFromConversion(
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                TextButton(onClick = { promotionDate = state.selectedDateMillis; dniDate = null; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) }
+                TextButton(onClick = { promotionDate = state.selectedDateMillis; dniDate = null; dniMenu = false; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) }
             }
         ) { DatePicker(state) }
     }
