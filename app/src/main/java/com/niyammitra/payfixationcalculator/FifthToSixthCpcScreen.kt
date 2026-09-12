@@ -144,12 +144,14 @@ private fun SixthCpcIncrementProgressionCard(calculation: FifthToSixthResult, st
             Text("Increment Progression — ${calculation.scale.payBand}", color = FiveSixBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
             Text("Pay fixed on 01 January 2006: ${formatFiveSixCurrency(calculation.revisedBasicPay)}", color = FiveSixTextSecondary, fontSize = 13.sp)
             steps.forEachIndexed { index, step ->
+                val payInBand = step.pay - calculation.gradePay
                 Surface(Modifier.fillMaxWidth(), color = FiveSixBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
                     Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Column(Modifier.weight(1f)) {
                             Text("Increment ${index + 1}", color = FiveSixTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text("Date: ${formatSixthCpcDate(step.date)}", color = FiveSixTextPrimary, fontSize = 13.sp)
-                            Text("Pay thereon: ${formatFiveSixCurrency(step.pay)}", color = FiveSixBlue, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                            Text("Pay in Pay Band: ${formatFiveSixCurrency(payInBand)}", color = FiveSixBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                            Text("Grade Pay: ${formatFiveSixCurrency(calculation.gradePay)}", color = FiveSixTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                         TextButton(onClick = { onDelete(index) }) { Text("Delete", fontWeight = FontWeight.Bold) }
                     }
