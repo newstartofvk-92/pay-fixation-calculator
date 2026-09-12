@@ -17,18 +17,23 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -47,6 +52,9 @@ private val SixSevenBackground = Color(0xFFF7FAFC)
 private val SixSevenTextPrimary = Color(0xFF172B4D)
 private val SixSevenTextSecondary = Color(0xFF5B6B7A)
 
+private enum class SeventhCpcNextAction { NEXT_INCREMENT, PROMOTION_MACP }
+private enum class PromotionFixationBasis { EVENT_DATE, DNI }
+
 @Composable
 fun SixthToSeventhCpcScreen(onBack: () -> Unit) {
     BackHandler(onBack = onBack)
@@ -56,28 +64,13 @@ fun SixthToSeventhCpcScreen(onBack: () -> Unit) {
     var payInPayBandText by remember { mutableStateOf("") }
     var payBandMenu by remember { mutableStateOf(false) }
     var gradePayMenu by remember { mutableStateOf(false) }
-
-    // Stores each successive 7th CPC cell reached through the Next Increment button.
-    val incrementResults = remember { mutableStateListOf<Int>() }
+    var nextAction by remember { mutableStateOf<SeventhCpcNextAction?>(null) }
+    var incrementPays by remember(selectedPayBand, selectedGradePay, payInPayBandText) { mutableStateOf<List<Int>>(emptyList()) }
 
     val payInPayBand = payInPayBandText.toIntOrNull()
     val result = if (selectedPayBand != null && selectedGradePay != null && payInPayBand != null) {
         calculateSixthToSeventhCpc(payInPayBand, selectedGradePay!!, selectedPayBand!!)
     } else null
-
-    // A change in the conversion inputs starts a fresh increment progression.
-    val conversionKey = Triple(selectedPayBand, selectedGradePay, payInPayBand)
-    var previousConversionKey by remember { mutableStateOf<Triple<SixthCpcPayBand?, Int?, Int?>?>(null) }
-    if (previousConversionKey != conversionKey) {
-        incrementResults.clear()
-        previousConversionKey = conversionKey
-    }
-
-    val currentCell = incrementResults.lastOrNull() ?: result?.revisedBasicPay
-    val levelStages = result?.let { PayMatrixData.getPayStages(it.level) }.orEmpty()
-    val currentIndex = currentCell?.let { levelStages.indexOf(it) } ?: -1
-    val canIncrement = currentIndex >= 0 && currentIndex < levelStages.lastIndex
-    val finalCellReached = currentIndex >= 0 && currentIndex == levelStages.lastIndex
 
     Column(Modifier.fillMaxSize().background(SixSevenBackground)) {
         Surface(modifier = Modifier.fillMaxWidth(), color = SixSevenHeaderBlue, shadowElevation = 3.dp) {
@@ -120,6 +113,7 @@ fun SixthToSeventhCpcScreen(onBack: () -> Unit) {
                                     selectedPayBand = band
                                     selectedGradePay = null
                                     payBandMenu = false
+                                    nextAction = null
                                 })
                             }
                         }
@@ -135,7 +129,7 @@ fun SixthToSeventhCpcScreen(onBack: () -> Unit) {
                         }
                         DropdownMenu(expanded = gradePayMenu && selectedPayBand != null, onDismissRequest = { gradePayMenu = false }) {
                             selectedPayBand?.gradePays?.forEach { gp ->
-                                DropdownMenuItem(text = { Text(formatSixSevenCurrency(gp)) }, onClick = { selectedGradePay = gp; gradePayMenu = false })
+                                DropdownMenuItem(text = { Text(formatSixSevenCurrency(gp)) }, onClick = { selectedGradePay = gp; gradePayMenu = false; nextAction = null })
                             }
                         }
                     }
@@ -175,18 +169,6 @@ fun SixthToSeventhCpcScreen(onBack: () -> Unit) {
                     }
                 }
 
-                if (incrementResults.isNotEmpty()) {
-                    incrementResults.forEachIndexed { index, pay ->
-                        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
-                            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                                Text("Next Increment ${index + 1}", color = SixSevenBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                                Text("Level ${calculation.level} — Cell ${levelStages.indexOf(pay) + 1}", color = SixSevenTextSecondary, fontSize = 13.sp)
-                                Text(formatSixSevenCurrency(pay), color = SixSevenBlue, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                            }
-                        }
-                    }
-                }
-
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                         Text("Next Increment", color = SixSevenBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
@@ -196,36 +178,42 @@ fun SixthToSeventhCpcScreen(onBack: () -> Unit) {
                     }
                 }
 
-                if (canIncrement) {
-                    Button(
-                        onClick = {
-                            val nextIndex = currentIndex + 1
-                            if (nextIndex <= levelStages.lastIndex) {
-                                incrementResults.add(levelStages[nextIndex])
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("Next Increment")
-                    }
-                } else if (finalCellReached) {
-                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFE8F5E9)), shape = RoundedCornerShape(16.dp)) {
-                        Text(
-                            "Final cell reached",
-                            Modifier.padding(16.dp).fillMaxWidth(),
-                            color = SixSevenTextPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
-                }
-
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Rule Basis", color = SixSevenTextPrimary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                         calculation.ruleBasis.forEachIndexed { index, rule ->
                             Text("${index + 1}. $rule", color = SixSevenTextPrimary, fontSize = 12.sp)
                         }
+                    }
+                }
+
+                if (nextAction == SeventhCpcNextAction.NEXT_INCREMENT) {
+                    NextIncrementProgression(calculation = calculation, incrementPays = incrementPays, onNext = {
+                        val currentPay = incrementPays.lastOrNull() ?: calculation.revisedBasicPay
+                        val nextPay = getSixthToSeventhNextCell(calculation.level, currentPay)
+                        if (nextPay != null) incrementPays = incrementPays + nextPay
+                    })
+                } else if (nextAction == SeventhCpcNextAction.PROMOTION_MACP) {
+                    PromotionMacpFromConversion(
+                        currentLevel = calculation.level,
+                        currentPay = calculation.revisedBasicPay,
+                        onBackToOptions = { nextAction = null }
+                    )
+                } else {
+                    Text("What do you want to calculate next?", color = SixSevenTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(
+                            onClick = { nextAction = SeventhCpcNextAction.NEXT_INCREMENT },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue),
+                            shape = RoundedCornerShape(12.dp)
+                        ) { Text("Next Increment", fontWeight = FontWeight.Bold) }
+                        Button(
+                            onClick = { nextAction = SeventhCpcNextAction.PROMOTION_MACP },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue),
+                            shape = RoundedCornerShape(12.dp)
+                        ) { Text("Promotion / MACP", fontWeight = FontWeight.Bold) }
                     }
                 }
             }
@@ -242,6 +230,158 @@ fun SixthToSeventhCpcScreen(onBack: () -> Unit) {
 }
 
 @Composable
+private fun NextIncrementProgression(
+    calculation: SixthToSeventhResult,
+    incrementPays: List<Int>,
+    onNext: () -> Unit
+) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Increment Progression — Level ${calculation.level}", color = SixSevenBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+            Text("Starting cell: ${formatSixSevenCurrency(calculation.revisedBasicPay)}", color = SixSevenTextSecondary, fontSize = 13.sp)
+            incrementPays.forEachIndexed { index, pay ->
+                Surface(Modifier.fillMaxWidth(), color = SixSevenBlue.copy(alpha = 0.06f), shape = RoundedCornerShape(12.dp)) {
+                    Column(Modifier.padding(14.dp)) {
+                        Text("Next Increment ${index + 1}", color = SixSevenTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text(formatSixSevenCurrency(pay), color = SixSevenBlue, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
+                    }
+                }
+            }
+            val currentPay = incrementPays.lastOrNull() ?: calculation.revisedBasicPay
+            val finalReached = getSixthToSeventhNextCell(calculation.level, currentPay) == null
+            if (finalReached) {
+                Text("Final cell reached", color = Color(0xFF2E7D32), fontWeight = FontWeight.ExtraBold, fontSize = 15.sp)
+            }
+            Button(
+                onClick = onNext,
+                enabled = !finalReached,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue)
+            ) { Text("Next Increment", fontWeight = FontWeight.Bold) }
+            OutlinedButton(onClick = { }, enabled = false, modifier = Modifier.fillMaxWidth()) {
+                Text("Promotion / MACP")
+            }
+        }
+    }
+}
+
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@Composable
+private fun PromotionMacpFromConversion(
+    currentLevel: String,
+    currentPay: Int,
+    onBackToOptions: () -> Unit
+) {
+    var promotedLevel by remember { mutableStateOf<String?>(null) }
+    var promotionDate by remember { mutableStateOf<Long?>(null) }
+    var dniDate by remember { mutableStateOf<Long?>(null) }
+    var promotedMenu by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var basis by remember { mutableStateOf(PromotionFixationBasis.EVENT_DATE) }
+
+    val matrix = PayMatrixSelection.forCategory(EmployeeCategory.ORDINARY)
+    val dniOptions = remember(promotionDate) { promotionDate?.let { getPayFixationDniOptions(it) } ?: emptyList() }
+    val result = if (promotedLevel != null && promotionDate != null && (basis == PromotionFixationBasis.EVENT_DATE || dniDate != null)) {
+        calculatePayFixation(currentLevel, currentPay, promotedLevel!!, promotionDate, dniDate, EmployeeCategory.ORDINARY)
+    } else null
+
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text("Promotion / MACP Fixation", color = SixSevenTextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Pay carried forward from conversion", color = SixSevenBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                ConversionRow("Present Pay Level", currentLevel.toIntOrNull() ?: 0)
+                Text("Present Pay Level: Level $currentLevel", color = SixSevenTextSecondary, fontSize = 13.sp)
+                ConversionRow("Current Basic Pay", currentPay)
+                Text("Select the Level to which promotion / MACP is granted.", color = SixSevenTextSecondary, fontSize = 13.sp)
+                Box {
+                    OutlinedButton(onClick = { promotedMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text(promotedLevel?.let { "Level $it" } ?: "Select Promoted / Upgraded Pay Level", modifier = Modifier.weight(1f))
+                        Text("▼")
+                    }
+                    DropdownMenu(expanded = promotedMenu, onDismissRequest = { promotedMenu = false }) {
+                        matrix.levels.filter { matrix.isHigherLevel(currentLevel, it) }.forEach { level ->
+                            DropdownMenuItem(text = { Text("Level $level") }, onClick = { promotedLevel = level; promotedMenu = false })
+                        }
+                    }
+                }
+
+                Text("Date of Promotion / MACP", color = SixSevenTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(promotionDate?.let { formatSixSevenDate(it) } ?: "Select date", modifier = Modifier.weight(1f))
+                }
+
+                Text("Fixation option", color = SixSevenTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = basis == PromotionFixationBasis.EVENT_DATE, onClick = { basis = PromotionFixationBasis.EVENT_DATE })
+                    Text("From date of event", color = SixSevenTextPrimary, fontSize = 13.sp)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = basis == PromotionFixationBasis.DNI, onClick = { basis = PromotionFixationBasis.DNI })
+                    Text("From DNI", color = SixSevenTextPrimary, fontSize = 13.sp)
+                }
+
+                if (basis == PromotionFixationBasis.DNI) {
+                    Text("Date of Next Increment (DNI)", color = SixSevenTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Box {
+                        OutlinedButton(onClick = { if (dniOptions.isNotEmpty()) dniDate = dniDate ?: dniOptions.first() }, enabled = dniOptions.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
+                            Text(dniDate?.let { formatSixSevenDate(it) } ?: "Select DNI", modifier = Modifier.weight(1f))
+                        }
+                        DropdownMenu(expanded = dniOptions.isNotEmpty() && dniDate != null, onDismissRequest = { }) {
+                            dniOptions.forEach { option ->
+                                DropdownMenuItem(text = { Text(formatSixSevenDate(option)) }, onClick = { dniDate = option })
+                            }
+                        }
+                    }
+                    if (dniOptions.isNotEmpty()) {
+                        Text("Available DNI choices: ${dniOptions.joinToString(" / ") { formatSixSevenDate(it) }}", color = SixSevenTextSecondary, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+
+        result?.let { fixation ->
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text(if (basis == PromotionFixationBasis.EVENT_DATE) "Result — From Date of Event" else "Result — From DNI", color = SixSevenBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                    if (basis == PromotionFixationBasis.EVENT_DATE) {
+                        Text("Date: From ${formatSixSevenDate(promotionDate!!)}", color = SixSevenTextPrimary, fontWeight = FontWeight.Bold)
+                        ConversionRow("Pay after one increment in Level $currentLevel", fixation.option1.payWithIncrement)
+                        ConversionRow("Fixed Pay in Level $promotedLevel", fixation.option1.finalFixedPay)
+                        fixation.option1.nextDni?.let { Text("Next DNI: ${formatSixSevenDate(it)}", color = SixSevenTextSecondary, fontSize = 13.sp) }
+                        fixation.option1.payAfterNextDni?.let { ConversionRow("Pay on next DNI", it) }
+                    } else {
+                        Text("Fixation from DNI: ${formatSixSevenDate(dniDate!!)}", color = SixSevenTextPrimary, fontWeight = FontWeight.Bold)
+                        ConversionRow("Pay until DNI in Level $promotedLevel", fixation.option2.payUntilDni)
+                        ConversionRow("Annual increment in Level $currentLevel", fixation.option2.payWithAnnualIncrement)
+                        ConversionRow("Promotion / MACP increment", fixation.option2.payWithPromotionIncrement)
+                        ConversionRow("Fixed Pay in Level $promotedLevel", fixation.option2.finalFixedPay)
+                        fixation.option2.nextDni?.let { Text("Next DNI: ${formatSixSevenDate(it)}", color = SixSevenTextSecondary, fontSize = 13.sp) }
+                        fixation.option2.payAfterNextDni?.let { ConversionRow("Pay on next DNI", it) }
+                    }
+                }
+            }
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = onBackToOptions, modifier = Modifier.weight(1f)) { Text("Back to Options") }
+            Button(onClick = { }, enabled = false, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue)) { Text("Result") }
+        }
+    }
+
+    if (showDatePicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = promotionDate)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = { promotionDate = state.selectedDateMillis; dniDate = null; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) }
+            }
+        ) { DatePicker(state) }
+    }
+}
+
+@Composable
 private fun ConversionRow(label: String, value: Int) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = SixSevenTextSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f))
@@ -249,4 +389,17 @@ private fun ConversionRow(label: String, value: Int) {
     }
 }
 
+private fun getSixthToSeventhNextCell(level: String, currentPay: Int): Int? =
+    if (level == "13") {
+        val stages = listOf(123100, 126800, 130600, 134500, 138500, 142700, 147000, 151400, 155900, 160600, 165400, 170400, 175500, 180800, 186200, 191800, 197600, 203500, 209600, 215900)
+        val index = stages.indexOf(currentPay)
+        if (index >= 0 && index < stages.lastIndex) stages[index + 1] else null
+    } else {
+        val stages = PayMatrixData.getPayStages(level)
+        val index = stages.indexOf(currentPay)
+        if (index >= 0 && index < stages.lastIndex) stages[index + 1] else null
+    }
+
 private fun formatSixSevenCurrency(value: Int): String = NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(value)
+
+private fun formatSixSevenDate(value: Long): String = java.text.SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(java.util.Date(value))
