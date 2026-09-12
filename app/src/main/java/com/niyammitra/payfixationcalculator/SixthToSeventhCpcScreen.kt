@@ -199,10 +199,9 @@ fun SixthToSeventhCpcScreen(onBack: () -> Unit) {
                     Button(
                         onClick = {
                             nextAction = SeventhCpcNextAction.NEXT_INCREMENT
-                            if (incrementPays.isEmpty()) {
-                                getSixthToSeventhNextCell(calculation.level, incrementPays.lastOrNull() ?: calculation.revisedBasicPay)?.let { nextPay ->
-                                    incrementPays = listOf(nextPay)
-                                }
+                            val currentPay = incrementPays.lastOrNull() ?: calculation.revisedBasicPay
+                            getSixthToSeventhNextCell(calculation.level, currentPay)?.let { nextPay ->
+                                incrementPays = incrementPays + nextPay
                             }
                         },
                         modifier = Modifier.weight(1f),
@@ -217,22 +216,7 @@ fun SixthToSeventhCpcScreen(onBack: () -> Unit) {
                     ) { Text("Promotion / MACP", fontWeight = FontWeight.Bold) }
                 }
 
-                if (nextAction == SeventhCpcNextAction.NEXT_INCREMENT) {
-                    val currentPay = incrementPays.lastOrNull() ?: calculation.revisedBasicPay
-                    val finalReached = getSixthToSeventhNextCell(calculation.level, currentPay) == null
-                    if (!finalReached) {
-                        Button(
-                            onClick = {
-                                getSixthToSeventhNextCell(calculation.level, incrementPays.lastOrNull() ?: calculation.revisedBasicPay)?.let { nextPay ->
-                                    incrementPays = incrementPays + nextPay
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue),
-                            shape = RoundedCornerShape(12.dp)
-                        ) { Text("Add Next Increment", fontWeight = FontWeight.Bold) }
-                    }
-                } else if (nextAction == SeventhCpcNextAction.PROMOTION_MACP) {
+                if (nextAction == SeventhCpcNextAction.PROMOTION_MACP) {
                     PromotionMacpFromConversion(
                         currentLevel = calculation.level,
                         currentPay = incrementPays.lastOrNull() ?: calculation.revisedBasicPay,
