@@ -48,6 +48,25 @@ object SixthToSeventhCpcData {
     }
 }
 
+// The 2017 amendment changed only Level 13 from the original 2.57-IOR table.
+// Keep this corrected table local to the conversion engine until the common
+// PayMatrixData is deliberately migrated and regression-tested separately.
+private val amendedLevel13Stages = listOf(
+    123100, 126800, 130600, 134500, 138500,
+    142700, 147000, 151400, 155900, 160600,
+    165400, 170400, 175500, 180800, 186200,
+    191800, 197600, 203500, 209600, 215900
+)
+
+private fun sixthToSeventhStages(level: String): List<Int> =
+    if (level == "13") amendedLevel13Stages else PayMatrixData.getPayStages(level)
+
+private fun sixthToSeventhNextIncrement(level: String, currentPay: Int): Int? {
+    val stages = sixthToSeventhStages(level)
+    val index = stages.indexOf(currentPay)
+    return if (index >= 0 && index < stages.lastIndex) stages[index + 1] else null
+}
+
 fun calculateSixthToSeventhCpc(
     payInPayBand: Int,
     gradePay: Int,
@@ -59,13 +78,13 @@ fun calculateSixthToSeventhCpc(
     val existingPay = payInPayBand + gradePay
     val multiplied = existingPay * 2.57
     val rounded = kotlin.math.round(multiplied).toInt()
-    val stages = PayMatrixData.getPayStages(level)
+    val stages = sixthToSeventhStages(level)
     if (stages.isEmpty()) return null
 
     // Rule 7(1)(a)(ii): if the calculated amount is below the first cell,
     // pay is fixed at the minimum/first cell of the applicable level.
     val revised = stages.firstOrNull { it >= rounded } ?: stages.last()
-    val next = PayMatrixData.getNextIncrement(level, revised)
+    val next = sixthToSeventhNextIncrement(level, revised)
 
     return SixthToSeventhResult(
         payInPayBand = payInPayBand,
@@ -85,6 +104,7 @@ fun calculateSixthToSeventhCpc(
             "The rounded amount is searched in the applicable 7th CPC Pay Matrix Level; if no equal cell exists, the immediate next higher cell is used.",
             "If the calculated amount is below the first cell of the applicable Level, pay is fixed at that Level's minimum/first cell.",
             "PB-2 Grade Pay ₹5,400 corresponds to Level 9; PB-3 Grade Pay ₹5,400 corresponds to Level 10.",
+            "Level 13 is calculated using the amended 2017 matrix (starting at ₹1,23,100).",
             "For pay fixed as on 01 January 2016, the next increment is 01 July 2016 under the Rule 10 transitional provision, subject to applicable conditions."
         )
     )
