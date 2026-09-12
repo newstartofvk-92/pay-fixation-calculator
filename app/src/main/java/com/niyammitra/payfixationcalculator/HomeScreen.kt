@@ -45,12 +45,12 @@ private val HomeNiyamBackground = Color(0xFFF7FAFC)
 private val HomeNiyamTextPrimary = Color(0xFF172B4D)
 private val HomeNiyamTextSecondary = Color(0xFF5B6B7A)
 
-/** V2 entry screen for selecting the pay-fixation workflow. */
 @Composable
 fun V2AppScreen() {
     val context = LocalContext.current
     var selectedFixationType by remember { mutableStateOf<FixationType?>(null) }
     var showCalculator by remember { mutableStateOf(false) }
+    var showFourthToFifth by remember { mutableStateOf(false) }
     var showFifthToSixth by remember { mutableStateOf(false) }
     var showSixthToSeventh by remember { mutableStateOf(false) }
     var carriedPayBand by remember { mutableStateOf<String?>(null) }
@@ -65,6 +65,11 @@ fun V2AppScreen() {
     if (showCalculator) {
         BackHandler { showCalculator = false }
         PayFixationCalculatorScreen()
+        return
+    }
+
+    if (showFourthToFifth) {
+        FourthToFifthCpcScreen(onBack = { showFourthToFifth = false })
         return
     }
 
@@ -120,6 +125,7 @@ fun V2AppScreen() {
         onSelected = { type ->
             selectedFixationType = type
             when (type) {
+                FixationType.FOURTH_TO_FIFTH -> showFourthToFifth = true
                 FixationType.FIFTH_TO_SIXTH -> showFifthToSixth = true
                 FixationType.SIXTH_TO_SEVENTH -> {
                     carriedPayBand = null
@@ -128,7 +134,6 @@ fun V2AppScreen() {
                     showSixthToSeventh = true
                 }
                 FixationType.SEVENTH_CPC -> showCalculator = true
-                else -> Unit
             }
         },
         onHistory = { history = HistoryStore.getAll(context); showHistory = true },
@@ -146,7 +151,7 @@ private fun HomeFixationSelectionScreen(onSelected: (FixationType) -> Unit, onHi
             Text("Select Fixation Type", color = HomeNiyamTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
             Text("Choose the pay-revision or pay-fixation workflow you want to work out.", color = HomeNiyamTextSecondary, fontSize = 14.sp)
             FixationType.values().forEach { type ->
-                FixationTypeCard(type = type, enabled = type == FixationType.FIFTH_TO_SIXTH || type == FixationType.SIXTH_TO_SEVENTH || type == FixationType.SEVENTH_CPC, onClick = { onSelected(type) })
+                FixationTypeCard(type = type, enabled = true, onClick = { onSelected(type) })
             }
         }
     }
@@ -163,7 +168,7 @@ private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -
             Column(Modifier.weight(1f)) {
                 Text(type.title, color = if (enabled) HomeNiyamTextPrimary else HomeNiyamTextSecondary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                 Spacer(Modifier.height(4.dp))
-                Text(when (type) { FixationType.FIFTH_TO_SIXTH -> "Pay conversion using 1.86 fitment factor"; FixationType.SIXTH_TO_SEVENTH -> "Pay conversion using 2.57 fitment factor"; FixationType.SEVENTH_CPC -> "Promotion / MACP"; else -> "Coming soon" }, color = HomeNiyamTextSecondary, fontSize = 13.sp)
+                Text(when (type) { FixationType.FOURTH_TO_FIFTH -> "Pay conversion using Rule 7 fitment"; FixationType.FIFTH_TO_SIXTH -> "Pay conversion using 1.86 fitment factor"; FixationType.SIXTH_TO_SEVENTH -> "Pay conversion using 2.57 fitment factor"; FixationType.SEVENTH_CPC -> "Promotion / MACP" }, color = HomeNiyamTextSecondary, fontSize = 13.sp)
             }
         }
     }
