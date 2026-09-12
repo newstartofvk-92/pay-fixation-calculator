@@ -53,6 +53,9 @@ fun V2AppScreen() {
     var showCalculator by remember { mutableStateOf(false) }
     var showFifthToSixth by remember { mutableStateOf(false) }
     var showSixthToSeventh by remember { mutableStateOf(false) }
+    var carriedPayBand by remember { mutableStateOf<String?>(null) }
+    var carriedPayInPayBand by remember { mutableStateOf<Int?>(null) }
+    var carriedGradePay by remember { mutableStateOf<Int?>(null) }
     var showHistory by remember { mutableStateOf(false) }
     var history by remember { mutableStateOf(HistoryStore.getAll(context)) }
     var selectedHistory by remember { mutableStateOf<CalculationHistory?>(null) }
@@ -66,12 +69,26 @@ fun V2AppScreen() {
     }
 
     if (showFifthToSixth) {
-        FifthToSixthCpcScreen(onBack = { showFifthToSixth = false })
+        FifthToSixthCpcScreen(
+            onBack = { showFifthToSixth = false },
+            onContinueToSeventh = { payBand, payInPayBand, gradePay ->
+                carriedPayBand = payBand
+                carriedPayInPayBand = payInPayBand
+                carriedGradePay = gradePay
+                showFifthToSixth = false
+                showSixthToSeventh = true
+            }
+        )
         return
     }
 
     if (showSixthToSeventh) {
-        SixthToSeventhCpcScreen(onBack = { showSixthToSeventh = false })
+        SixthToSeventhCpcScreen(
+            onBack = { showSixthToSeventh = false },
+            initialPayBand = carriedPayBand,
+            initialGradePay = carriedGradePay,
+            initialPayInPayBand = carriedPayInPayBand
+        )
         return
     }
 
@@ -104,7 +121,12 @@ fun V2AppScreen() {
             selectedFixationType = type
             when (type) {
                 FixationType.FIFTH_TO_SIXTH -> showFifthToSixth = true
-                FixationType.SIXTH_TO_SEVENTH -> showSixthToSeventh = true
+                FixationType.SIXTH_TO_SEVENTH -> {
+                    carriedPayBand = null
+                    carriedPayInPayBand = null
+                    carriedGradePay = null
+                    showSixthToSeventh = true
+                }
                 FixationType.SEVENTH_CPC -> showCalculator = true
                 else -> Unit
             }
