@@ -276,7 +276,7 @@ private fun AdFreePurchaseDialog(context: android.content.Context, onClose: () -
 }
 
 @Composable
-private fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit, onDelete: (Long) -> Unit, onClear: () -> Unit, onOpen: (CalculationHistory) -> Unit, onAbout: () -> Unit) {
+fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit, onDelete: (Long) -> Unit, onClear: () -> Unit, onOpen: (CalculationHistory) -> Unit, onAbout: () -> Unit) {
     Column(Modifier.fillMaxSize().background(NiyamBackground)) {
         Surface(modifier = Modifier.fillMaxWidth(), color = NiyamHeaderBlue, shadowElevation = 3.dp) {
             Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -314,7 +314,7 @@ private fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit,
 }
 
 @Composable
-private fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) {
+fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) {
     val result = remember(entry) { calculatePayFixation(entry.currentLevel, entry.currentPay, entry.promotedLevel, entry.promotionDate, entry.dniDate, entry.employeeCategory) }
     val selectedDni = entry.dniDate
     val option1NextDni = result.option1.nextDni
