@@ -31,6 +31,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+// Home-screen colors are local to this file because the existing calculator
+// colors in MainActivity.kt are intentionally private to that file.
+private val HomeNiyamBlue = Color(0xFF1769AA)
+private val HomeNiyamHeaderBlue = Color(0xFF1976B8)
+private val HomeNiyamBackground = Color(0xFFF7FAFC)
+private val HomeNiyamTextPrimary = Color(0xFF172B4D)
+private val HomeNiyamTextSecondary = Color(0xFF5B6B7A)
+
 /** V2 entry screen for selecting the pay-fixation workflow. */
 @Composable
 fun V2AppScreen() {
@@ -64,7 +72,7 @@ fun V2AppScreen() {
 @Composable
 private fun HomeFixationSelectionScreen(onSelected: (FixationType) -> Unit) {
     Column(
-        modifier = Modifier.fillMaxSize().background(NiyamBackground),
+        modifier = Modifier.fillMaxSize().background(HomeNiyamBackground),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         HomeHeader()
@@ -72,8 +80,8 @@ private fun HomeFixationSelectionScreen(onSelected: (FixationType) -> Unit) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Select Fixation Type", color = NiyamTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-            Text("Choose the pay-revision or pay-fixation workflow you want to work out.", color = NiyamTextSecondary, fontSize = 14.sp)
+            Text("Select Fixation Type", color = HomeNiyamTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+            Text("Choose the pay-revision or pay-fixation workflow you want to work out.", color = HomeNiyamTextSecondary, fontSize = 14.sp)
             FixationType.values().forEach { type ->
                 FixationTypeCard(
                     type = type,
@@ -91,14 +99,14 @@ private fun SeventhCpcFixationSelectionScreen(
     onSelected: (SeventhCpcFixationType) -> Unit
 ) {
     BackHandler(onBack = onBack)
-    Column(modifier = Modifier.fillMaxSize().background(NiyamBackground)) {
+    Column(modifier = Modifier.fillMaxSize().background(HomeNiyamBackground)) {
         HomeHeader()
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("7th CPC Pay Fixation", color = NiyamTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-            Text("Select the reason for fixation.", color = NiyamTextSecondary, fontSize = 14.sp)
+            Text("7th CPC Pay Fixation", color = HomeNiyamTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+            Text("Select the reason for fixation.", color = HomeNiyamTextSecondary, fontSize = 14.sp)
             SeventhCpcFixationType.values().forEach { type ->
                 Card(
                     modifier = Modifier.fillMaxWidth().clickable { onSelected(type) },
@@ -107,16 +115,16 @@ private fun SeventhCpcFixationSelectionScreen(
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
                     Column(Modifier.padding(20.dp)) {
-                        Text(type.title, color = NiyamBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(type.title, color = HomeNiyamBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                         Spacer(Modifier.height(6.dp))
-                        Text(type.description, color = NiyamTextSecondary, fontSize = 13.sp)
+                        Text(type.description, color = HomeNiyamTextSecondary, fontSize = 13.sp)
                     }
                 }
             }
             Text(
                 "‹  Back",
                 modifier = Modifier.clickable(onClick = onBack).padding(vertical = 8.dp),
-                color = NiyamBlue,
+                color = HomeNiyamBlue,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -137,7 +145,7 @@ private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -
         ) {
             Box(
                 modifier = Modifier.size(46.dp).background(
-                    if (enabled) NiyamBlue.copy(alpha = 0.10f) else Color(0xFFE1E4E8),
+                    if (enabled) HomeNiyamBlue.copy(alpha = 0.10f) else Color(0xFFE1E4E8),
                     RoundedCornerShape(12.dp)
                 ),
                 contentAlignment = Alignment.Center
@@ -148,16 +156,16 @@ private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -
                         FixationType.SIXTH_TO_SEVENTH -> "6→7"
                         FixationType.SEVENTH_CPC -> "7th"
                     },
-                    color = if (enabled) NiyamBlue else NiyamTextSecondary,
+                    color = if (enabled) HomeNiyamBlue else HomeNiyamTextSecondary,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Text(type.title, color = if (enabled) NiyamTextPrimary else NiyamTextSecondary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                Text(type.title, color = if (enabled) HomeNiyamTextPrimary else HomeNiyamTextSecondary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                 Spacer(Modifier.height(4.dp))
-                Text(if (enabled) type.description else "Coming soon", color = NiyamTextSecondary, fontSize = 13.sp)
+                Text(if (enabled) type.description else "Coming soon", color = HomeNiyamTextSecondary, fontSize = 13.sp)
             }
         }
     }
@@ -165,7 +173,7 @@ private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -
 
 @Composable
 private fun HomeHeader() {
-    Surface(modifier = Modifier.fillMaxWidth(), color = NiyamHeaderBlue, shadowElevation = 3.dp) {
+    Surface(modifier = Modifier.fillMaxWidth(), color = HomeNiyamHeaderBlue, shadowElevation = 3.dp) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 20.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -174,7 +182,7 @@ private fun HomeHeader() {
                 modifier = Modifier.size(56.dp).background(Color.White, RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("NM", color = NiyamHeaderBlue, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+                Text("NM", color = HomeNiyamHeaderBlue, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
             }
             Spacer(Modifier.width(12.dp))
             Column {
