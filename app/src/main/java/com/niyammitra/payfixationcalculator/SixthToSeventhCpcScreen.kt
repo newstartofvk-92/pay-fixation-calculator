@@ -140,7 +140,10 @@ fun SixthToSeventhCpcScreen(onBack: () -> Unit) {
                     Button(onClick = { nextAction = SeventhCpcNextAction.PROMOTION_MACP }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue), shape = RoundedCornerShape(12.dp)) { Text("Promotion / MACP", fontWeight = FontWeight.Bold) }
                 }
 
-                if (nextAction == SeventhCpcNextAction.PROMOTION_MACP) PromotionMacpFromConversion(calculation.level, incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay, julyFirst2016())
+                if (nextAction == SeventhCpcNextAction.PROMOTION_MACP) {
+                    val currentDni = incrementSteps.lastOrNull()?.let { addYears(it.date, 1) } ?: julyFirst2016()
+                    PromotionMacpFromConversion(calculation.level, incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay, currentDni)
+                }
             }
 
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
