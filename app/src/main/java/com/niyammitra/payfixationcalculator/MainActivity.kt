@@ -179,10 +179,10 @@ fun PayFixationCalculatorScreen() {
                 DropdownField("Current Basic Pay", currentPay?.let { formatCurrency(it) } ?: "Select your Current Basic Pay", payStages.map { formatCurrency(it) }, payMenu, { payMenu = it }, { value -> currentPay = payStages.firstOrNull { formatCurrency(it) == value } }, currentLevel != null)
             }
 
-            SelectionCard("Promotion Details") {
-                DropdownField("Promoted Pay Level", promotedLevel?.let { "Level $it" } ?: "Select your Promoted Pay Level", matrix.levels, promotedMenu, { promotedMenu = it }, { level -> promotedLevel = level })
+            SelectionCard("Promotion / MACP Details") {
+                DropdownField("Promoted / Upgraded Pay Level", promotedLevel?.let { "Level $it" } ?: "Select your Promoted / Upgraded Pay Level", matrix.levels, promotedMenu, { promotedMenu = it }, { level -> promotedLevel = level })
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    DateField("Date of Promotion", promotionDate, { showDatePicker = true }, Modifier.weight(1f))
+                    DateField("Date of Promotion / MACP", promotionDate, { showDatePicker = true }, Modifier.weight(1f))
                     Column(Modifier.weight(1f)) {
                         Text("Date of Next Increment", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         Box(Modifier.padding(top = 8.dp)) {
@@ -198,16 +198,16 @@ fun PayFixationCalculatorScreen() {
             }
 
             if (result != null) {
-                Text("Fixation Illustrations", color = NiyamTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-                ResultCard("Option 1: Fixation from Date of Promotion", promotionDate, listOf(
+                Text("Fixation Illustrations — Promotion / MACP", color = NiyamTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                ResultCard("Option 1: Fixation from Date of Promotion / MACP", promotionDate, listOf(
                     "Pay in lower Level ($currentLevel)" to result.option1.lowerLevelPay,
                     "Add one increment in lower Level ($currentLevel)" to result.option1.payWithIncrement,
                     "Placement in promoted Level ($promotedLevel)" to result.option1.finalFixedPay
                 ), result.option1.finalFixedPay, result.option1.nextDni, result.option1.payAfterNextDni)
                 ResultCard("Option 2: Fixation from Date of Next Increment", dniDate, listOf(
-                    "Pay from date of promotion until DNI (placed at next higher cell in Level $promotedLevel)" to result.option2.payUntilDni,
+                    "Pay from date of promotion / MACP until DNI (placed at next higher cell in Level $promotedLevel)" to result.option2.payUntilDni,
                     "On DNI, annual increment in lower Level ($currentLevel)" to result.option2.payWithAnnualIncrement,
-                    "On DNI, one increment on account of promotion in Level $currentLevel" to result.option2.payWithPromotionIncrement,
+                    "On DNI, one increment on account of Promotion / MACP in Level $currentLevel" to result.option2.payWithPromotionIncrement,
                     "Final placement in promoted Level ($promotedLevel)" to result.option2.finalFixedPay
                 ), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni, promotionDate)
 
@@ -218,13 +218,13 @@ fun PayFixationCalculatorScreen() {
                 val dniPayDifference = option2PayAtSelectedDni - option1PayAtSelectedDni
                 val preDniDifference = result.option2.payUntilDni - result.option1.finalFixedPay
                 val recommendationText = when {
-                    preDniDifference < 0 && dniPayDifference > 0 -> "Recommended: Option 2. Option 1 gives ₹${-preDniDifference} higher basic pay from the date of promotion until the selected DNI, but Option 2 gives ₹${dniPayDifference} higher basic pay from the selected DNI onward."
-                    preDniDifference > 0 && dniPayDifference < 0 -> "Recommended: Option 1. Option 2 gives ₹${preDniDifference} higher basic pay from the date of promotion until the selected DNI, but Option 1 gives ₹${-dniPayDifference} higher basic pay from the selected DNI onward."
-                    preDniDifference > 0 -> "Recommended: Option 1. It gives ₹${preDniDifference} higher basic pay from the date of promotion until the selected DNI, with no lower pay at the selected DNI."
+                    preDniDifference < 0 && dniPayDifference > 0 -> "Recommended: Option 2. Option 1 gives ₹${-preDniDifference} higher basic pay from the date of promotion / MACP until the selected DNI, but Option 2 gives ₹${dniPayDifference} higher basic pay from the selected DNI onward."
+                    preDniDifference > 0 && dniPayDifference < 0 -> "Recommended: Option 1. Option 2 gives ₹${preDniDifference} higher basic pay from the date of promotion / MACP until the selected DNI, but Option 1 gives ₹${-dniPayDifference} higher basic pay from the selected DNI onward."
+                    preDniDifference > 0 -> "Recommended: Option 1. It gives ₹${preDniDifference} higher basic pay from the date of promotion / MACP until the selected DNI, with no lower pay at the selected DNI."
                     preDniDifference < 0 -> "Recommended: Option 2. It gives lower basic pay before the selected DNI, but the selected DNI comparison does not show a higher Option 1 pay."
                     dniPayDifference > 0 -> "Recommended: Option 2. At the selected DNI, it gives ₹${dniPayDifference} higher basic pay than Option 1."
                     dniPayDifference < 0 -> "Recommended: Option 1. At the selected DNI, it gives ₹${-dniPayDifference} higher basic pay than Option 2."
-                    else -> "Recommended: Both options have the same basic pay at the selected DNI; Option 1 provides fixation from the date of promotion."
+                    else -> "Recommended: Both options have the same basic pay at the selected DNI; Option 1 provides fixation from the date of promotion / MACP."
                 }
 
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFE8F5E9))) { Text(recommendationText, Modifier.padding(16.dp), color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold) }
@@ -323,11 +323,11 @@ fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) {
     val dniPayDifference = option2PayAtSelectedDni - option1PayAtSelectedDni
     val preDniDifference = result.option2.payUntilDni - result.option1.finalFixedPay
     val recommendationText = when {
-        preDniDifference > 0 -> "Recommended: Option 2. It gives ₹${preDniDifference} higher basic pay from the date of promotion until the selected DNI."
-        preDniDifference < 0 -> "Recommended: Option 1. It gives ₹${-preDniDifference} higher basic pay from the date of promotion until the selected DNI."
+        preDniDifference > 0 -> "Recommended: Option 2. It gives ₹${preDniDifference} higher basic pay from the date of promotion / MACP until the selected DNI."
+        preDniDifference < 0 -> "Recommended: Option 1. It gives ₹${-preDniDifference} higher basic pay from the date of promotion / MACP until the selected DNI."
         dniPayDifference > 0 -> "Recommended: Option 2. At the selected DNI, it gives ₹${dniPayDifference} higher basic pay than Option 1."
         dniPayDifference < 0 -> "Recommended: Option 1. At the selected DNI, it gives ₹${-dniPayDifference} higher basic pay than Option 2."
-        else -> "Recommended: Option 1. Both options have the same basic pay at the selected DNI; Option 1 provides fixation from the date of promotion."
+        else -> "Recommended: Option 1. Both options have the same basic pay at the selected DNI; Option 1 provides fixation from the date of promotion / MACP."
     }
     AlertDialog(
         onDismissRequest = onClose,
@@ -335,10 +335,10 @@ fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) {
         text = { Column(modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("Employee Category", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp); Text(entry.employeeCategory.displayName)
             Text("Current Status", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp); Text("Present Pay Level: Level ${entry.currentLevel}"); Text("Current Basic Pay: ${formatCurrency(entry.currentPay)}")
-            Text("Promotion Details", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.padding(top = 4.dp)); Text("Promoted Pay Level: Level ${entry.promotedLevel}"); Text("Date of Promotion: ${entry.promotionDate?.let { formatDate(it) } ?: "Not selected"}"); Text("Selected DNI: ${entry.dniDate?.let { formatDate(it) } ?: "Not selected"}")
-            HorizontalDivider(Modifier.padding(vertical = 4.dp)); Text("Fixation Illustrations", color = NiyamTextPrimary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-            ResultCard("Option 1: Fixation from Date of Promotion", entry.promotionDate, listOf("Pay in lower Level (${entry.currentLevel})" to result.option1.lowerLevelPay, "Add one increment in lower Level (${entry.currentLevel})" to result.option1.payWithIncrement, "Placement in promoted Level (${entry.promotedLevel})" to result.option1.finalFixedPay), result.option1.finalFixedPay, result.option1.nextDni, result.option1.payAfterNextDni)
-            ResultCard("Option 2: Fixation from Date of Next Increment", entry.dniDate, listOf("Pay from date of promotion until DNI (placed at next higher cell in Level ${entry.promotedLevel})" to result.option2.payUntilDni, "On DNI, annual increment in lower Level (${entry.currentLevel})" to result.option2.payWithAnnualIncrement, "On DNI, one increment on account of promotion in Level ${entry.currentLevel}" to result.option2.payWithPromotionIncrement, "Final placement in promoted Level (${entry.promotedLevel})" to result.option2.finalFixedPay), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni, entry.promotionDate)
+            Text("Promotion / MACP Details", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.padding(top = 4.dp)); Text("Promoted / Upgraded Pay Level: Level ${entry.promotedLevel}"); Text("Date of Promotion / MACP: ${entry.promotionDate?.let { formatDate(it) } ?: "Not selected"}"); Text("Selected DNI: ${entry.dniDate?.let { formatDate(it) } ?: "Not selected"}")
+            HorizontalDivider(Modifier.padding(vertical = 4.dp)); Text("Fixation Illustrations — Promotion / MACP", color = NiyamTextPrimary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+            ResultCard("Option 1: Fixation from Date of Promotion / MACP", entry.promotionDate, listOf("Pay in lower Level (${entry.currentLevel})" to result.option1.lowerLevelPay, "Add one increment in lower Level (${entry.currentLevel})" to result.option1.payWithIncrement, "Placement in promoted Level (${entry.promotedLevel})" to result.option1.finalFixedPay), result.option1.finalFixedPay, result.option1.nextDni, result.option1.payAfterNextDni)
+            ResultCard("Option 2: Fixation from Date of Next Increment", entry.dniDate, listOf("Pay from date of promotion / MACP until DNI (placed at next higher cell in Level ${entry.promotedLevel})" to result.option2.payUntilDni, "On DNI, annual increment in lower Level (${entry.currentLevel})" to result.option2.payWithAnnualIncrement, "On DNI, one increment on account of Promotion / MACP in Level ${entry.currentLevel}" to result.option2.payWithPromotionIncrement, "Final placement in promoted Level (${entry.promotedLevel})" to result.option2.finalFixedPay), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni, entry.promotionDate)
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFE8F5E9))) { Text(recommendationText, Modifier.padding(16.dp), color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold) }
         } },
         confirmButton = { TextButton(onClick = onClose) { Text("Close") } }
@@ -391,7 +391,7 @@ private fun ResultCard(title: String, date: Long?, steps: List<Pair<String, Int>
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(Color.White), elevation = CardDefaults.cardElevation(2.dp)) {
         Column(Modifier.padding(16.dp)) {
             Text(title, fontWeight = FontWeight.Bold, color = NiyamBlue, fontSize = 16.sp)
-            date?.let { Text(if (title.startsWith("Option 1")) "Date of Promotion: ${formatDate(it)}" else "Selected DNI: ${formatDate(it)}", fontSize = 12.sp, color = Color.Gray) }
+            date?.let { Text(if (title.startsWith("Option 1")) "Date of Promotion / MACP: ${formatDate(it)}" else "Selected DNI: ${formatDate(it)}", fontSize = 12.sp, color = Color.Gray) }
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
             steps.forEachIndexed { index, (description, pay) ->
                 Column(Modifier.padding(vertical = 6.dp)) {
