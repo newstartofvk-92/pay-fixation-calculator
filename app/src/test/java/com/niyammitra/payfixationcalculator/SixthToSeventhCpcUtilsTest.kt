@@ -48,7 +48,7 @@ class SixthToSeventhCpcUtilsTest {
         assertNotNull(result)
         assertEquals("13", result!!.level)
         assertEquals(118477, result.roundedPay)
-        assertEquals(118477.coerceAtLeast(123100), result.revisedBasicPay)
+        assertEquals(123100, result.revisedBasicPay)
     }
 
     @Test
