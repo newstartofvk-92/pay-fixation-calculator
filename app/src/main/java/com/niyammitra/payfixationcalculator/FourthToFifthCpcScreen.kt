@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -55,7 +53,7 @@ fun FourthToFifthCpcScreen(onBack: () -> Unit) {
     var scaleMenu by remember { mutableStateOf(false) }
     val basicPay = basicPayText.toIntOrNull()
     val result = if (selectedScale != null && basicPay != null) {
-        runCatching { calculateFourthToFifthCpc(basicPay, selectedScale!!) }.getOrNull()
+        runCatching { calculateFourthToFifthCpcPrecise(basicPay, selectedScale!!) }.getOrNull()
     } else null
 
     Column(Modifier.fillMaxSize().background(FourFiveBackground)) {
