@@ -20,7 +20,7 @@ enum class FixationType(
     ),
     SEVENTH_CPC(
         title = "7th CPC Pay Fixation",
-        description = "Pay fixation within the 7th CPC Pay Matrix."
+        description = "Pay fixation for Promotion / MACP within the 7th CPC Pay Matrix."
     )
 }
 
