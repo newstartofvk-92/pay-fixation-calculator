@@ -1,5 +1,6 @@
 package com.niyammitra.payfixationcalculator
 
+import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -11,14 +12,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 
 // Home-screen colors are local to this file because the existing calculator
 // colors in MainActivity.kt are intentionally private to that file.
@@ -42,13 +52,62 @@ private val HomeNiyamTextSecondary = Color(0xFF5B6B7A)
 /** V2 entry screen for selecting the pay-fixation workflow. */
 @Composable
 fun V2AppScreen() {
+    val context = LocalContext.current
     var selectedFixationType by remember { mutableStateOf<FixationType?>(null) }
     var selectedSeventhCpcType by remember { mutableStateOf<SeventhCpcFixationType?>(null) }
     var showCalculator by remember { mutableStateOf(false) }
+    var showHistory by remember { mutableStateOf(false) }
+    var history by remember { mutableStateOf(HistoryStore.getAll(context)) }
+    var selectedHistory by remember { mutableStateOf<CalculationHistory?>(null) }
+    var showClearHistoryDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
 
     if (showCalculator) {
         BackHandler { showCalculator = false }
         PayFixationCalculatorScreen()
+        return
+    }
+
+    if (showHistory) {
+        BackHandler { showHistory = false }
+        HistoryScreen(
+            history = history,
+            onBack = { showHistory = false },
+            onDelete = { id ->
+                HistoryStore.delete(context, id)
+                history = HistoryStore.getAll(context)
+            },
+            onClear = { showClearHistoryDialog = true },
+            onOpen = { selectedHistory = it },
+            onAbout = { showAboutDialog = true }
+        )
+
+        if (showClearHistoryDialog) {
+            AlertDialog(
+                onDismissRequest = { showClearHistoryDialog = false },
+                title = { Text("Clear History?") },
+                text = { Text("All saved calculations will be permanently removed from this device.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        HistoryStore.clear(context)
+                        history = emptyList()
+                        showClearHistoryDialog = false
+                    }) {
+                        Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showClearHistoryDialog = false }) { Text("Cancel") }
+                }
+            )
+        }
+
+        selectedHistory?.let { entry ->
+            HistoryDetailDialog(entry) { selectedHistory = null }
+        }
+        if (showAboutDialog) {
+            AboutDialog(onClose = { showAboutDialog = false })
+        }
         return
     }
 
@@ -63,19 +122,34 @@ fun V2AppScreen() {
         return
     }
 
-    HomeFixationSelectionScreen { type ->
-        selectedFixationType = type
-        if (type != FixationType.SEVENTH_CPC) selectedSeventhCpcType = null
+    HomeFixationSelectionScreen(
+        onSelected = { type ->
+            selectedFixationType = type
+            if (type != FixationType.SEVENTH_CPC) selectedSeventhCpcType = null
+        },
+        onHistory = {
+            history = HistoryStore.getAll(context)
+            showHistory = true
+        },
+        onAbout = { showAboutDialog = true }
+    )
+
+    if (showAboutDialog) {
+        AboutDialog(onClose = { showAboutDialog = false })
     }
 }
 
 @Composable
-private fun HomeFixationSelectionScreen(onSelected: (FixationType) -> Unit) {
+private fun HomeFixationSelectionScreen(
+    onSelected: (FixationType) -> Unit,
+    onHistory: () -> Unit,
+    onAbout: () -> Unit
+) {
     Column(
         modifier = Modifier.fillMaxSize().background(HomeNiyamBackground),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        HomeHeader()
+        HomeHeader(onHistory = onHistory, onAbout = onAbout)
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -172,10 +246,13 @@ private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -
 }
 
 @Composable
-private fun HomeHeader() {
+private fun HomeHeader(
+    onHistory: (() -> Unit)? = null,
+    onAbout: (() -> Unit)? = null
+) {
     Surface(modifier = Modifier.fillMaxWidth(), color = HomeNiyamHeaderBlue, shadowElevation = 3.dp) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 20.dp),
+            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
@@ -185,9 +262,32 @@ private fun HomeHeader() {
                 Text("NM", color = HomeNiyamHeaderBlue, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
             }
             Spacer(Modifier.width(12.dp))
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text("Pay Fixation Calculator", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
                 Text("NiyamMitra", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
+
+            if (onHistory != null && onAbout != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.width(52.dp).clickable(onClick = onHistory)
+                    ) {
+                        Icon(Icons.Default.History, contentDescription = "History", modifier = Modifier.size(24.dp), tint = Color.White)
+                        Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Box(
+                        modifier = Modifier.padding(horizontal = 10.dp).height(34.dp).width(1.dp)
+                            .background(Color.White.copy(alpha = 0.35f))
+                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.width(52.dp).clickable(onClick = onAbout)
+                    ) {
+                        Icon(Icons.Default.Info, contentDescription = "About", modifier = Modifier.size(24.dp), tint = Color.White)
+                        Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
     }
