@@ -51,6 +51,7 @@ fun V2AppScreen() {
     val context = LocalContext.current
     var selectedFixationType by remember { mutableStateOf<FixationType?>(null) }
     var showCalculator by remember { mutableStateOf(false) }
+    var showFifthToSixth by remember { mutableStateOf(false) }
     var showSixthToSeventh by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
     var history by remember { mutableStateOf(HistoryStore.getAll(context)) }
@@ -64,6 +65,11 @@ fun V2AppScreen() {
         return
     }
 
+    if (showFifthToSixth) {
+        FifthToSixthCpcScreen(onBack = { showFifthToSixth = false })
+        return
+    }
+
     if (showSixthToSeventh) {
         SixthToSeventhCpcScreen(onBack = { showSixthToSeventh = false })
         return
@@ -74,41 +80,22 @@ fun V2AppScreen() {
         HistoryScreen(
             history = history,
             onBack = { showHistory = false },
-            onDelete = { id ->
-                HistoryStore.delete(context, id)
-                history = HistoryStore.getAll(context)
-            },
+            onDelete = { id -> HistoryStore.delete(context, id); history = HistoryStore.getAll(context) },
             onClear = { showClearHistoryDialog = true },
             onOpen = { selectedHistory = it },
             onAbout = { showAboutDialog = true }
         )
-
         if (showClearHistoryDialog) {
             AlertDialog(
                 onDismissRequest = { showClearHistoryDialog = false },
                 title = { Text("Clear History?") },
                 text = { Text("All saved calculations will be permanently removed from this device.") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        HistoryStore.clear(context)
-                        history = emptyList()
-                        showClearHistoryDialog = false
-                    }) {
-                        Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showClearHistoryDialog = false }) { Text("Cancel") }
-                }
+                confirmButton = { TextButton(onClick = { HistoryStore.clear(context); history = emptyList(); showClearHistoryDialog = false }) { Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold) } },
+                dismissButton = { TextButton(onClick = { showClearHistoryDialog = false }) { Text("Cancel") } }
             )
         }
-
-        selectedHistory?.let { entry ->
-            HistoryDetailDialog(entry) { selectedHistory = null }
-        }
-        if (showAboutDialog) {
-            AboutDialog(onClose = { showAboutDialog = false })
-        }
+        selectedHistory?.let { entry -> HistoryDetailDialog(entry) { selectedHistory = null } }
+        if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })
         return
     }
 
@@ -116,46 +103,28 @@ fun V2AppScreen() {
         onSelected = { type ->
             selectedFixationType = type
             when (type) {
+                FixationType.FIFTH_TO_SIXTH -> showFifthToSixth = true
                 FixationType.SIXTH_TO_SEVENTH -> showSixthToSeventh = true
                 FixationType.SEVENTH_CPC -> showCalculator = true
                 else -> Unit
             }
         },
-        onHistory = {
-            history = HistoryStore.getAll(context)
-            showHistory = true
-        },
+        onHistory = { history = HistoryStore.getAll(context); showHistory = true },
         onAbout = { showAboutDialog = true }
     )
 
-    if (showAboutDialog) {
-        AboutDialog(onClose = { showAboutDialog = false })
-    }
+    if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })
 }
 
 @Composable
-private fun HomeFixationSelectionScreen(
-    onSelected: (FixationType) -> Unit,
-    onHistory: () -> Unit,
-    onAbout: () -> Unit
-) {
-    Column(
-        modifier = Modifier.fillMaxSize().background(HomeNiyamBackground),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+private fun HomeFixationSelectionScreen(onSelected: (FixationType) -> Unit, onHistory: () -> Unit, onAbout: () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize().background(HomeNiyamBackground), horizontalAlignment = Alignment.CenterHorizontally) {
         HomeHeader(onHistory = onHistory, onAbout = onAbout)
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Select Fixation Type", color = HomeNiyamTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
             Text("Choose the pay-revision or pay-fixation workflow you want to work out.", color = HomeNiyamTextSecondary, fontSize = 14.sp)
             FixationType.values().forEach { type ->
-                FixationTypeCard(
-                    type = type,
-                    enabled = type == FixationType.SIXTH_TO_SEVENTH || type == FixationType.SEVENTH_CPC,
-                    onClick = { onSelected(type) }
-                )
+                FixationTypeCard(type = type, enabled = type == FixationType.FIFTH_TO_SIXTH || type == FixationType.SIXTH_TO_SEVENTH || type == FixationType.SEVENTH_CPC, onClick = { onSelected(type) })
             }
         }
     }
@@ -163,95 +132,33 @@ private fun HomeFixationSelectionScreen(
 
 @Composable
 private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = if (enabled) Color.White else Color(0xFFF0F2F5)),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (enabled) 2.dp else 0.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(20.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier.size(46.dp).background(
-                    if (enabled) HomeNiyamBlue.copy(alpha = 0.10f) else Color(0xFFE1E4E8),
-                    RoundedCornerShape(12.dp)
-                ),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    when (type) {
-                        FixationType.FOURTH_TO_FIFTH -> "4→5"
-                        FixationType.FIFTH_TO_SIXTH -> "5→6"
-                        FixationType.SIXTH_TO_SEVENTH -> "6→7"
-                        FixationType.SEVENTH_CPC -> "7th"
-                    },
-                    color = if (enabled) HomeNiyamBlue else HomeNiyamTextSecondary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
+    Card(modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (enabled) Color.White else Color(0xFFF0F2F5)), elevation = CardDefaults.cardElevation(defaultElevation = if (enabled) 2.dp else 0.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(46.dp).background(if (enabled) HomeNiyamBlue.copy(alpha = 0.10f) else Color(0xFFE1E4E8), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                Text(when (type) { FixationType.FOURTH_TO_FIFTH -> "4→5"; FixationType.FIFTH_TO_SIXTH -> "5→6"; FixationType.SIXTH_TO_SEVENTH -> "6→7"; FixationType.SEVENTH_CPC -> "7th" }, color = if (enabled) HomeNiyamBlue else HomeNiyamTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(type.title, color = if (enabled) HomeNiyamTextPrimary else HomeNiyamTextSecondary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    when (type) {
-                        FixationType.SIXTH_TO_SEVENTH -> "Pay conversion using 2.57 fitment factor"
-                        FixationType.SEVENTH_CPC -> "Promotion / MACP"
-                        else -> "Coming soon"
-                    },
-                    color = HomeNiyamTextSecondary,
-                    fontSize = 13.sp
-                )
+                Text(when (type) { FixationType.FIFTH_TO_SIXTH -> "Pay conversion using 1.86 fitment factor"; FixationType.SIXTH_TO_SEVENTH -> "Pay conversion using 2.57 fitment factor"; FixationType.SEVENTH_CPC -> "Promotion / MACP"; else -> "Coming soon" }, color = HomeNiyamTextSecondary, fontSize = 13.sp)
             }
         }
     }
 }
 
 @Composable
-private fun HomeHeader(
-    onHistory: (() -> Unit)? = null,
-    onAbout: (() -> Unit)? = null
-) {
+private fun HomeHeader(onHistory: (() -> Unit)? = null, onAbout: (() -> Unit)? = null) {
     Surface(modifier = Modifier.fillMaxWidth(), color = HomeNiyamHeaderBlue, shadowElevation = 3.dp) {
-        Row(
-            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier.size(56.dp).background(Color.White, RoundedCornerShape(14.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("NM", color = HomeNiyamHeaderBlue, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-            }
+        Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(56.dp).background(Color.White, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Text("NM", color = HomeNiyamHeaderBlue, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold) }
             Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Pay Fixation Calculator", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
-                Text("NiyamMitra", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            }
-
+            Column(Modifier.weight(1f)) { Text("Pay Fixation Calculator", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold); Text("NiyamMitra", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium) }
             if (onHistory != null && onAbout != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(52.dp).clickable(onClick = onHistory)
-                    ) {
-                        Icon(Icons.Default.History, contentDescription = "History", modifier = Modifier.size(24.dp), tint = Color.White)
-                        Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Box(
-                        modifier = Modifier.padding(horizontal = 10.dp).height(34.dp).width(1.dp)
-                            .background(Color.White.copy(alpha = 0.35f))
-                    )
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(52.dp).clickable(onClick = onAbout)
-                    ) {
-                        Icon(Icons.Default.Info, contentDescription = "About", modifier = Modifier.size(24.dp), tint = Color.White)
-                        Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable(onClick = onHistory)) { Icon(Icons.Default.History, contentDescription = "History", modifier = Modifier.size(24.dp), tint = Color.White); Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                    Box(modifier = Modifier.padding(horizontal = 10.dp).height(34.dp).width(1.dp).background(Color.White.copy(alpha = 0.35f)))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable(onClick = onAbout)) { Icon(Icons.Default.Info, contentDescription = "About", modifier = Modifier.size(24.dp), tint = Color.White); Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 }
             }
         }
