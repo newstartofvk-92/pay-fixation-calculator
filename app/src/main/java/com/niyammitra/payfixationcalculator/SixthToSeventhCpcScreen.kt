@@ -61,11 +61,21 @@ private enum class PromotionFixationBasis { EVENT_DATE, DNI }
 data class SeventhCpcIncrementStep(val pay: Int, val date: Long)
 
 @Composable
-fun SixthToSeventhCpcScreen(onBack: () -> Unit) {
+fun SixthToSeventhCpcScreen(
+    onBack: () -> Unit,
+    initialPayBand: String? = null,
+    initialGradePay: Int? = null,
+    initialPayInPayBand: Int? = null
+) {
     BackHandler(onBack = onBack)
-    var selectedPayBand by remember { mutableStateOf<SixthCpcPayBand?>(null) }
-    var selectedGradePay by remember { mutableStateOf<Int?>(null) }
-    var payInPayBandText by remember { mutableStateOf("") }
+    val initialBand = initialPayBand?.let { bandPrefix ->
+        SixthToSeventhCpcData.payBands.firstOrNull {
+            it.title.substringBefore(":").trim() == bandPrefix
+        }
+    }
+    var selectedPayBand by remember(initialPayBand) { mutableStateOf<SixthCpcPayBand?>(initialBand) }
+    var selectedGradePay by remember(initialGradePay) { mutableStateOf<Int?>(initialGradePay) }
+    var payInPayBandText by remember(initialPayInPayBand) { mutableStateOf(initialPayInPayBand?.toString() ?: "") }
     var payBandMenu by remember { mutableStateOf(false) }
     var gradePayMenu by remember { mutableStateOf(false) }
     var nextAction by remember { mutableStateOf<SeventhCpcNextAction?>(null) }
