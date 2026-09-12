@@ -40,7 +40,8 @@ object SixthToSeventhCpcData {
     fun levelFor(payBand: SixthCpcPayBand, gradePay: Int): String? = when (payBand.title.substringBefore(":")) {
         "PB-1" -> mapOf(1800 to "1", 1900 to "2", 2000 to "3", 2400 to "4", 2800 to "5")[gradePay]
         "PB-2" -> mapOf(4200 to "6", 4600 to "7", 4800 to "8")[gradePay]
-        "PB-3" -> mapOf(5400 to "9", 6600 to "11", 7600 to "12")[gradePay]
+        // Grade Pay 5400 exists in both PB-2 and PB-3 and maps to different Levels.
+        "PB-3" -> mapOf(5400 to "10", 6600 to "11", 7600 to "12")[gradePay]
         "PB-4" -> mapOf(8700 to "13", 8900 to "13A", 10000 to "14")[gradePay]
         else -> null
     }
@@ -57,9 +58,8 @@ fun calculateSixthToSeventhCpc(
     val existingPay = payInPayBand + gradePay
     val multiplied = existingPay * 2.57
     val rounded = kotlin.math.round(multiplied).toInt()
-    val matrix = PayMatrixData
-    val revised = matrix.findEqualOrNextHigher(level, rounded) ?: return null
-    val next = matrix.getNextIncrement(level, revised)
+    val revised = PayMatrixData.findEqualOrNextHigher(level, rounded) ?: return null
+    val next = PayMatrixData.getNextIncrement(level, revised)
 
     return SixthToSeventhResult(
         payInPayBand = payInPayBand,
