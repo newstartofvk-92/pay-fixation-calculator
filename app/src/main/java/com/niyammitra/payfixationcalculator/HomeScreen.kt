@@ -174,6 +174,7 @@ private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -
             ) {
                 Text(
                     when (type) {
+                        FixationType.FOURTH_TO_FIFTH -> "4→5"
                         FixationType.FIFTH_TO_SIXTH -> "5→6"
                         FixationType.SIXTH_TO_SEVENTH -> "6→7"
                         FixationType.SEVENTH_CPC -> "7th"
