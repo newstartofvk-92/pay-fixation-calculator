@@ -1,6 +1,5 @@
 package com.niyammitra.payfixationcalculator
 
-import android.app.Activity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -41,8 +39,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 
-// Home-screen colors are local to this file because the existing calculator
-// colors in MainActivity.kt are intentionally private to that file.
 private val HomeNiyamBlue = Color(0xFF1769AA)
 private val HomeNiyamHeaderBlue = Color(0xFF1976B8)
 private val HomeNiyamBackground = Color(0xFFF7FAFC)
@@ -54,7 +50,6 @@ private val HomeNiyamTextSecondary = Color(0xFF5B6B7A)
 fun V2AppScreen() {
     val context = LocalContext.current
     var selectedFixationType by remember { mutableStateOf<FixationType?>(null) }
-    var selectedSeventhCpcType by remember { mutableStateOf<SeventhCpcFixationType?>(null) }
     var showCalculator by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
     var history by remember { mutableStateOf(HistoryStore.getAll(context)) }
@@ -111,21 +106,12 @@ fun V2AppScreen() {
         return
     }
 
-    if (selectedFixationType == FixationType.SEVENTH_CPC && selectedSeventhCpcType == null) {
-        SeventhCpcFixationSelectionScreen(
-            onBack = { selectedFixationType = null },
-            onSelected = { type ->
-                selectedSeventhCpcType = type
-                if (type == SeventhCpcFixationType.PROMOTION) showCalculator = true
-            }
-        )
-        return
-    }
-
     HomeFixationSelectionScreen(
         onSelected = { type ->
             selectedFixationType = type
-            if (type != FixationType.SEVENTH_CPC) selectedSeventhCpcType = null
+            if (type == FixationType.SEVENTH_CPC) {
+                showCalculator = true
+            }
         },
         onHistory = {
             history = HistoryStore.getAll(context)
@@ -168,44 +154,6 @@ private fun HomeFixationSelectionScreen(
 }
 
 @Composable
-private fun SeventhCpcFixationSelectionScreen(
-    onBack: () -> Unit,
-    onSelected: (SeventhCpcFixationType) -> Unit
-) {
-    BackHandler(onBack = onBack)
-    Column(modifier = Modifier.fillMaxSize().background(HomeNiyamBackground)) {
-        HomeHeader()
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text("7th CPC Pay Fixation", color = HomeNiyamTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-            Text("Select the reason for fixation.", color = HomeNiyamTextSecondary, fontSize = 14.sp)
-            SeventhCpcFixationType.values().forEach { type ->
-                Card(
-                    modifier = Modifier.fillMaxWidth().clickable { onSelected(type) },
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(Color.White),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(Modifier.padding(20.dp)) {
-                        Text(type.title, color = HomeNiyamBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-                        Spacer(Modifier.height(6.dp))
-                        Text(type.description, color = HomeNiyamTextSecondary, fontSize = 13.sp)
-                    }
-                }
-            }
-            Text(
-                "‹  Back",
-                modifier = Modifier.clickable(onClick = onBack).padding(vertical = 8.dp),
-                color = HomeNiyamBlue,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
-
-@Composable
 private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick),
@@ -239,7 +187,11 @@ private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -
             Column(Modifier.weight(1f)) {
                 Text(type.title, color = if (enabled) HomeNiyamTextPrimary else HomeNiyamTextSecondary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                 Spacer(Modifier.height(4.dp))
-                Text(if (enabled) type.description else "Coming soon", color = HomeNiyamTextSecondary, fontSize = 13.sp)
+                Text(
+                    if (enabled) "Promotion / MACP" else "Coming soon",
+                    color = HomeNiyamTextSecondary,
+                    fontSize = 13.sp
+                )
             }
         }
     }
