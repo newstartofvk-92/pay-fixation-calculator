@@ -362,7 +362,7 @@ fun PayFixationCalculatorScreen() {
                     "On DNI, annual increment in lower Level ($currentLevel)" to result.option2.payWithAnnualIncrement,
                     "On DNI, one increment on account of promotion in Level $currentLevel" to result.option2.payWithPromotionIncrement,
                     "Final placement in promoted Level ($promotedLevel)" to result.option2.finalFixedPay
-                ), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni)
+                ), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni, promotionDate)
 
                 // Compare the actual pay available at the selected DNI, not just the
                 // eventual final-pay values. This matters when the selected DNI is in
@@ -666,7 +666,7 @@ private fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) 
                     "On DNI, annual increment in lower Level (${entry.currentLevel})" to result.option2.payWithAnnualIncrement,
                     "On DNI, one increment on account of promotion in Level ${entry.currentLevel}" to result.option2.payWithPromotionIncrement,
                     "Final placement in promoted Level (${entry.promotedLevel})" to result.option2.finalFixedPay
-                ), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni)
+                ), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni, entry.promotionDate)
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFE8F5E9))) {
                     Text(recommendationText, Modifier.padding(16.dp), color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
                 }
@@ -733,16 +733,23 @@ private fun DateField(label: String, millis: Long?, onClick: () -> Unit, modifie
  * illustration format used by the earlier NiyamMitra implementation.
  */
 @Composable
-private fun ResultCard(title: String, date: Long?, steps: List<Pair<String, Int>>, finalPay: Int, futureDni: Long?, futurePay: Int?, interimPay: Int? = null) {
+private fun ResultCard(title: String, date: Long?, steps: List<Pair<String, Int>>, finalPay: Int, futureDni: Long?, futurePay: Int?, interimPay: Int? = null, periodStartDate: Long? = null) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(Color.White), elevation = CardDefaults.cardElevation(2.dp)) {
         Column(Modifier.padding(16.dp)) {
             Text(title, fontWeight = FontWeight.Bold, color = NiyamBlue, fontSize = 16.sp)
             date?.let { Text(if (title.startsWith("Option 1")) "Date of Promotion: ${formatDate(it)}" else "Selected DNI: ${formatDate(it)}", fontSize = 12.sp, color = Color.Gray) }
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
-            steps.forEach { (description, pay) ->
+            steps.forEachIndexed { index, (description, pay) ->
                 Column(Modifier.padding(vertical = 6.dp)) {
                     Text(description, fontSize = 13.sp, color = NiyamTextPrimary)
-                    date?.let { Text("Date: ${formatDate(it)}", fontSize = 11.sp, color = NiyamTextSecondary, modifier = Modifier.padding(top = 2.dp)) }
+                    date?.let {
+                        val dateText = if (periodStartDate != null && index == 0) {
+                            "Date: From ${formatDate(periodStartDate)} to ${formatDate(it)}"
+                        } else {
+                            "Date: ${formatDate(it)}"
+                        }
+                        Text(dateText, fontSize = 11.sp, color = NiyamTextSecondary, modifier = Modifier.padding(top = 2.dp))
+                    }
                     Text("Pay: ${formatCurrency(pay)}", fontSize = 13.sp, color = NiyamBlue, fontWeight = FontWeight.Bold)
                 }
             }
