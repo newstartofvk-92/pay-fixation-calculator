@@ -124,6 +124,7 @@ fun SixthToSeventhCpcScreen(onBack: () -> Unit) {
                             Column(Modifier.padding(14.dp)) { Text("7th CPC Revised Basic Pay", color = SixSevenTextSecondary, fontSize = 13.sp); Text(formatSixSevenCurrency(calculation.revisedBasicPay), color = SixSevenBlue, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold) }
                         }
                         Text("Pay on 01 January 2016", color = SixSevenTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Text("DNI: 01 July 2016", color = SixSevenTextSecondary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
 
@@ -139,7 +140,7 @@ fun SixthToSeventhCpcScreen(onBack: () -> Unit) {
                     Button(onClick = { nextAction = SeventhCpcNextAction.PROMOTION_MACP }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue), shape = RoundedCornerShape(12.dp)) { Text("Promotion / MACP", fontWeight = FontWeight.Bold) }
                 }
 
-                if (nextAction == SeventhCpcNextAction.PROMOTION_MACP) PromotionMacpFromConversion(calculation.level, incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay, onBackToOptions = { nextAction = null })
+                if (nextAction == SeventhCpcNextAction.PROMOTION_MACP) PromotionMacpFromConversion(calculation.level, incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay, julyFirst2016())
             }
 
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
@@ -184,20 +185,17 @@ private fun IncrementProgressionCard(level: String, startingPay: Int, steps: Lis
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun PromotionMacpFromConversion(currentLevel: String, currentPay: Int, onBackToOptions: () -> Unit) {
+private fun PromotionMacpFromConversion(currentLevel: String, currentPay: Int, knownDni: Long) {
     var promotedLevel by remember { mutableStateOf<String?>(null) }
     var promotionDate by remember { mutableStateOf<Long?>(null) }
-    var dniDate by remember { mutableStateOf<Long?>(null) }
     var promotedMenu by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
-    var dniMenu by remember { mutableStateOf(false) }
     var basis by remember { mutableStateOf(PromotionFixationBasis.EVENT_DATE) }
     var postAction by remember { mutableStateOf<SeventhCpcNextAction?>(null) }
     var postSteps by remember { mutableStateOf<List<SeventhCpcIncrementStep>>(emptyList()) }
 
     val matrix = PayMatrixSelection.forCategory(EmployeeCategory.ORDINARY)
-    val dniOptions = remember(promotionDate) { promotionDate?.let { getPayFixationDniOptions(it) } ?: emptyList() }
-    val fixation = if (promotedLevel != null && promotionDate != null && (basis == PromotionFixationBasis.EVENT_DATE || dniDate != null)) calculatePayFixation(currentLevel, currentPay, promotedLevel!!, promotionDate, dniDate, EmployeeCategory.ORDINARY) else null
+    val fixation = if (promotedLevel != null && promotionDate != null) calculatePayFixation(currentLevel, currentPay, promotedLevel!!, promotionDate, knownDni, EmployeeCategory.ORDINARY) else null
     val finalPay = fixation?.let { if (basis == PromotionFixationBasis.EVENT_DATE) it.option1.finalFixedPay else it.option2.finalFixedPay }
     val firstPostIncrementDate = fixation?.let { if (basis == PromotionFixationBasis.EVENT_DATE) it.option1.nextDni else it.option2.nextDni }
 
@@ -209,6 +207,7 @@ private fun PromotionMacpFromConversion(currentLevel: String, currentPay: Int, o
                 Text("Present Pay Level: Level $currentLevel", color = SixSevenTextSecondary, fontSize = 13.sp)
                 ConversionRow("Latest Basic Pay", currentPay)
                 Text("Promotion / MACP fixation starts from this latest pay.", color = SixSevenTextSecondary, fontSize = 12.sp)
+                Text("Known DNI: ${formatSixSevenDate(knownDni)}", color = SixSevenTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Box {
                     OutlinedButton(onClick = { promotedMenu = true }, modifier = Modifier.fillMaxWidth()) { Text(promotedLevel?.let { "Level $it" } ?: "Select Promoted / Upgraded Pay Level", Modifier.weight(1f)); Text("▼") }
                     DropdownMenu(expanded = promotedMenu, onDismissRequest = { promotedMenu = false }) { matrix.levels.filter { matrix.isHigherLevel(currentLevel, it) }.forEach { level -> DropdownMenuItem(text = { Text("Level $level") }, onClick = { promotedLevel = level; promotedMenu = false }) } }
@@ -216,15 +215,8 @@ private fun PromotionMacpFromConversion(currentLevel: String, currentPay: Int, o
                 Text("Date of Promotion / MACP", color = SixSevenTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(promotionDate?.let { formatSixSevenDate(it) } ?: "Select date", Modifier.weight(1f)) }
                 Text("Fixation option", color = SixSevenTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(selected = basis == PromotionFixationBasis.EVENT_DATE, onClick = { basis = PromotionFixationBasis.EVENT_DATE; dniDate = null }); Text("From date of event", color = SixSevenTextPrimary, fontSize = 13.sp) }
-                Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(selected = basis == PromotionFixationBasis.DNI, onClick = { basis = PromotionFixationBasis.DNI }); Text("From DNI", color = SixSevenTextPrimary, fontSize = 13.sp) }
-                if (basis == PromotionFixationBasis.DNI) {
-                    Text("Date of Next Increment (DNI)", color = SixSevenTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Box {
-                        OutlinedButton(onClick = { if (dniOptions.isNotEmpty()) dniMenu = true }, enabled = dniOptions.isNotEmpty(), modifier = Modifier.fillMaxWidth()) { Text(dniDate?.let { formatSixSevenDate(it) } ?: "Select DNI", Modifier.weight(1f)); Text("▼") }
-                        DropdownMenu(expanded = dniMenu, onDismissRequest = { dniMenu = false }) { dniOptions.forEach { option -> DropdownMenuItem(text = { Text(formatSixSevenDate(option)) }, onClick = { dniDate = option; dniMenu = false }) } }
-                    }
-                }
+                Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(selected = basis == PromotionFixationBasis.EVENT_DATE, onClick = { basis = PromotionFixationBasis.EVENT_DATE }); Text("From date of event", color = SixSevenTextPrimary, fontSize = 13.sp) }
+                Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(selected = basis == PromotionFixationBasis.DNI, onClick = { basis = PromotionFixationBasis.DNI }); Text("From DNI (${formatSixSevenDate(knownDni)})", color = SixSevenTextPrimary, fontSize = 13.sp) }
             }
         }
 
@@ -233,7 +225,7 @@ private fun PromotionMacpFromConversion(currentLevel: String, currentPay: Int, o
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text(if (basis == PromotionFixationBasis.EVENT_DATE) "Result — From Date of Event" else "Result — From DNI", color = SixSevenBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                     if (basis == PromotionFixationBasis.EVENT_DATE) { Text("Date: From ${formatSixSevenDate(promotionDate!!)}", color = SixSevenTextPrimary, fontWeight = FontWeight.Bold); ConversionRow("Pay after one increment in Level $currentLevel", f.option1.payWithIncrement); ConversionRow("Fixed Pay in Level $promotedLevel", f.option1.finalFixedPay); f.option1.nextDni?.let { Text("Next DNI: ${formatSixSevenDate(it)}", color = SixSevenTextSecondary, fontSize = 13.sp) } }
-                    else { Text("Fixation from DNI: ${formatSixSevenDate(dniDate!!)}", color = SixSevenTextPrimary, fontWeight = FontWeight.Bold); ConversionRow("Pay until DNI in Level $promotedLevel", f.option2.payUntilDni); ConversionRow("Annual increment in Level $currentLevel", f.option2.payWithAnnualIncrement); ConversionRow("Promotion / MACP increment", f.option2.payWithPromotionIncrement); ConversionRow("Fixed Pay in Level $promotedLevel", f.option2.finalFixedPay); f.option2.nextDni?.let { Text("Next DNI: ${formatSixSevenDate(it)}", color = SixSevenTextSecondary, fontSize = 13.sp) } }
+                    else { Text("Fixation from DNI: ${formatSixSevenDate(knownDni)}", color = SixSevenTextPrimary, fontWeight = FontWeight.Bold); ConversionRow("Pay until DNI in Level $promotedLevel", f.option2.payUntilDni); ConversionRow("Annual increment in Level $currentLevel", f.option2.payWithAnnualIncrement); ConversionRow("Promotion / MACP increment", f.option2.payWithPromotionIncrement); ConversionRow("Fixed Pay in Level $promotedLevel", f.option2.finalFixedPay); f.option2.nextDni?.let { Text("Next DNI: ${formatSixSevenDate(it)}", color = SixSevenTextSecondary, fontSize = 13.sp) } }
                 }
             }
 
@@ -248,15 +240,14 @@ private fun PromotionMacpFromConversion(currentLevel: String, currentPay: Int, o
                     }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue), shape = RoundedCornerShape(12.dp)) { Text("Next Increment", fontWeight = FontWeight.Bold) }
                     Button(onClick = { postAction = SeventhCpcNextAction.PROMOTION_MACP }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue), shape = RoundedCornerShape(12.dp)) { Text("Promotion / MACP", fontWeight = FontWeight.Bold) }
                 }
-                if (postAction == SeventhCpcNextAction.PROMOTION_MACP) PromotionMacpFromConversion(promotedLevel!!, postSteps.lastOrNull()?.pay ?: pay, onBackToOptions = { postAction = null })
+                if (postAction == SeventhCpcNextAction.PROMOTION_MACP) PromotionMacpFromConversion(promotedLevel!!, postSteps.lastOrNull()?.pay ?: pay, firstPostIncrementDate ?: addYears(promotionDate!!, 1))
             }
         }
-        OutlinedButton(onClick = onBackToOptions, modifier = Modifier.fillMaxWidth()) { Text("Back to Options") }
     }
 
     if (showDatePicker) {
         val state = rememberDatePickerState(initialSelectedDateMillis = promotionDate)
-        DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { promotionDate = state.selectedDateMillis; dniDate = null; dniMenu = false; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) } }) { DatePicker(state) }
+        DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { promotionDate = state.selectedDateMillis; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) } }) { DatePicker(state) }
     }
 }
 
