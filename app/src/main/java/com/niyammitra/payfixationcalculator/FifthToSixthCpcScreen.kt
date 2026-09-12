@@ -29,7 +29,7 @@ private val FiveSixTextSecondary = Color(0xFF5B6B7A)
 data class SixthCpcIncrementStep(val pay: Int, val date: Long)
 
 @Composable
-fun FifthToSixthCpcScreen(onBack: () -> Unit) {
+fun FifthToSixthCpcScreen(onBack: () -> Unit, onContinueToSeventh: ((String, Int, Int) -> Unit)? = null) {
     BackHandler(onBack = onBack)
     var selectedScale by remember { mutableStateOf<FifthCpcScale?>(null) }
     var scaleMenu by remember { mutableStateOf(false) }
@@ -111,6 +111,21 @@ fun FifthToSixthCpcScreen(onBack: () -> Unit) {
                     colors = ButtonDefaults.buttonColors(containerColor = FiveSixBlue),
                     shape = RoundedCornerShape(12.dp)
                 ) { Text("Next Increment", fontWeight = FontWeight.Bold) }
+
+                if (onContinueToSeventh != null) {
+                    Button(
+                        onClick = {
+                            val latest = incrementSteps.lastOrNull()
+                            val latestPay = latest?.pay ?: calculation.revisedBasicPay
+                            val latestPayInBand = latestPay - calculation.gradePay
+                            val payBandTitle = calculation.scale.payBand.substringBefore(":").trim()
+                            onContinueToSeventh(payBandTitle, latestPayInBand, calculation.gradePay)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = FiveSixBlue),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Continue to 7th CPC", fontWeight = FontWeight.Bold) }
+                }
             }
 
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
