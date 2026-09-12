@@ -38,30 +38,21 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
-// Main NiyamMitra UI colors used throughout the calculator screen.
 private val NiyamBlue = Color(0xFF1769AA)
 private val NiyamHeaderBlue = Color(0xFF1976B8)
 private val NiyamBackground = Color(0xFFF7FAFC)
 private val NiyamTextPrimary = Color(0xFF172B4D)
 private val NiyamTextSecondary = Color(0xFF5B6B7A)
-
-// Production banner ID created for the NiyamMitra Pay Fixation Calculator.
 private const val BANNER_AD_UNIT_ID = "ca-app-pub-1512519890788753/1856516842"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        // Initialize Google Play Billing first so the UI can immediately know
-        // whether this user has lifetime ad-free entitlement.
         BillingManager.initialize(this)
-
-        // Initialize the Google Mobile Ads SDK and preload the History interstitial.
         MobileAds.initialize(this)
         HistoryInterstitialAd.load(this)
-
-        setContent { PayFixationCalculatorTheme { PayFixationCalculatorScreen() } }
+        setContent { PayFixationCalculatorTheme { V2AppScreen() } }
     }
 }
 
@@ -69,13 +60,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun PayFixationCalculatorScreen() {
     val context = LocalContext.current
-
-    // Screen/navigation state. The calculator itself remains on this screen;
-    // History is shown as an alternate screen state rather than a new Activity.
     var showHistory by remember { mutableStateOf(false) }
     var history by remember { mutableStateOf(HistoryStore.getAll(context)) }
-
-    // User inputs used by the existing pay-fixation calculation engine.
     var officialName by remember { mutableStateOf("") }
     var employeeCategory by remember { mutableStateOf(EmployeeCategory.ORDINARY) }
     var currentLevel by remember { mutableStateOf<String?>(null) }
@@ -83,8 +69,6 @@ fun PayFixationCalculatorScreen() {
     var promotedLevel by remember { mutableStateOf<String?>(null) }
     var promotionDate by remember { mutableStateOf<Long?>(null) }
     var dniDate by remember { mutableStateOf<Long?>(null) }
-
-    // Dropdown/dialog state for the input controls.
     var categoryMenu by remember { mutableStateOf(false) }
     var levelMenu by remember { mutableStateOf(false) }
     var payMenu by remember { mutableStateOf(false) }
@@ -94,177 +78,71 @@ fun PayFixationCalculatorScreen() {
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var selectedHistory by remember { mutableStateOf<CalculationHistory?>(null) }
     var showAdFreeDialog by remember { mutableStateOf(false) }
-
-    // Controls visibility of the About dialog without affecting calculator state.
     var showAboutDialog by remember { mutableStateOf(false) }
 
     if (showHistory) {
-        // Intercept the Android system Back button while History is displayed so it
-        // returns to the calculator instead of finishing MainActivity. The same
-        // HistoryInterstitialAd flow is used as the visible History back control.
         androidx.activity.compose.BackHandler {
             val activity = context as? Activity
-            if (activity != null) {
-                HistoryInterstitialAd.showOnHistoryBack(activity) { showHistory = false }
-            } else {
-                showHistory = false
-            }
+            if (activity != null) HistoryInterstitialAd.showOnHistoryBack(activity) { showHistory = false } else showHistory = false
         }
         HistoryScreen(
             history = history,
             onBack = {
-                // Going back from History is an explicit ad opportunity for free users.
-                // Premium users are automatically allowed through by HistoryInterstitialAd.
                 val activity = context as? Activity
-                if (activity != null) {
-                    HistoryInterstitialAd.showOnHistoryBack(activity) { showHistory = false }
-                } else {
-                    showHistory = false
-                }
+                if (activity != null) HistoryInterstitialAd.showOnHistoryBack(activity) { showHistory = false } else showHistory = false
             },
-            onDelete = { id ->
-                HistoryStore.delete(context, id)
-                history = HistoryStore.getAll(context)
-            },
+            onDelete = { id -> HistoryStore.delete(context, id); history = HistoryStore.getAll(context) },
             onClear = { showClearHistoryDialog = true },
             onOpen = { selectedHistory = it },
             onAbout = { showAboutDialog = true }
         )
-
         if (showClearHistoryDialog) {
             AlertDialog(
                 onDismissRequest = { showClearHistoryDialog = false },
                 title = { Text("Clear History?") },
                 text = { Text("All saved calculations will be permanently removed from this device.") },
                 confirmButton = {
-                    TextButton(onClick = {
-                        // Clear only local history; this does not affect the calculator inputs.
-                        HistoryStore.clear(context)
-                        history = emptyList()
-                        showClearHistoryDialog = false
-                    }) { Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold) }
+                    TextButton(onClick = { HistoryStore.clear(context); history = emptyList(); showClearHistoryDialog = false }) { Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold) }
                 },
                 dismissButton = { TextButton(onClick = { showClearHistoryDialog = false }) { Text("Cancel") } }
             )
         }
-
-        // Tapping a saved record opens its complete reconstructed calculation.
         selectedHistory?.let { entry -> HistoryDetailDialog(entry) { selectedHistory = null } }
-
-        // The same About dialog remains available from the History header so both
-        // major app screens provide consistent access to app information and privacy policy.
-        if (showAboutDialog) {
-            AboutDialog(onClose = { showAboutDialog = false })
-        }
+        if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })
         return
     }
 
-    // Select the same data-provider used by the calculation engine so the input
-    // levels and pay cells always match the chosen employee category.
     val matrix = PayMatrixSelection.forCategory(employeeCategory)
-
-    // Pay stages are derived from the selected present level. Changing the level
-    // also clears the previously selected basic pay in the input section.
     val payStages = currentLevel?.let { matrix.getPayStages(it) } ?: emptyList()
-
-    // The two selectable DNI dates are generated by the same calculation utility
-    // used by the existing app; the first one is selected automatically.
     val dniOptions = remember(promotionDate) { promotionDate?.let { getPayFixationDniOptions(it) } ?: emptyList() }
     LaunchedEffect(promotionDate) { dniDate = dniOptions.firstOrNull() }
-
-    // IMPORTANT: all fixation formulas remain in calculatePayFixation().
-    // The selected category changes only the pay-matrix provider.
     val result = if (currentLevel != null && currentPay != null && promotedLevel != null) {
         calculatePayFixation(currentLevel!!, currentPay!!, promotedLevel!!, promotionDate, dniDate, employeeCategory)
     } else null
 
     Column(Modifier.fillMaxSize().background(NiyamBackground)) {
-        // A dedicated blue header gives the home screen a clear visual identity and
-        // replaces the previous photo-like logo row with a compact, professional mark.
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = NiyamHeaderBlue,
-            shadowElevation = 3.dp
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // The simple NM mark remains crisp at every screen density and avoids
-                // the clutter caused by the photographic RKCApps logo in the header.
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .background(Color.White, RoundedCornerShape(14.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
+        Surface(modifier = Modifier.fillMaxWidth(), color = NiyamHeaderBlue, shadowElevation = 3.dp) {
+            Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(modifier = Modifier.size(56.dp).background(Color.White, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
                     Text("NM", color = NiyamHeaderBlue, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
                 }
-
                 Spacer(Modifier.width(12.dp))
-
                 Column(Modifier.weight(1f)) {
-                    // The calculator name is the primary header title; NiyamMitra is the brand subtitle.
                     Text("Pay Fixation Calculator", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
                     Text("NiyamMitra", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 }
-
-                // History and About deliberately use identical icon and label sizes so
-                // neither action appears visually more important than the other.
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .width(52.dp)
-                            .clickable {
-                            // Refresh history before opening it so the newest save/delete state is shown.
-                            history = HistoryStore.getAll(context)
-                            val activity = context as? Activity
-                            if (activity != null) {
-                                // Free users may see the History-entry interstitial; premium users bypass it.
-                                HistoryInterstitialAd.showIfDue(activity) { showHistory = true }
-                            } else {
-                                showHistory = true
-                            }
-                        }
-                    ) {
-                        // Both header actions use a fixed 24dp Material icon box, making their visual size equal.
-                        Icon(
-                            imageVector = Icons.Default.History,
-                            contentDescription = "History",
-                            modifier = Modifier.size(24.dp),
-                            tint = Color.White
-                        )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable {
+                        history = HistoryStore.getAll(context)
+                        val activity = context as? Activity
+                        if (activity != null) HistoryInterstitialAd.showIfDue(activity) { showHistory = true } else showHistory = true
+                    }) {
+                        Icon(imageVector = Icons.Default.History, contentDescription = "History", modifier = Modifier.size(24.dp), tint = Color.White)
                         Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
-
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 10.dp)
-                            .height(34.dp)
-                            .width(1.dp)
-                            .background(Color.White.copy(alpha = 0.35f))
-                    )
-
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .width(52.dp)
-                            .clickable {
-                            // About opens the app information/legal dialog and does not alter calculation state.
-                            showAboutDialog = true
-                        }
-                    ) {
-                        // The About icon uses the identical 24dp box and label size as History.
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "About",
-                            modifier = Modifier.size(24.dp),
-                            tint = Color.White
-                        )
+                    Box(modifier = Modifier.padding(horizontal = 10.dp).height(34.dp).width(1.dp).background(Color.White.copy(alpha = 0.35f)))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable { showAboutDialog = true }) {
+                        Icon(imageVector = Icons.Default.Info, contentDescription = "About", modifier = Modifier.size(24.dp), tint = Color.White)
                         Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
@@ -272,64 +150,35 @@ fun PayFixationCalculatorScreen() {
         }
 
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            // This card is shown only to free users. Purchasing lifetime ad removal
-            // makes this card disappear because BillingManager.isPremium becomes true.
             if (!BillingManager.isPremium) {
-                Card(
-                    Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(Color(0xFFEAF5FC))
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(Color(0xFFEAF5FC))) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Go Ad-Free", color = NiyamBlue, fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
                             Spacer(Modifier.height(4.dp))
                             Text("Remove all ads permanently for ${BillingManager.getPrice()} one time.", color = NiyamTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
                         Spacer(Modifier.width(12.dp))
-                        Button(
-                            onClick = { showAdFreeDialog = true },
-                            shape = RoundedCornerShape(24.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = NiyamBlue),
-                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 11.dp)
-                        ) {
-                            Text("Remove Ads", fontWeight = FontWeight.Bold)
-                        }
+                        Button(onClick = { showAdFreeDialog = true }, shape = RoundedCornerShape(24.dp), colors = ButtonDefaults.buttonColors(containerColor = NiyamBlue), contentPadding = PaddingValues(horizontal = 18.dp, vertical = 11.dp)) { Text("Remove Ads", fontWeight = FontWeight.Bold) }
                     }
                 }
             }
 
-            // The employee category is selected before pay level because it determines
-            // which pay matrix the rest of the calculator will display and use.
             SelectionCard("Employee Category") {
-                DropdownField(
-                    label = "Employee Category",
-                    value = employeeCategory.displayName,
-                    options = EmployeeCategory.values().map { it.displayName },
-                    expanded = categoryMenu,
-                    onExpandedChange = { categoryMenu = it },
-                    onSelected = { selected ->
-                        // Switching category resets level/pay selections because the two
-                        // matrices contain different levels and pay cells.
-                        employeeCategory = EmployeeCategory.values().first { it.displayName == selected }
-                        currentLevel = null
-                        currentPay = null
-                        promotedLevel = null
-                    }
-                )
+                DropdownField(label = "Employee Category", value = employeeCategory.displayName, options = EmployeeCategory.values().map { it.displayName }, expanded = categoryMenu, onExpandedChange = { categoryMenu = it }, onSelected = { selected ->
+                    employeeCategory = EmployeeCategory.values().first { it.displayName == selected }
+                    currentLevel = null
+                    currentPay = null
+                    promotedLevel = null
+                })
             }
 
-            // Current Status collects the employee's existing pay-level information.
             SelectionCard("Current Status") {
                 OutlinedTextField(value = officialName, onValueChange = { officialName = it }, label = { Text("Name of Official (for History)") }, placeholder = { Text("Enter name, if required") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 DropdownField("Present Pay Level", currentLevel?.let { "Level $it" } ?: "Select your Present Pay Level", matrix.levels, levelMenu, { levelMenu = it }, { level -> currentLevel = level; currentPay = null; payMenu = false })
                 DropdownField("Current Basic Pay", currentPay?.let { formatCurrency(it) } ?: "Select your Current Basic Pay", payStages.map { formatCurrency(it) }, payMenu, { payMenu = it }, { value -> currentPay = payStages.firstOrNull { formatCurrency(it) == value } }, currentLevel != null)
             }
 
-            // Promotion Details collects the promoted level and the relevant dates.
             SelectionCard("Promotion Details") {
                 DropdownField("Promoted Pay Level", promotedLevel?.let { "Level $it" } ?: "Select your Promoted Pay Level", matrix.levels, promotedMenu, { promotedMenu = it }, { level -> promotedLevel = level })
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
@@ -349,8 +198,6 @@ fun PayFixationCalculatorScreen() {
             }
 
             if (result != null) {
-                // The result cards are display-only. The calculation itself remains
-                // in PayFixationUtils.kt so changing the UI cannot alter the formulas.
                 Text("Fixation Illustrations", color = NiyamTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                 ResultCard("Option 1: Fixation from Date of Promotion", promotionDate, listOf(
                     "Pay in lower Level ($currentLevel)" to result.option1.lowerLevelPay,
@@ -364,229 +211,85 @@ fun PayFixationCalculatorScreen() {
                     "Final placement in promoted Level ($promotedLevel)" to result.option2.finalFixedPay
                 ), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni, promotionDate)
 
-                // Compare the actual pay available at the selected DNI, not just the
-                // eventual final-pay values. This matters when the selected DNI is in
-                // January: Option 1 can receive its increment months before Option 2.
                 val selectedDni = dniDate
                 val option1NextDni = result.option1.nextDni
-                val option1PayAtSelectedDni = if (selectedDni != null && option1NextDni != null && option1NextDni <= selectedDni) {
-                    result.option1.payAfterNextDni ?: result.option1.finalFixedPay
-                } else {
-                    result.option1.finalFixedPay
-                }
+                val option1PayAtSelectedDni = if (selectedDni != null && option1NextDni != null && option1NextDni <= selectedDni) result.option1.payAfterNextDni ?: result.option1.finalFixedPay else result.option1.finalFixedPay
                 val option2PayAtSelectedDni = result.option2.finalFixedPay
                 val dniPayDifference = option2PayAtSelectedDni - option1PayAtSelectedDni
                 val preDniDifference = result.option2.payUntilDni - result.option1.finalFixedPay
-
-                // Explain the trade-off when one option pays more before the selected DNI
-                // while the other pays more from the selected DNI onward. This keeps the
-                // recommendation aligned with the actual cash-pay sequence of both options.
                 val recommendationText = when {
-                    preDniDifference < 0 && dniPayDifference > 0 ->
-                        "Recommended: Option 2. Option 1 gives ₹${-preDniDifference} higher basic pay from the date of promotion until the selected DNI, but Option 2 gives ₹${dniPayDifference} higher basic pay from the selected DNI onward."
-                    preDniDifference > 0 && dniPayDifference < 0 ->
-                        "Recommended: Option 1. Option 2 gives ₹${preDniDifference} higher basic pay from the date of promotion until the selected DNI, but Option 1 gives ₹${-dniPayDifference} higher basic pay from the selected DNI onward."
-                    preDniDifference > 0 ->
-                        "Recommended: Option 1. It gives ₹${preDniDifference} higher basic pay from the date of promotion until the selected DNI, with no lower pay at the selected DNI."
-                    preDniDifference < 0 ->
-                        "Recommended: Option 2. It gives lower basic pay before the selected DNI, but the selected DNI comparison does not show a higher Option 1 pay."
-                    dniPayDifference > 0 ->
-                        "Recommended: Option 2. At the selected DNI, it gives ₹${dniPayDifference} higher basic pay than Option 1."
-                    dniPayDifference < 0 ->
-                        "Recommended: Option 1. At the selected DNI, it gives ₹${-dniPayDifference} higher basic pay than Option 2."
-                    else ->
-                        "Recommended: Both options have the same basic pay at the selected DNI; Option 1 provides fixation from the date of promotion."
-                }
-                val recommendationColor = Color(0xFFE8F5E9)
-                val recommendationTextColor = Color(0xFF2E7D32)
-
-                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(recommendationColor)) {
-                    Text(recommendationText, Modifier.padding(16.dp), color = recommendationTextColor, fontWeight = FontWeight.Bold)
+                    preDniDifference < 0 && dniPayDifference > 0 -> "Recommended: Option 2. Option 1 gives ₹${-preDniDifference} higher basic pay from the date of promotion until the selected DNI, but Option 2 gives ₹${dniPayDifference} higher basic pay from the selected DNI onward."
+                    preDniDifference > 0 && dniPayDifference < 0 -> "Recommended: Option 1. Option 2 gives ₹${preDniDifference} higher basic pay from the date of promotion until the selected DNI, but Option 1 gives ₹${-dniPayDifference} higher basic pay from the selected DNI onward."
+                    preDniDifference > 0 -> "Recommended: Option 1. It gives ₹${preDniDifference} higher basic pay from the date of promotion until the selected DNI, with no lower pay at the selected DNI."
+                    preDniDifference < 0 -> "Recommended: Option 2. It gives lower basic pay before the selected DNI, but the selected DNI comparison does not show a higher Option 1 pay."
+                    dniPayDifference > 0 -> "Recommended: Option 2. At the selected DNI, it gives ₹${dniPayDifference} higher basic pay than Option 1."
+                    dniPayDifference < 0 -> "Recommended: Option 1. At the selected DNI, it gives ₹${-dniPayDifference} higher basic pay than Option 2."
+                    else -> "Recommended: Both options have the same basic pay at the selected DNI; Option 1 provides fixation from the date of promotion."
                 }
 
-                // Save stores the selected matrix category together with the calculation
-                // so History can reconstruct the result using the same matrix later.
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFE8F5E9))) { Text(recommendationText, Modifier.padding(16.dp), color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold) }
+
                 Button(onClick = {
                     val now = System.currentTimeMillis()
-                    HistoryStore.add(context, CalculationHistory(
-                        id = now,
-                        savedAt = now,
-                        officialName = officialName.trim(),
-                        employeeCategory = employeeCategory,
-                        currentLevel = currentLevel!!,
-                        currentPay = currentPay!!,
-                        promotedLevel = promotedLevel!!,
-                        promotionDate = promotionDate,
-                        dniDate = dniDate,
-                        option1FinalPay = result.option1.finalFixedPay,
-                        option2FinalPay = result.option2.finalFixedPay
-                    ))
+                    HistoryStore.add(context, CalculationHistory(id = now, savedAt = now, officialName = officialName.trim(), employeeCategory = employeeCategory, currentLevel = currentLevel!!, currentPay = currentPay!!, promotedLevel = promotedLevel!!, promotionDate = promotionDate, dniDate = dniDate, option1FinalPay = result.option1.finalFixedPay, option2FinalPay = result.option2.finalFixedPay))
                     history = HistoryStore.getAll(context)
                 }, modifier = Modifier.fillMaxWidth()) { Text("Save Calculation to History") }
             }
 
-            // This disclaimer is intentionally visible on the main calculator screen
-            // so users see that results are assistive/reference calculations before relying
-            // on them for any official service or financial purpose.
             PayFixationDisclaimer()
-
             Spacer(Modifier.height(30.dp))
         }
 
-        // Banner ads are rendered only for free users. Premium users do not create
-        // the AdView at all, which also prevents unnecessary ad requests.
-        if (!BillingManager.isPremium) {
-            BannerAd(Modifier.fillMaxWidth().navigationBarsPadding())
-        }
+        if (!BillingManager.isPremium) BannerAd(Modifier.fillMaxWidth().navigationBarsPadding())
     }
 
     if (showDatePicker) {
-        // The selected promotion date is fed back into the DNI-option calculation.
         val state = rememberDatePickerState(initialSelectedDateMillis = promotionDate)
         DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = {
             TextButton(onClick = { promotionDate = state.selectedDateMillis; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) }
         }) { DatePicker(state) }
     }
-
-    // Shows app information and the privacy-policy link without changing calculation or billing behavior.
-    if (showAboutDialog) {
-        AboutDialog(onClose = { showAboutDialog = false })
-    }
-
-    // The purchase dialog is hidden after the entitlement is granted.
-    if (showAdFreeDialog && !BillingManager.isPremium) {
-        AdFreePurchaseDialog(context = context, onClose = { showAdFreeDialog = false })
-    }
+    if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })
+    if (showAdFreeDialog && !BillingManager.isPremium) AdFreePurchaseDialog(context = context, onClose = { showAdFreeDialog = false })
 }
 
-/**
- * Presents the legal-use disclaimer for the calculator without changing any
- * calculation formulas. It clarifies that results are indicative and should be
- * verified against applicable rules/orders and by the competent authority.
- */
 @Composable
 private fun PayFixationDisclaimer() {
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(Color(0xFFFFF8E1))
-    ) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(Color(0xFFFFF8E1))) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Important Disclaimer", color = NiyamTextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            Text(
-                "This application is intended solely as an assistive and reference tool for working out indicative pay-fixation calculations based on the information and rules provided by the user. The results are not an official determination of pay, entitlement, or financial benefit and should not be treated as a substitute for applicable Government rules, regulations, orders, clarifications, or decisions of the competent authority.",
-                color = NiyamTextPrimary,
-                fontSize = 12.sp
-            )
-            Text(
-                "Users should verify the results with the applicable rules/orders and the competent administrative or accounts authority before using them for any official, service, or financial purpose. The developer does not assume responsibility for any decision, claim, loss, liability, or consequence arising from reliance solely on the calculations provided by this application.",
-                color = NiyamTextSecondary,
-                fontSize = 12.sp
-            )
+            Text("This application is intended solely as an assistive and reference tool for working out indicative pay-fixation calculations based on the information and rules provided by the user. The results are not an official determination of pay, entitlement, or financial benefit and should not be treated as a substitute for applicable Government rules, regulations, orders, clarifications, or decisions of the competent authority.", color = NiyamTextPrimary, fontSize = 12.sp)
+            Text("Users should verify the results with the applicable rules/orders and the competent administrative or accounts authority before using them for any official, service, or financial purpose. The developer does not assume responsibility for any decision, claim, loss, liability, or consequence arising from reliance solely on the calculations provided by this application.", color = NiyamTextSecondary, fontSize = 12.sp)
         }
     }
 }
 
-/** Dialog explaining and launching the one-time lifetime ad-removal purchase. */
 @Composable
 private fun AdFreePurchaseDialog(context: android.content.Context, onClose: () -> Unit) {
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text("NiyamMitra Ad-Free") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Remove all advertisements from Pay Fixation Calculator permanently.")
-                Text("Lifetime ad-free access", fontWeight = FontWeight.Bold, color = NiyamBlue)
-                Text("One-time purchase: ${BillingManager.getPrice()}", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Text("No subscription. Your purchase can be restored on this Google Play account.", color = NiyamTextSecondary, fontSize = 13.sp)
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                // BillingManager opens the official Google Play purchase flow.
-                // If BillingClient is not ready yet, do not block the user; show a retry message.
-                val activity = context as? Activity
-                if (activity == null || BillingManager.launchPurchase(activity) == null) {
-                    Toast.makeText(context, "Google Play purchase is not ready yet. Please try again in a moment.", Toast.LENGTH_SHORT).show()
-                }
-            }) { Text("Buy Ad-Free") }
-        },
-        dismissButton = {
-            Row {
-                // Restore checks Google Play ownership again rather than trusting only local state.
-                TextButton(onClick = { BillingManager.restorePurchases(context) }) { Text("Restore Purchase") }
-                TextButton(onClick = onClose) { Text("Cancel") }
-            }
-        }
+        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Remove all advertisements from Pay Fixation Calculator permanently."); Text("Lifetime ad-free access", fontWeight = FontWeight.Bold, color = NiyamBlue); Text("One-time purchase: ${BillingManager.getPrice()}", fontSize = 16.sp, fontWeight = FontWeight.Bold); Text("No subscription. Your purchase can be restored on this Google Play account.", color = NiyamTextSecondary, fontSize = 13.sp) } },
+        confirmButton = { Button(onClick = { val activity = context as? Activity; if (activity == null || BillingManager.launchPurchase(activity) == null) Toast.makeText(context, "Google Play purchase is not ready yet. Please try again in a moment.", Toast.LENGTH_SHORT).show() }) { Text("Buy Ad-Free") } },
+        dismissButton = { Row { TextButton(onClick = { BillingManager.restorePurchases(context) }) { Text("Restore Purchase") }; TextButton(onClick = onClose) { Text("Cancel") } } }
     )
 }
 
-/** Displays the locally saved calculations and provides delete/open actions. */
 @Composable
-private fun HistoryScreen(
-    history: List<CalculationHistory>,
-    onBack: () -> Unit,
-    onDelete: (Long) -> Unit,
-    onClear: () -> Unit,
-    onOpen: (CalculationHistory) -> Unit,
-    onAbout: () -> Unit
-) {
+private fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit, onDelete: (Long) -> Unit, onClear: () -> Unit, onOpen: (CalculationHistory) -> Unit, onAbout: () -> Unit) {
     Column(Modifier.fillMaxSize().background(NiyamBackground)) {
-        // The History screen uses the same blue app header so navigation feels like
-        // part of the same application rather than a separate screen style.
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            color = NiyamHeaderBlue,
-            shadowElevation = 3.dp
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Back remains the primary navigation control on the History screen.
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.clickable(onClick = onBack)
-                ) {
-                    Text("‹", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                    Text("Back", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-
+        Surface(modifier = Modifier.fillMaxWidth(), color = NiyamHeaderBlue, shadowElevation = 3.dp) {
+            Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onBack)) { Text("‹", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold); Text("Back", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 Spacer(Modifier.width(16.dp))
-
-                Column(Modifier.weight(1f)) {
-                    Text("Calculation History", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Saved calculations", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                }
-
-                // About uses exactly the same icon and label sizing as the Home header.
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.clickable(onClick = onAbout)
-                ) {
-                    Text("ⓘ", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                    Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
+                Column(Modifier.weight(1f)) { Text("Calculation History", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold); Text("Saved calculations", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onAbout)) { Text("ⓘ", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold); Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
             }
         }
-
-        Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (history.isNotEmpty()) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = onClear) { Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold) }
-                }
-            }
-
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (history.isNotEmpty()) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { TextButton(onClick = onClear) { Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold) } }
             if (history.isEmpty()) {
-                Box(Modifier.fillMaxSize().padding(top = 80.dp), contentAlignment = Alignment.Center) {
-                    Text("No saved calculations yet.", color = NiyamTextSecondary, fontSize = 16.sp)
-                }
+                Box(Modifier.fillMaxSize().padding(top = 80.dp), contentAlignment = Alignment.Center) { Text("No saved calculations yet.", color = NiyamTextSecondary, fontSize = 16.sp) }
             } else {
                 history.forEach { entry ->
                     Card(Modifier.fillMaxWidth().clickable { onOpen(entry) }, colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(16.dp)) {
@@ -610,25 +313,12 @@ private fun HistoryScreen(
     }
 }
 
-/**
- * Reconstructs the complete saved calculation using the same calculation engine
- * and the same pay matrix category that was selected when it was saved.
- */
 @Composable
 private fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) {
-    val result = remember(entry) {
-        calculatePayFixation(entry.currentLevel, entry.currentPay, entry.promotedLevel, entry.promotionDate, entry.dniDate, entry.employeeCategory)
-    }
-
-    // Use the same date-aware recommendation as the live calculator so a saved
-    // January-DNI calculation cannot display a different recommendation in History.
+    val result = remember(entry) { calculatePayFixation(entry.currentLevel, entry.currentPay, entry.promotedLevel, entry.promotionDate, entry.dniDate, entry.employeeCategory) }
     val selectedDni = entry.dniDate
     val option1NextDni = result.option1.nextDni
-    val option1PayAtSelectedDni = if (selectedDni != null && option1NextDni != null && option1NextDni <= selectedDni) {
-        result.option1.payAfterNextDni ?: result.option1.finalFixedPay
-    } else {
-        result.option1.finalFixedPay
-    }
+    val option1PayAtSelectedDni = if (selectedDni != null && option1NextDni != null && option1NextDni <= selectedDni) result.option1.payAfterNextDni ?: result.option1.finalFixedPay else result.option1.finalFixedPay
     val option2PayAtSelectedDni = result.option2.finalFixedPay
     val dniPayDifference = option2PayAtSelectedDni - option1PayAtSelectedDni
     val preDniDifference = result.option2.payUntilDni - result.option1.finalFixedPay
@@ -639,50 +329,26 @@ private fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) 
         dniPayDifference < 0 -> "Recommended: Option 1. At the selected DNI, it gives ₹${-dniPayDifference} higher basic pay than Option 2."
         else -> "Recommended: Option 1. Both options have the same basic pay at the selected DNI; Option 1 provides fixation from the date of promotion."
     }
-
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text(if (entry.officialName.isBlank()) "Saved Calculation" else entry.officialName) },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Employee Category", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                Text(entry.employeeCategory.displayName)
-                Text("Current Status", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                Text("Present Pay Level: Level ${entry.currentLevel}")
-                Text("Current Basic Pay: ${formatCurrency(entry.currentPay)}")
-                Text("Promotion Details", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.padding(top = 4.dp))
-                Text("Promoted Pay Level: Level ${entry.promotedLevel}")
-                Text("Date of Promotion: ${entry.promotionDate?.let { formatDate(it) } ?: "Not selected"}")
-                Text("Selected DNI: ${entry.dniDate?.let { formatDate(it) } ?: "Not selected"}")
-                HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                Text("Fixation Illustrations", color = NiyamTextPrimary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                ResultCard("Option 1: Fixation from Date of Promotion", entry.promotionDate, listOf(
-                    "Pay in lower Level (${entry.currentLevel})" to result.option1.lowerLevelPay,
-                    "Add one increment in lower Level (${entry.currentLevel})" to result.option1.payWithIncrement,
-                    "Placement in promoted Level (${entry.promotedLevel})" to result.option1.finalFixedPay
-                ), result.option1.finalFixedPay, result.option1.nextDni, result.option1.payAfterNextDni)
-                ResultCard("Option 2: Fixation from Date of Next Increment", entry.dniDate, listOf(
-                    "Pay from date of promotion until DNI (placed at next higher cell in Level ${entry.promotedLevel})" to result.option2.payUntilDni,
-                    "On DNI, annual increment in lower Level (${entry.currentLevel})" to result.option2.payWithAnnualIncrement,
-                    "On DNI, one increment on account of promotion in Level ${entry.currentLevel}" to result.option2.payWithPromotionIncrement,
-                    "Final placement in promoted Level (${entry.promotedLevel})" to result.option2.finalFixedPay
-                ), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni, entry.promotionDate)
-                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFE8F5E9))) {
-                    Text(recommendationText, Modifier.padding(16.dp), color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold)
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onClose) { Text("Close") } },
+        text = { Column(modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Employee Category", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp); Text(entry.employeeCategory.displayName)
+            Text("Current Status", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp); Text("Present Pay Level: Level ${entry.currentLevel}"); Text("Current Basic Pay: ${formatCurrency(entry.currentPay)}")
+            Text("Promotion Details", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.padding(top = 4.dp)); Text("Promoted Pay Level: Level ${entry.promotedLevel}"); Text("Date of Promotion: ${entry.promotionDate?.let { formatDate(it) } ?: "Not selected"}"); Text("Selected DNI: ${entry.dniDate?.let { formatDate(it) } ?: "Not selected"}")
+            HorizontalDivider(Modifier.padding(vertical = 4.dp)); Text("Fixation Illustrations", color = NiyamTextPrimary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+            ResultCard("Option 1: Fixation from Date of Promotion", entry.promotionDate, listOf("Pay in lower Level (${entry.currentLevel})" to result.option1.lowerLevelPay, "Add one increment in lower Level (${entry.currentLevel})" to result.option1.payWithIncrement, "Placement in promoted Level (${entry.promotedLevel})" to result.option1.finalFixedPay), result.option1.finalFixedPay, result.option1.nextDni, result.option1.payAfterNextDni)
+            ResultCard("Option 2: Fixation from Date of Next Increment", entry.dniDate, listOf("Pay from date of promotion until DNI (placed at next higher cell in Level ${entry.promotedLevel})" to result.option2.payUntilDni, "On DNI, annual increment in lower Level (${entry.currentLevel})" to result.option2.payWithAnnualIncrement, "On DNI, one increment on account of promotion in Level ${entry.currentLevel}" to result.option2.payWithPromotionIncrement, "Final placement in promoted Level (${entry.promotedLevel})" to result.option2.finalFixedPay), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni, entry.promotionDate)
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFE8F5E9))) { Text(recommendationText, Modifier.padding(16.dp), color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold) }
+        } },
+        confirmButton = { TextButton(onClick = onClose) { Text("Close") } }
     )
 }
 
-/** Renders the anchored adaptive banner used by free users. */
 @Composable
 private fun BannerAd(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     if (BillingManager.isPremium) return
-
-    // Create one AdView for this composition and clean it up when the composable leaves it.
     val adView = remember(context) { AdView(context).apply {
         adUnitId = BANNER_AD_UNIT_ID
         val displayMetrics = context.resources.displayMetrics
@@ -694,7 +360,6 @@ private fun BannerAd(modifier: Modifier = Modifier) {
     AndroidView(modifier = modifier.wrapContentHeight(), factory = { adView })
 }
 
-/** Groups related input controls into a consistent white card. */
 @Composable
 private fun SelectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(Color.White)) {
@@ -702,7 +367,6 @@ private fun SelectionCard(title: String, content: @Composable ColumnScope.() -> 
     }
 }
 
-/** Generic dropdown used for category, pay level, basic pay, and promoted level selections. */
 @Composable
 private fun DropdownField(label: String, value: String, options: List<String>, expanded: Boolean, onExpandedChange: (Boolean) -> Unit, onSelected: (String) -> Unit, enabled: Boolean = true) {
     Box {
@@ -710,28 +374,18 @@ private fun DropdownField(label: String, value: String, options: List<String>, e
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) { Text(label, fontSize = 12.sp, color = NiyamTextSecondary); Text(value, color = NiyamTextPrimary, fontSize = 15.sp) }
             Text("▼")
         }
-        DropdownMenu(expanded = expanded && enabled, onDismissRequest = { onExpandedChange(false) }) {
-            options.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { onSelected(option); onExpandedChange(false) }) }
-        }
+        DropdownMenu(expanded = expanded && enabled, onDismissRequest = { onExpandedChange(false) }) { options.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { onSelected(option); onExpandedChange(false) }) } }
     }
 }
 
-/** Displays a date field that opens the Material date picker when tapped. */
 @Composable
 private fun DateField(label: String, millis: Long?, onClick: () -> Unit, modifier: Modifier) {
     Column(modifier) {
         Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-        Box(Modifier.fillMaxWidth().padding(top = 8.dp).border(1.dp, Color.LightGray, RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(14.dp)) {
-            Text(millis?.let { formatDate(it) } ?: "Select", color = if (millis != null) NiyamTextPrimary else Color.Gray, fontSize = 14.sp)
-        }
+        Box(Modifier.fillMaxWidth().padding(top = 8.dp).border(1.dp, Color.LightGray, RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(14.dp)) { Text(millis?.let { formatDate(it) } ?: "Select", color = if (millis != null) NiyamTextPrimary else Color.Gray, fontSize = 14.sp) }
     }
 }
 
-/**
- * Displays one fixation option and its event-by-event pay values.
- * The date is intentionally shown with each event to retain the detailed
- * illustration format used by the earlier NiyamMitra implementation.
- */
 @Composable
 private fun ResultCard(title: String, date: Long?, steps: List<Pair<String, Int>>, finalPay: Int, futureDni: Long?, futurePay: Int?, interimPay: Int? = null, periodStartDate: Long? = null) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(Color.White), elevation = CardDefaults.cardElevation(2.dp)) {
@@ -743,11 +397,7 @@ private fun ResultCard(title: String, date: Long?, steps: List<Pair<String, Int>
                 Column(Modifier.padding(vertical = 6.dp)) {
                     Text(description, fontSize = 13.sp, color = NiyamTextPrimary)
                     date?.let {
-                        val dateText = if (periodStartDate != null && index == 0) {
-                            "Date: From ${formatDate(periodStartDate)} to ${formatDate(it)}"
-                        } else {
-                            "Date: ${formatDate(it)}"
-                        }
+                        val dateText = if (periodStartDate != null && index == 0) "Date: From ${formatDate(periodStartDate)} to ${formatDate(it)}" else "Date: ${formatDate(it)}"
                         Text(dateText, fontSize = 11.sp, color = NiyamTextSecondary, modifier = Modifier.padding(top = 2.dp))
                     }
                     Text("Pay: ${formatCurrency(pay)}", fontSize = 13.sp, color = NiyamBlue, fontWeight = FontWeight.Bold)
@@ -758,9 +408,7 @@ private fun ResultCard(title: String, date: Long?, steps: List<Pair<String, Int>
                     interimPay?.let { Text("Interim Pay: ${formatCurrency(it)}", fontSize = 13.sp, color = NiyamTextSecondary) }
                     Text("Final Fixed Pay: ${formatCurrency(finalPay)}", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = NiyamBlue)
                     if (futureDni != null && futurePay != null) {
-                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                        Text("Next DNI: ${formatDate(futureDni)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = NiyamTextPrimary)
-                        Text("Pay thereon: ${formatCurrency(futurePay)}", fontSize = 13.sp, color = NiyamTextSecondary)
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp)); Text("Next DNI: ${formatDate(futureDni)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = NiyamTextPrimary); Text("Pay thereon: ${formatCurrency(futurePay)}", fontSize = 13.sp, color = NiyamTextSecondary)
                     }
                 }
             }
