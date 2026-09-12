@@ -51,6 +51,7 @@ fun V2AppScreen() {
     val context = LocalContext.current
     var selectedFixationType by remember { mutableStateOf<FixationType?>(null) }
     var showCalculator by remember { mutableStateOf(false) }
+    var showSixthToSeventh by remember { mutableStateOf(false) }
     var showHistory by remember { mutableStateOf(false) }
     var history by remember { mutableStateOf(HistoryStore.getAll(context)) }
     var selectedHistory by remember { mutableStateOf<CalculationHistory?>(null) }
@@ -60,6 +61,11 @@ fun V2AppScreen() {
     if (showCalculator) {
         BackHandler { showCalculator = false }
         PayFixationCalculatorScreen()
+        return
+    }
+
+    if (showSixthToSeventh) {
+        SixthToSeventhCpcScreen(onBack = { showSixthToSeventh = false })
         return
     }
 
@@ -109,8 +115,10 @@ fun V2AppScreen() {
     HomeFixationSelectionScreen(
         onSelected = { type ->
             selectedFixationType = type
-            if (type == FixationType.SEVENTH_CPC) {
-                showCalculator = true
+            when (type) {
+                FixationType.SIXTH_TO_SEVENTH -> showSixthToSeventh = true
+                FixationType.SEVENTH_CPC -> showCalculator = true
+                else -> Unit
             }
         },
         onHistory = {
@@ -145,7 +153,7 @@ private fun HomeFixationSelectionScreen(
             FixationType.values().forEach { type ->
                 FixationTypeCard(
                     type = type,
-                    enabled = type == FixationType.SEVENTH_CPC,
+                    enabled = type == FixationType.SIXTH_TO_SEVENTH || type == FixationType.SEVENTH_CPC,
                     onClick = { onSelected(type) }
                 )
             }
@@ -189,7 +197,11 @@ private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -
                 Text(type.title, color = if (enabled) HomeNiyamTextPrimary else HomeNiyamTextSecondary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    if (enabled) "Promotion / MACP" else "Coming soon",
+                    when (type) {
+                        FixationType.SIXTH_TO_SEVENTH -> "Pay conversion using 2.57 fitment factor"
+                        FixationType.SEVENTH_CPC -> "Promotion / MACP"
+                        else -> "Coming soon"
+                    },
                     color = HomeNiyamTextSecondary,
                     fontSize = 13.sp
                 )
