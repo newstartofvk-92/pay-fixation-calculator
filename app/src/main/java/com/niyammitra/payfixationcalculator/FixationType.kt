@@ -10,6 +10,10 @@ enum class FixationType(
     val title: String,
     val description: String
 ) {
+    FOURTH_TO_FIFTH(
+        title = "4th CPC → 5th CPC",
+        description = "Revision of pay from the 4th CPC structure to the 5th CPC structure."
+    ),
     FIFTH_TO_SIXTH(
         title = "5th CPC → 6th CPC",
         description = "Revision of pay from the 5th CPC structure to the 6th CPC structure."
