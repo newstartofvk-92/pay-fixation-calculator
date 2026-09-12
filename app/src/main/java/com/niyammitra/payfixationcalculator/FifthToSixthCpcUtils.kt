@@ -55,3 +55,16 @@ fun calculateFifthToSixthCpc(existingBasicPay: Int, scale: FifthCpcScale): Fifth
         "Rule 10 provides a uniform annual increment date of 01 July; the standard first increment after fixation on 01.01.2006 is 01.07.2006, subject to the rule's provisos."
     ))
 }
+
+/**
+ * Calculates one annual increment under the 6th CPC structure.
+ * Rule 10 / the relevant increment provision specifies 3% of (pay in Pay Band + Grade Pay),
+ * rounded up to the next multiple of Rs.10, added to pay in Pay Band.
+ */
+fun calculateSixthCpcNextIncrement(payInPayBand: Int, gradePay: Int, payBandMaximum: Int): Int? {
+    if (payInPayBand >= payBandMaximum) return null
+    val incrementBase = payInPayBand + gradePay
+    val increment = (ceil((incrementBase * 0.03) / 10.0) * 10.0).toInt()
+    val nextPayInBand = minOf(payInPayBand + increment, payBandMaximum)
+    return if (nextPayInBand > payInPayBand) nextPayInBand + gradePay else null
+}
