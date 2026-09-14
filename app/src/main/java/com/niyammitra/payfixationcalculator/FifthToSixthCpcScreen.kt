@@ -86,14 +86,8 @@ fun FifthToSixthCpcScreen(onBack: () -> Unit, onContinueToSeventh: ((String, Int
                     }
                 }, Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = FiveSixBlue), shape = RoundedCornerShape(12.dp)) { Text("Next Increment", fontWeight = FontWeight.Bold) }
 
-                // The event workflow is deliberately part of this screen. It must appear before the optional 7th-CPC hand-off.
-                val latestIncrement = incrementSteps.lastOrNull()
-                val latestPayInBand = latestIncrement?.let { it.pay - calculation.gradePay } ?: calculation.payInPayBand
                 SixthCpcEventsSection(
                     calculation = calculation,
-                    startingPayInBand = latestPayInBand,
-                    startingGradePay = calculation.gradePay,
-                    startingPayBand = calculation.scale.payBand,
                     onContinueToSeventh = onContinueToSeventh
                 )
             }
