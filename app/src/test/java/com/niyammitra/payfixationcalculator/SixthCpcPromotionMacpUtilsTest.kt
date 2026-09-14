@@ -22,6 +22,12 @@ class SixthCpcPromotionMacpUtilsTest {
     fun macpAutomaticallyUsesImmediateNextGradePay() {
         assertEquals(4600, nextSixthCpcMacpGradePay(4200))
         assertEquals(4800, nextSixthCpcMacpGradePay(4600))
+        assertEquals(4600, targetGradePayForSixthCpcFinancialUpgradation(4200, SixthCpcFinancialUpgradation.MACP, acpGradePay = 12000))
+    }
+
+    @Test
+    fun acpUsesApplicableUserSelectedGradePay() {
+        assertEquals(4600, targetGradePayForSixthCpcFinancialUpgradation(4200, SixthCpcFinancialUpgradation.ACP, acpGradePay = 4600))
     }
 
     @Test
@@ -37,6 +43,21 @@ class SixthCpcPromotionMacpUtilsTest {
         )
         assertEquals(410, result.increment)
         assertEquals(9710, result.newPayInPayBand)
+        assertEquals(4600, result.newGradePay)
+        assertEquals(14310, result.revisedBasicPay)
+    }
+
+    @Test
+    fun macpIgnoresUserSuppliedTargetAndUsesImmediateNextGradePay() {
+        val result = calculateSixthCpcPromotionOrMacp(
+            payInPayBand = 9300,
+            currentGradePay = 4200,
+            targetGradePay = 12000,
+            eventDate = calendarDate(2008, Calendar.SEPTEMBER, 1),
+            eventType = "Financial Upgradation",
+            fixationOption = SixthCpcFixationOption.FROM_EVENT_DATE,
+            financialUpgradation = SixthCpcFinancialUpgradation.MACP
+        )
         assertEquals(4600, result.newGradePay)
         assertEquals(14310, result.revisedBasicPay)
     }
