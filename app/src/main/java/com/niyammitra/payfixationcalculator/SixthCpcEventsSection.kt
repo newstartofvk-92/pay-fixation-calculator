@@ -114,11 +114,28 @@ fun SixthCpcEventsSection(calculation: FifthToSixthResult, startingPayInBand: In
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         val canIncrement = chain.increments.lastOrNull()?.date?.let { it < july2015Date() } ?: (chain.result?.nextIncrementDate ?: chain.scaleUpgrade?.nextIncrementDate)?.let { it <= july2015Date() } ?: true
-                        Button(onClick = {
-                            val current = eventPayInBand(chain) ?: return@Button; val gp = eventGradePay(chain) ?: return@Button; val next = calculateSixthCpcNextIncrement(current, gp, bandForGradePay(gp).payBandMaximum)
-                            if (next != null) { val nextPb = next - gp; val nextDate = chain.increments.lastOrNull()?.let { addSixthEventYears(it.date, 1) } ?: (chain.result?.nextIncrementDate ?: chain.scaleUpgrade?.nextIncrementDate ?: nextJulyOnOrAfter(System.currentTimeMillis())); if (nextDate <= july2015Date()) events = events.toMutableList().also { it[index] = chain.copy(increments = chain.increments + SixthCpcEventIncrement(nextPb, gp, nextDate)) } }
-                        }, enabled = canIncrement, Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text(if (canIncrement) "Next Increment" else "6th CPC Sequence Complete", fontWeight = FontWeight.Bold) }
-                        Button(onClick = { resetForm() }, Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Add Another Event", fontWeight = FontWeight.Bold) }
+                        Button(
+                            onClick = {
+                                val current = eventPayInBand(chain) ?: return@Button
+                                val gp = eventGradePay(chain) ?: return@Button
+                                val next = calculateSixthCpcNextIncrement(current, gp, bandForGradePay(gp).payBandMaximum)
+                                if (next != null) {
+                                    val nextPb = next - gp
+                                    val nextDate = chain.increments.lastOrNull()?.let { addSixthEventYears(it.date, 1) } ?: (chain.result?.nextIncrementDate ?: chain.scaleUpgrade?.nextIncrementDate ?: nextJulyOnOrAfter(System.currentTimeMillis()))
+                                    if (nextDate <= july2015Date()) events = events.toMutableList().also { it[index] = chain.copy(increments = chain.increments + SixthCpcEventIncrement(nextPb, gp, nextDate)) }
+                                }
+                            },
+                            enabled = canIncrement,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) { Text(if (canIncrement) "Next Increment" else "6th CPC Sequence Complete", fontWeight = FontWeight.Bold) }
+                        Button(
+                            onClick = { resetForm() },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) { Text("Add Another Event", fontWeight = FontWeight.Bold) }
                     }
                 }
             }
@@ -144,50 +161,48 @@ fun SixthCpcEventsSection(calculation: FifthToSixthResult, startingPayInBand: In
                         targetPayBand?.let { band ->
                             Text("Select Grade Pay applicable to the upgraded / revised scale", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             Box { OutlinedButton(onClick = { targetMenu = true }, Modifier.fillMaxWidth()) { Text(targetGradePay?.let { formatSixthEventCurrency(it) } ?: "Select Grade Pay", Modifier.weight(1f)); Text("▼") }; DropdownMenu(expanded = targetMenu, onDismissRequest = { targetMenu = false }) { band.gradePays.forEach { gp -> DropdownMenuItem(text = { Text(formatSixthEventCurrency(gp)) }, onClick = { targetGradePay = gp; targetMenu = false }) } } }
-                            Surface(Modifier.fillMaxWidth(), color = Color(0xFF1769AA).copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { Text("Last Basic Pay fetched automatically", color = Color(0xFF5B6B7A), fontSize = 12.sp); Text(formatSixthEventCurrency(currentBasicPay), color = Color(0xFF1769AA), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold); Text("Placed Pay in Pay Band = Last Basic Pay fetched. No promotion increment is added.", color = Color(0xFF5B6B7A), fontSize = 11.sp) } }
+                            Surface(Modifier.fillMaxWidth(), color = Color(0xFF1769AA).copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { Text("Last Basic Pay fetched automatically", color = Color(0xFF5B6B7A), fontSize = 12.sp); Text(formatSixthEventCurrency(currentBasicPay), color = Color(0xFF1769AA), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold); Text("Placed Pay in Pay Band = Last Basic Pay fetched. No promotion increment is added.", color = Color(0xFF5B6B7A), fontSize = 12.sp) } }
                         }
-                    } else {
-                        if (eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION && autoScheme == SixthCpcFinancialUpgradation.ACP) Text("3. Select ACP promotional pay scale", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        else if (eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION) { Text("3. MACP target", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp); val nextGp = nextSixthCpcMacpGradePay(currentGradePay); targetGradePay = nextGp; Text(nextGp?.let { "Automatically selected: ${bandForGradePay(it).title} | GP ${formatSixthEventCurrency(it)}" } ?: "No higher Grade Pay is available.", color = Color(0xFF1769AA), fontWeight = FontWeight.ExtraBold, fontSize = 13.sp) }
-                        else Text("3. Select promotional Grade Pay", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        if (eventKind == SixthCpcEventKind.PROMOTION || autoScheme == SixthCpcFinancialUpgradation.ACP) Box { OutlinedButton(onClick = { targetMenu = true }, Modifier.fillMaxWidth()) { Text(targetGradePay?.let { "Target GP ${formatSixthEventCurrency(it)}" } ?: "Select Grade Pay / ACP scale", Modifier.weight(1f)); Text("▼") }; DropdownMenu(expanded = targetMenu, onDismissRequest = { targetMenu = false }) { sixthCpcGradePayHierarchy().filter { it > currentGradePay }.forEach { gp -> DropdownMenuItem(text = { Text("${bandForGradePay(gp).title} | GP ${formatSixthEventCurrency(gp)}") }, onClick = { targetGradePay = gp; targetMenu = false }) } } }
+                    } else if (eventKind != SixthCpcEventKind.PAY_SCALE_UPGRADATION) {
+                        Text("3. ${if (eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION) "Target Grade Pay" else "Promotional Grade Pay"}", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        Box { OutlinedButton(onClick = { targetMenu = true }, Modifier.fillMaxWidth()) { Text(targetGradePay?.let { formatSixthEventCurrency(it) } ?: "Select Grade Pay", Modifier.weight(1f)); Text("▼") }; DropdownMenu(expanded = targetMenu, onDismissRequest = { targetMenu = false }) { SixthToSeventhCpcData.payBands.flatMap { it.gradePays }.distinct().filter { it > currentGradePay }.forEach { gp -> DropdownMenuItem(text = { Text(formatSixthEventCurrency(gp)) }, onClick = { targetGradePay = gp; targetMenu = false }) } } }
                     }
-                    if (eventKind != SixthCpcEventKind.PAY_SCALE_UPGRADATION) {
+                    if (eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION || eventKind == SixthCpcEventKind.PROMOTION) {
                         Text("4. Fixation option", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(selected = fixationOption == SixthCpcFixationOption.FROM_EVENT_DATE, onClick = { fixationOption = SixthCpcFixationOption.FROM_EVENT_DATE }); Text("From Date of Event", fontSize = 12.sp); RadioButton(selected = fixationOption == SixthCpcFixationOption.FROM_DNI, onClick = { fixationOption = SixthCpcFixationOption.FROM_DNI }); Text("From Date of DNI", fontSize = 12.sp) }
-                        Text("6th CPC has one normal annual increment date: 1 July.", color = Color(0xFF5B6B7A), fontSize = 11.sp)
+                        Row(Modifier.fillMaxWidth()) { RadioButton(selected = fixationOption == SixthCpcFixationOption.FROM_EVENT_DATE, onClick = { fixationOption = SixthCpcFixationOption.FROM_EVENT_DATE }); Text("From Date of Event", Modifier.padding(top = 12.dp), color = Color(0xFF172B4D), fontSize = 13.sp) }
+                        Row(Modifier.fillMaxWidth()) { RadioButton(selected = fixationOption == SixthCpcFixationOption.FROM_DNI, onClick = { fixationOption = SixthCpcFixationOption.FROM_DNI }); Text("From Date of DNI (1 July)", Modifier.padding(top = 12.dp), color = Color(0xFF172B4D), fontSize = 13.sp) }
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        TextButton(onClick = { showEventForm = false }) { Text("Cancel") }
-                        Button(onClick = {
+                    val canSave = eventDate != null && (eventKind == SixthCpcEventKind.PAY_SCALE_UPGRADATION && targetPayBand != null && targetGradePay != null || eventKind != SixthCpcEventKind.PAY_SCALE_UPGRADATION && targetGradePay != null)
+                    Button(
+                        onClick = {
                             val date = eventDate ?: return@Button
+                            val gp = targetGradePay ?: return@Button
                             if (eventKind == SixthCpcEventKind.PAY_SCALE_UPGRADATION) {
-                                val band = targetPayBand; val gp = targetGradePay
-                                // Per the agreed workflow, placement pay in the upgraded/revised scale is the LAST BASIC PAY fetched from the preceding stage.
-                                val placedPayInBand = currentBasicPay
-                                if (band != null && gp != null && gp > currentGradePay) {
-                                    events = events + SixthCpcEventChain(SixthCpcEventKind.PAY_SCALE_UPGRADATION, scaleUpgrade = SixthCpcScaleUpgradeResult(date, currentPayInBand, currentGradePay, currentPayBand, placedPayInBand, gp, band.title, placedPayInBand + gp, nextJulyOnOrAfter(date)))
-                                    showEventForm = false
-                                }
-                            } else if (targetGradePay != null) {
-                                val scheme = if (eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION) financialUpgradationForSixthCpcEvent(date) else null
-                                val result = calculateSixthCpcPromotionOrMacp(currentPayInBand, currentGradePay, targetGradePay!!, date, if (eventKind == SixthCpcEventKind.PROMOTION) "Promotion" else "Financial Upgradation", fixationOption, scheme)
+                                val band = targetPayBand ?: return@Button
+                                val result = SixthCpcScaleUpgradeResult(date, currentBasicPay, currentGradePay, currentPayBand, currentBasicPay, gp, band.title.substringBefore(":"), currentBasicPay + gp, nextJulyOnOrAfter(date))
+                                events = events + SixthCpcEventChain(eventKind, scaleUpgrade = result); showEventForm = false
+                            } else {
+                                val result = calculateSixthCpcPromotionOrMacp(currentPayInBand, currentGradePay, currentPayBand, gp, date, eventKind, fixationOption) ?: return@Button
                                 events = events + SixthCpcEventChain(eventKind, result = result); showEventForm = false
                             }
-                        }, enabled = eventDate != null && if (eventKind == SixthCpcEventKind.PAY_SCALE_UPGRADATION) targetPayBand != null && targetGradePay != null && targetGradePay!! > currentGradePay else targetGradePay != null, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Apply Event", fontWeight = FontWeight.Bold) }
-                    }
+                        },
+                        enabled = canSave,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Save Event", fontWeight = FontWeight.Bold) }
                 }
             }
         }
-        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(18.dp)) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text("6th CPC Event Rule Basis", color = Color(0xFF172B4D), fontSize = 17.sp, fontWeight = FontWeight.ExtraBold); Text("ACP applies for financial-upgradation events up to 31.08.2008; MACP applies from 01.09.2008. The normal annual increment date under the 6th CPC is 1 July.", color = Color(0xFF172B4D), fontSize = 12.sp); Text("Pay Scale Upgradation / Revision is separate from promotion and financial upgradation. The latest Basic Pay is fetched automatically and is used directly as the placed Pay in Pay Band. The selected Grade Pay is added to determine the revised Basic Pay; no promotion increment is added.", color = Color(0xFF172B4D), fontSize = 12.sp) } }
     }
-    if (showDatePicker) { val state = rememberDatePickerState(initialSelectedDateMillis = eventDate); DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { eventDate = state.selectedDateMillis; showDatePicker = false }) { Text("OK") } }, dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } }) { DatePicker(state = state) } }
+    if (showDatePicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = eventDate)
+        DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { eventDate = state.selectedDateMillis; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) } }) { DatePicker(state) }
+    }
 }
 
-@Composable private fun EventTypeRadio(label: String, selected: Boolean, onClick: () -> Unit) { Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(selected = selected, onClick = onClick); Text(label, fontSize = 12.sp) } }
-private fun eventKindLabel(kind: SixthCpcEventKind): String = when (kind) { SixthCpcEventKind.PROMOTION -> "Promotion"; SixthCpcEventKind.FINANCIAL_UPGRADATION -> "Financial Upgradation"; SixthCpcEventKind.PAY_SCALE_UPGRADATION -> "Pay Scale Upgradation / Revision" }
-private fun nextJulyOnOrAfter(date: Long): Long = Calendar.getInstance().apply { timeInMillis = date; val year = get(Calendar.YEAR); set(Calendar.MONTH, Calendar.JULY); set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0); if (timeInMillis < date) set(Calendar.YEAR, year + 1) }.timeInMillis
-private fun addSixthEventYears(date: Long, years: Int): Long = Calendar.getInstance().apply { timeInMillis = date; add(Calendar.YEAR, years) }.timeInMillis
-private fun formatSixthEventDate(value: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))
+@Composable private fun EventTypeRadio(label: String, selected: Boolean, onClick: () -> Unit) { Row(Modifier.fillMaxWidth()) { RadioButton(selected = selected, onClick = onClick); Text(label, Modifier.padding(top = 12.dp), color = Color(0xFF172B4D), fontSize = 13.sp) } }
+@Composable private fun SixthEventRow(label: String, value: Int) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(label, color = Color(0xFF5B6B7A), fontSize = 13.sp); Text(formatSixthEventCurrency(value), color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 14.sp) } }
 private fun formatSixthEventCurrency(value: Int): String = NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(value)
-@Composable private fun SixthEventRow(label: String, value: Int) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text(label, color = Color(0xFF5B6B7A), fontSize = 13.sp, modifier = Modifier.weight(1f)); Text(formatSixthEventCurrency(value), color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 14.sp) } }
+private fun formatSixthEventDate(value: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))
+private fun addSixthEventYears(date: Long, years: Int): Long = Calendar.getInstance().apply { timeInMillis = date; add(Calendar.YEAR, years) }.timeInMillis
