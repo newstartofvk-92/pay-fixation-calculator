@@ -56,26 +56,15 @@ data class FifthCpcEventResult(
     val ruleBasis: List<String>
 )
 
-fun calculateFifthCpcEvent(
-    eventDate: Long,
-    currentPay: Int,
-    currentScale: FifthCpcScale,
-    targetScale: FifthCpcScale,
-    fixationOption: FifthCpcFixationOption,
-    eventType: FifthCpcEventType = FifthCpcEventType.PROMOTION
-): FifthCpcEventResult {
+fun calculateFifthCpcEvent(eventDate: Long, currentPay: Int, currentScale: FifthCpcScale, targetScale: FifthCpcScale, fixationOption: FifthCpcFixationOption, eventType: FifthCpcEventType = FifthCpcEventType.PROMOTION): FifthCpcEventResult {
     require(currentPay > 0) { "Current 5th CPC basic pay must be positive." }
     require(eventDate >= fifthCpcConversionDate() && eventDate <= fifthCpcEndDate()) { "The event date must fall between 01 January 1996 and 31 December 2005." }
     require(targetScale.title != currentScale.title) { "The target scale must differ from the current scale." }
-
     val firstIncrementedPay = calculateFifthCpcNextStage(currentPay, currentScale) ?: currentPay
-    val fixationBase = if (fixationOption == FifthCpcFixationOption.FROM_DNI) {
-        calculateFifthCpcNextStage(firstIncrementedPay, currentScale) ?: firstIncrementedPay
-    } else firstIncrementedPay
+    val fixationBase = if (fixationOption == FifthCpcFixationOption.FROM_DNI) calculateFifthCpcNextStage(firstIncrementedPay, currentScale) ?: firstIncrementedPay else firstIncrementedPay
     val newPay = findEqualOrNextHigherFifthCpcStage(fixationBase, targetScale)
     val eventDni = nextJulyOnOrAfterFifthCpc(eventDate)
     val nextIncrementDate = if (fixationOption == FifthCpcFixationOption.FROM_DNI) addFifthCpcYear(eventDni) else eventDni
-
     val ruleBasis = buildList {
         add("Event type: ${if (eventType == FifthCpcEventType.PROMOTION) "Promotion" else "ACP financial upgradation"}.")
         add("Pay fixation uses the applicable Fundamental Rule promotion/fixation method under the 5th CPC pay structure.")
@@ -84,7 +73,6 @@ fun calculateFifthCpcEvent(
         add("The resulting pay is placed at the stage equal to, or next higher than, the fixation amount in the selected higher scale.")
         add("The normal 5th CPC increment cycle is 01 July; the employee's actual service record and applicable FR/departmental provisions govern special cases.")
     }
-
     return FifthCpcEventResult(eventDate, eventType, fixationOption, currentPay, firstIncrementedPay, if (fixationOption == FifthCpcFixationOption.FROM_DNI) fixationBase else null, newPay, targetScale, nextIncrementDate, ruleBasis)
 }
 
@@ -129,13 +117,7 @@ private fun fifthCpcJuly2005Date(): Long = Calendar.getInstance().apply { clear(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FourthToFifthEventSection(
-    currentPay: Int,
-    currentScale: FifthCpcScale,
-    currentDate: Long,
-    onLatestStateChange: ((FifthCpcScale, Int, Long) -> Unit)? = null,
-    onContinueToSixth: ((FifthCpcScale, Int) -> Unit)? = null
-) {
+fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, currentDate: Long, onLatestStateChange: ((FifthCpcScale, Int, Long) -> Unit)? = null, onContinueToSixth: ((FifthCpcScale, Int) -> Unit)? = null) {
     var events by remember(currentPay, currentScale.title, currentDate) { mutableStateOf<List<FifthCpcEventResult>>(emptyList()) }
     var postIncrements by remember(currentPay, currentScale.title, currentDate) { mutableStateOf<List<Pair<Int, Long>>>(emptyList()) }
     var showForm by remember { mutableStateOf(false) }
@@ -153,9 +135,7 @@ fun FourthToFifthEventSection(
     val canContinueToSixth = baseDate >= fifthCpcJuly2005Date()
     val canAddEvent = baseDate < fifthCpcEndDate()
 
-    LaunchedEffect(baseScale.title, basePay, baseDate) {
-        onLatestStateChange?.invoke(baseScale, basePay, baseDate)
-    }
+    LaunchedEffect(baseScale.title, basePay, baseDate) { onLatestStateChange?.invoke(baseScale, basePay, baseDate) }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("5th CPC Events", color = Color(0xFF172B4D), fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
@@ -235,16 +215,18 @@ fun FourthToFifthEventSection(
                     val validTarget = targetScale != null && targetScale!!.title != baseScale.title
                     if (selectedDate != null && selectedDate < baseDate) Text("The event date is earlier than the current pay state. Add the intervening increment/event first.", color = Color(0xFFC62828), fontSize = 11.sp)
                     Button(onClick = {
-                        val date = eventDate ?: return@Button
-                        val target = targetScale ?: return@Button
-                        val event = calculateFifthCpcEvent(date, basePay, baseScale, target, fixationOption, eventType)
-                        events = events + event
-                        postIncrements = emptyList()
-                        showForm = false
-                        eventDate = null
-                        targetScale = null
-                        eventType = FifthCpcEventType.PROMOTION
-                        fixationOption = FifthCpcFixationOption.FROM_EVENT_DATE
+                        val date = eventDate
+                        val target = targetScale
+                        if (date != null && target != null) {
+                            val event = calculateFifthCpcEvent(date, basePay, baseScale, target, fixationOption, eventType)
+                            events = events + event
+                            postIncrements = emptyList()
+                            showForm = false
+                            eventDate = null
+                            targetScale = null
+                            eventType = FifthCpcEventType.PROMOTION
+                            fixationOption = FifthCpcFixationOption.FROM_EVENT_DATE
+                        }
                     }, enabled = validDate && validTarget, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Apply Event", fontWeight = FontWeight.Bold) }
                 }
             }
@@ -269,11 +251,14 @@ fun FourthToFifthEventSection(
         val state = rememberDatePickerState(initialSelectedDateMillis = eventDate ?: baseDate)
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
-            confirmButton = TextButton(onClick = { eventDate = state.selectedDateMillis; showDatePicker = false }) { Text("OK") },
-            dismissButton = TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
-        ) {
-            DatePicker(state = state)
-        }
+            confirmButton = {
+                TextButton(onClick = { eventDate = state.selectedDateMillis; showDatePicker = false }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            },
+            content = { DatePicker(state = state) }
+        )
     }
 }
 
@@ -286,4 +271,4 @@ private fun FifthEventRow(label: String, value: Int) {
 }
 
 private fun formatFifthEventDate(value: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))
-private fun formatFifthEventCurrency(value: Int): String = NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(value)
+private fun formatFifthEventCurrency(value: Int): String = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("en-IN")).format(value)
