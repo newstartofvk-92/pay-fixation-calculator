@@ -42,18 +42,6 @@ fun financialUpgradationForSixthCpcEvent(eventDate: Long): SixthCpcFinancialUpgr
     return if (eventDate <= cutoff) SixthCpcFinancialUpgradation.ACP else SixthCpcFinancialUpgradation.MACP
 }
 
-/**
- * Calculates a 6th-CPC promotion or financial upgradation.
- *
- * For ACP (event on/before 31.08.2008), the applicable ACP promotional scale/GP
- * is supplied by the user. For MACP (from 01.09.2008), the UI supplies the
- * immediate next Grade Pay in the applicable hierarchy.
- *
- * From-DNI option: the annual 1 July increment is first granted in the lower
- * grade on the DNI, and the promotion/financial-upgradation increment is then
- * applied in accordance with FR 22(1)(a)(1). This keeps the two options
- * auditable instead of treating them as identical calculations.
- */
 fun calculateSixthCpcPromotionOrMacp(
     payInPayBand: Int,
     currentGradePay: Int,
@@ -73,8 +61,6 @@ fun calculateSixthCpcPromotionOrMacp(
     var totalIncrement = calculateSixthCpcIncrement(payInPayBand, currentGradePay)
 
     if (fixationOption == SixthCpcFixationOption.FROM_DNI) {
-        // The employee first receives the normal annual increment on 1 July,
-        // then the one increment attached to the promotion/FU fixation.
         fixationPayInBand += totalIncrement
         val promotionIncrement = calculateSixthCpcIncrement(fixationPayInBand, currentGradePay)
         fixationPayInBand += promotionIncrement
@@ -84,7 +70,7 @@ fun calculateSixthCpcPromotionOrMacp(
     }
 
     val targetBand = bandForGradePay(targetGradePay)
-    val newPayInBand = minOf(maxOf(fixationPayInBand, targetBand.payBandMinimum), targetBand.payBandMaximum)
+    val newPayInBand = minOf(maxOf(fixationPayInBand, sixthCpcPayBandMinimum(targetBand)), sixthCpcPayBandMaximum(targetBand))
 
     val basis = mutableListOf<String>()
     if (scheme == SixthCpcFinancialUpgradation.ACP) {
@@ -129,6 +115,22 @@ private fun calculateSixthCpcIncrement(payInPayBand: Int, gradePay: Int): Int {
 fun bandForGradePay(gradePay: Int): SixthCpcPayBand {
     return SixthToSeventhCpcData.payBands.firstOrNull { gradePay in it.gradePays }
         ?: throw IllegalArgumentException("No 6th CPC Pay Band is mapped to Grade Pay Rs.$gradePay")
+}
+
+fun sixthCpcPayBandMinimum(payBand: SixthCpcPayBand): Int = when (payBand.title.substringBefore(":")) {
+    "PB-1" -> 5200
+    "PB-2" -> 9300
+    "PB-3" -> 15600
+    "PB-4" -> 37400
+    else -> throw IllegalArgumentException("Unknown 6th CPC Pay Band: ${payBand.title}")
+}
+
+fun sixthCpcPayBandMaximum(payBand: SixthCpcPayBand): Int = when (payBand.title.substringBefore(":")) {
+    "PB-1" -> 20200
+    "PB-2" -> 34800
+    "PB-3" -> 39100
+    "PB-4" -> 67000
+    else -> throw IllegalArgumentException("Unknown 6th CPC Pay Band: ${payBand.title}")
 }
 
 fun sixthCpcGradePayHierarchy(): List<Int> = listOf(1800, 1900, 2000, 2400, 2800, 4200, 4600, 4800, 5400, 6600, 7600, 8700, 8900, 10000, 12000)
