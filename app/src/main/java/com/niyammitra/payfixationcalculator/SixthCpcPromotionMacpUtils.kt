@@ -2,16 +2,9 @@ package com.niyammitra.payfixationcalculator
 
 import kotlin.math.ceil
 
-/** Financial-upgradation regimes during the 6th CPC period. */
-enum class SixthCpcFinancialUpgradation {
-    ACP,
-    MACP
-}
+enum class SixthCpcFinancialUpgradation { ACP, MACP }
 
-enum class SixthCpcFixationOption {
-    FROM_EVENT_DATE,
-    FROM_DNI
-}
+enum class SixthCpcFixationOption { FROM_EVENT_DATE, FROM_DNI }
 
 data class SixthCpcEventResult(
     val eventType: String,
@@ -42,6 +35,20 @@ fun financialUpgradationForSixthCpcEvent(eventDate: Long): SixthCpcFinancialUpgr
     return if (eventDate <= cutoff) SixthCpcFinancialUpgradation.ACP else SixthCpcFinancialUpgradation.MACP
 }
 
+fun targetGradePayForSixthCpcFinancialUpgradation(
+    currentGradePay: Int,
+    scheme: SixthCpcFinancialUpgradation,
+    acpGradePay: Int? = null
+): Int = when (scheme) {
+    SixthCpcFinancialUpgradation.ACP -> {
+        require(acpGradePay != null) { "ACP requires the applicable promotional Grade Pay." }
+        require(acpGradePay > currentGradePay) { "The ACP Grade Pay must be higher than the current Grade Pay." }
+        acpGradePay
+    }
+    SixthCpcFinancialUpgradation.MACP -> nextSixthCpcMacpGradePay(currentGradePay)
+        ?: throw IllegalArgumentException("No higher Grade Pay is available for MACP.")
+}
+
 fun calculateSixthCpcPromotionOrMacp(
     payInPayBand: Int,
     currentGradePay: Int,
@@ -52,14 +59,20 @@ fun calculateSixthCpcPromotionOrMacp(
     financialUpgradation: SixthCpcFinancialUpgradation? = null
 ): SixthCpcEventResult {
     require(payInPayBand > 0) { "Pay in Pay Band must be positive." }
-    require(targetGradePay > currentGradePay) { "The target Grade Pay must be higher than the current Grade Pay." }
-
     val scheme = financialUpgradation ?: if (eventType == "Financial Upgradation") financialUpgradationForSixthCpcEvent(eventDate) else null
+    val effectiveTargetGradePay = if (scheme != null) {
+        targetGradePayForSixthCpcFinancialUpgradation(
+            currentGradePay,
+            scheme,
+            if (scheme == SixthCpcFinancialUpgradation.ACP) targetGradePay else null
+        )
+    } else {
+        require(targetGradePay > currentGradePay) { "The target Grade Pay must be higher than the current Grade Pay." }
+        targetGradePay
+    }
     val annualIncrementDate = nextSixthCpcIncrementDate(eventDate)
-
     var fixationPayInBand = payInPayBand
     var totalIncrement = calculateSixthCpcIncrement(payInPayBand, currentGradePay)
-
     if (fixationOption == SixthCpcFixationOption.FROM_DNI) {
         fixationPayInBand += totalIncrement
         val promotionIncrement = calculateSixthCpcIncrement(fixationPayInBand, currentGradePay)
@@ -68,28 +81,21 @@ fun calculateSixthCpcPromotionOrMacp(
     } else {
         fixationPayInBand += totalIncrement
     }
-
-    val targetBand = bandForGradePay(targetGradePay)
+    val targetBand = bandForGradePay(effectiveTargetGradePay)
     val newPayInBand = minOf(maxOf(fixationPayInBand, sixthCpcPayBandMinimum(targetBand)), sixthCpcPayBandMaximum(targetBand))
-
     val basis = mutableListOf<String>()
     if (scheme == SixthCpcFinancialUpgradation.ACP) {
         basis += "Event date is on or before 31 August 2008: ACP regime applies. The applicable ACP promotional scale/Grade Pay is selected by the user."
         basis += "ACP financial upgradation is regulated under the applicable ACP instructions and FR 22(1)(a)(1); it is not treated as a post-01 September 2008 MACP event."
     } else if (scheme == SixthCpcFinancialUpgradation.MACP) {
         basis += "Event date is on or after 01 September 2008: Modified ACP (MACP) regime applies."
-        basis += "MACP financial upgradation is to the immediate next higher Grade Pay in the prescribed hierarchy and is personal financial upgradation."
+        basis += "MACP financial upgradation is automatically fixed at the immediate next higher Grade Pay in the prescribed hierarchy; the user does not choose the MACP Grade Pay."
     } else {
         basis += "Regular promotion fixation is governed by the applicable promotion/fixation provisions; the promoted post Grade Pay is selected by the user."
     }
     basis += "For 6th CPC fixation, the increment is 3% of Pay in Pay Band plus existing Grade Pay, rounded up to the next multiple of Rs.10, and added to Pay in Pay Band."
-    basis += if (fixationOption == SixthCpcFixationOption.FROM_DNI) {
-        "From-DNI option: the normal annual increment on the 1 July DNI is applied in the lower grade before the promotion/financial-upgradation fixation."
-    } else {
-        "From-event-date option: the promotion/financial-upgradation fixation is applied from the event date."
-    }
+    basis += if (fixationOption == SixthCpcFixationOption.FROM_DNI) "From-DNI option: the normal annual increment on the 1 July DNI is applied in the lower grade before the promotion/financial-upgradation fixation." else "From-event-date option: the promotion/financial-upgradation fixation is applied from the event date."
     basis += "During the 6th CPC period the normal annual increment date is 1 July; there is no separate 1 January DNI in this workflow."
-
     return SixthCpcEventResult(
         eventType = eventType,
         financialUpgradation = scheme,
@@ -99,9 +105,9 @@ fun calculateSixthCpcPromotionOrMacp(
         oldGradePay = currentGradePay,
         increment = totalIncrement,
         newPayInPayBand = newPayInBand,
-        newGradePay = targetGradePay,
+        newGradePay = effectiveTargetGradePay,
         newPayBand = targetBand.title,
-        revisedBasicPay = newPayInBand + targetGradePay,
+        revisedBasicPay = newPayInBand + effectiveTargetGradePay,
         nextIncrementDate = if (fixationOption == SixthCpcFixationOption.FROM_DNI) addSixthYears(annualIncrementDate, 1) else nextSixthCpcIncrementDate(eventDate),
         ruleBasis = basis
     )
@@ -112,10 +118,8 @@ private fun calculateSixthCpcIncrement(payInPayBand: Int, gradePay: Int): Int {
     return (ceil((base * 0.03) / 10.0) * 10.0).toInt()
 }
 
-fun bandForGradePay(gradePay: Int): SixthCpcPayBand {
-    return SixthToSeventhCpcData.payBands.firstOrNull { gradePay in it.gradePays }
-        ?: throw IllegalArgumentException("No 6th CPC Pay Band is mapped to Grade Pay Rs.$gradePay")
-}
+fun bandForGradePay(gradePay: Int): SixthCpcPayBand = SixthToSeventhCpcData.payBands.firstOrNull { gradePay in it.gradePays }
+    ?: throw IllegalArgumentException("No 6th CPC Pay Band is mapped to Grade Pay Rs.$gradePay")
 
 fun sixthCpcPayBandMinimum(payBand: SixthCpcPayBand): Int = when (payBand.title.substringBefore(":")) {
     "PB-1" -> 5200
@@ -140,10 +144,7 @@ fun nextSixthCpcMacpGradePay(currentGradePay: Int): Int? = sixthCpcGradePayHiera
 private fun nextSixthCpcIncrementDate(eventDate: Long): Long {
     val calendar = java.util.Calendar.getInstance().apply { timeInMillis = eventDate }
     val year = calendar.get(java.util.Calendar.YEAR)
-    val july = java.util.Calendar.getInstance().apply {
-        clear()
-        set(year, java.util.Calendar.JULY, 1, 0, 0, 0)
-    }
+    val july = java.util.Calendar.getInstance().apply { clear(); set(year, java.util.Calendar.JULY, 1, 0, 0, 0) }
     return if (eventDate <= july.timeInMillis) july.timeInMillis else addSixthYears(july.timeInMillis, 1)
 }
 
