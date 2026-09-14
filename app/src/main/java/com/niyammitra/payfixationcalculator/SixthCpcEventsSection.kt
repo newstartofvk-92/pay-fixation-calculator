@@ -44,8 +44,14 @@ data class SixthCpcEventChain(val result: SixthCpcEventResult, val increments: L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SixthCpcEventsSection(calculation: FifthToSixthResult, onContinueToSeventh: ((String, Int, Int) -> Unit)?) {
-    var events by remember(calculation.revisedBasicPay, calculation.gradePay) { mutableStateOf<List<SixthCpcEventChain>>(emptyList()) }
+fun SixthCpcEventsSection(
+    calculation: FifthToSixthResult,
+    startingPayInBand: Int,
+    startingGradePay: Int,
+    startingPayBand: String,
+    onContinueToSeventh: ((String, Int, Int) -> Unit)?
+) {
+    var events by remember(calculation.revisedBasicPay, startingPayInBand, startingGradePay) { mutableStateOf<List<SixthCpcEventChain>>(emptyList()) }
     var showEventForm by remember { mutableStateOf(false) }
     var eventType by remember { mutableStateOf("Promotion") }
     var targetGradePay by remember { mutableStateOf<Int?>(null) }
@@ -53,9 +59,9 @@ fun SixthCpcEventsSection(calculation: FifthToSixthResult, onContinueToSeventh: 
     var targetMenu by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
 
-    val currentPayInBand = events.lastOrNull()?.let { it.increments.lastOrNull()?.payInPayBand ?: it.result.newPayInPayBand } ?: calculation.payInPayBand
-    val currentGradePay = events.lastOrNull()?.result?.newGradePay ?: calculation.gradePay
-    val currentPayBand = events.lastOrNull()?.result?.newPayBand ?: calculation.scale.payBand
+    val currentPayInBand = events.lastOrNull()?.let { it.increments.lastOrNull()?.payInPayBand ?: it.result.newPayInPayBand } ?: startingPayInBand
+    val currentGradePay = events.lastOrNull()?.result?.newGradePay ?: startingGradePay
+    val currentPayBand = events.lastOrNull()?.result?.newPayBand ?: startingPayBand
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("Promotion / MACP Events", color = Color(0xFF172B4D), fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
@@ -143,9 +149,7 @@ fun SixthCpcEventsSection(calculation: FifthToSixthResult, onContinueToSeventh: 
                         TextButton(onClick = { showEventForm = false }) { Text("Cancel") }
                         Button(onClick = {
                             if (targetGradePay != null && eventDate != null) {
-                                val currentPb = events.lastOrNull()?.let { it.increments.lastOrNull()?.payInPayBand ?: it.result.newPayInPayBand } ?: calculation.payInPayBand
-                                val currentGp = events.lastOrNull()?.result?.newGradePay ?: calculation.gradePay
-                                val result = calculateSixthCpcPromotionOrMacp(currentPb, currentGp, targetGradePay!!, eventDate!!, eventType)
+                                val result = calculateSixthCpcPromotionOrMacp(currentPayInBand, currentGradePay, targetGradePay!!, eventDate!!, eventType)
                                 events = events + SixthCpcEventChain(result)
                                 showEventForm = false
                             }
