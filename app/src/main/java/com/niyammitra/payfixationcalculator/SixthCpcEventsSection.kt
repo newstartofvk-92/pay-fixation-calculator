@@ -52,6 +52,25 @@ private fun eventPayBand(chain: SixthCpcEventChain): String? = chain.result?.new
 private fun eventLastDate(chain: SixthCpcEventChain): Long? = chain.increments.lastOrNull()?.date ?: chain.result?.eventDate ?: chain.scaleUpgrade?.eventDate
 private fun july2015Date(): Long = Calendar.getInstance().apply { clear(); set(2015, Calendar.JULY, 1, 0, 0, 0) }.timeInMillis
 
+private fun eventKindLabel(kind: SixthCpcEventKind): String = when (kind) {
+    SixthCpcEventKind.PROMOTION -> "Promotion"
+    SixthCpcEventKind.FINANCIAL_UPGRADATION -> "Financial Upgradation (ACP / MACP)"
+    SixthCpcEventKind.PAY_SCALE_UPGRADATION -> "Pay Scale Upgradation / Revision"
+}
+
+private fun nextJulyOnOrAfter(date: Long): Long {
+    val source = Calendar.getInstance().apply { timeInMillis = date }
+    val year = source.get(Calendar.YEAR)
+    val july = Calendar.getInstance().apply {
+        clear()
+        set(year, Calendar.JULY, 1, 0, 0, 0)
+    }
+    return if (date <= july.timeInMillis) july.timeInMillis else Calendar.getInstance().apply {
+        timeInMillis = july.timeInMillis
+        add(Calendar.YEAR, 1)
+    }.timeInMillis
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SixthCpcEventsSection(calculation: FifthToSixthResult, startingPayInBand: Int = calculation.payInPayBand, startingGradePay: Int = calculation.gradePay, startingPayBand: String = calculation.scale.payBand, onContinueToSeventh: ((String, Int, Int) -> Unit)? = null, onLatestStateChange: ((String, Int, Int, Long) -> Unit)? = null) {
@@ -141,7 +160,7 @@ fun SixthCpcEventsSection(calculation: FifthToSixthResult, startingPayInBand: In
             }
         }
 
-        if (events.isEmpty()) Button(onClick = { resetForm() }, Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Add Event", fontWeight = FontWeight.Bold) }
+        if (events.isEmpty()) Button(onClick = { resetForm() }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Add Event", fontWeight = FontWeight.Bold) }
 
         if (showEventForm) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
@@ -182,7 +201,15 @@ fun SixthCpcEventsSection(calculation: FifthToSixthResult, startingPayInBand: In
                                 val result = SixthCpcScaleUpgradeResult(date, currentBasicPay, currentGradePay, currentPayBand, currentBasicPay, gp, band.title.substringBefore(":"), currentBasicPay + gp, nextJulyOnOrAfter(date))
                                 events = events + SixthCpcEventChain(eventKind, scaleUpgrade = result); showEventForm = false
                             } else {
-                                val result = calculateSixthCpcPromotionOrMacp(currentPayInBand, currentGradePay, currentPayBand, gp, date, eventKind, fixationOption) ?: return@Button
+                                val result = calculateSixthCpcPromotionOrMacp(
+                                    payInPayBand = currentPayInBand,
+                                    currentGradePay = currentGradePay,
+                                    targetGradePay = gp,
+                                    eventDate = date,
+                                    eventType = eventKindLabel(eventKind),
+                                    fixationOption = fixationOption,
+                                    financialUpgradation = if (eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION) autoScheme else null
+                                )
                                 events = events + SixthCpcEventChain(eventKind, result = result); showEventForm = false
                             }
                         },
