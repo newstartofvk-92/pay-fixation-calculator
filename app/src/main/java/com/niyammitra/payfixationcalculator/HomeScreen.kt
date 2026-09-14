@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -56,6 +55,8 @@ fun V2AppScreen() {
     var carriedPayBand by remember { mutableStateOf<String?>(null) }
     var carriedPayInPayBand by remember { mutableStateOf<Int?>(null) }
     var carriedGradePay by remember { mutableStateOf<Int?>(null) }
+    var carriedFifthScaleTitle by remember { mutableStateOf<String?>(null) }
+    var carriedFifthBasicPay by remember { mutableStateOf<Int?>(null) }
     var showHistory by remember { mutableStateOf(false) }
     var history by remember { mutableStateOf(HistoryStore.getAll(context)) }
     var selectedHistory by remember { mutableStateOf<CalculationHistory?>(null) }
@@ -69,7 +70,15 @@ fun V2AppScreen() {
     }
 
     if (showFourthToFifth) {
-        FourthToFifthCpcScreen(onBack = { showFourthToFifth = false })
+        FourthToFifthCpcScreen(
+            onBack = { showFourthToFifth = false },
+            onContinueToSixth = { scale, pay ->
+                carriedFifthScaleTitle = scale.title
+                carriedFifthBasicPay = pay
+                showFourthToFifth = false
+                showFifthToSixth = true
+            }
+        )
         return
     }
 
@@ -82,63 +91,38 @@ fun V2AppScreen() {
                 carriedGradePay = gradePay
                 showFifthToSixth = false
                 showSixthToSeventh = true
-            }
+            },
+            initialScaleTitle = carriedFifthScaleTitle,
+            initialBasicPay = carriedFifthBasicPay
         )
         return
     }
 
     if (showSixthToSeventh) {
-        SixthToSeventhCpcScreen(
-            onBack = { showSixthToSeventh = false },
-            initialPayBand = carriedPayBand,
-            initialGradePay = carriedGradePay,
-            initialPayInPayBand = carriedPayInPayBand
-        )
+        SixthToSeventhCpcScreen(onBack = { showSixthToSeventh = false }, initialPayBand = carriedPayBand, initialGradePay = carriedGradePay, initialPayInPayBand = carriedPayInPayBand)
         return
     }
 
     if (showHistory) {
         BackHandler { showHistory = false }
-        HistoryScreen(
-            history = history,
-            onBack = { showHistory = false },
-            onDelete = { id -> HistoryStore.delete(context, id); history = HistoryStore.getAll(context) },
-            onClear = { showClearHistoryDialog = true },
-            onOpen = { selectedHistory = it },
-            onAbout = { showAboutDialog = true }
-        )
+        HistoryScreen(history = history, onBack = { showHistory = false }, onDelete = { id -> HistoryStore.delete(context, id); history = HistoryStore.getAll(context) }, onClear = { showClearHistoryDialog = true }, onOpen = { selectedHistory = it }, onAbout = { showAboutDialog = true })
         if (showClearHistoryDialog) {
-            AlertDialog(
-                onDismissRequest = { showClearHistoryDialog = false },
-                title = { Text("Clear History?") },
-                text = { Text("All saved calculations will be permanently removed from this device.") },
-                confirmButton = { TextButton(onClick = { HistoryStore.clear(context); history = emptyList(); showClearHistoryDialog = false }) { Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold) } },
-                dismissButton = { TextButton(onClick = { showClearHistoryDialog = false }) { Text("Cancel") } }
-            )
+            AlertDialog(onDismissRequest = { showClearHistoryDialog = false }, title = { Text("Clear History?") }, text = { Text("All saved calculations will be permanently removed from this device.") }, confirmButton = { TextButton(onClick = { HistoryStore.clear(context); history = emptyList(); showClearHistoryDialog = false }) { Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold) } }, dismissButton = { TextButton(onClick = { showClearHistoryDialog = false }) { Text("Cancel") } })
         }
         selectedHistory?.let { entry -> HistoryDetailDialog(entry) { selectedHistory = null } }
         if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })
         return
     }
 
-    HomeFixationSelectionScreen(
-        onSelected = { type ->
-            selectedFixationType = type
-            when (type) {
-                FixationType.FOURTH_TO_FIFTH -> showFourthToFifth = true
-                FixationType.FIFTH_TO_SIXTH -> showFifthToSixth = true
-                FixationType.SIXTH_TO_SEVENTH -> {
-                    carriedPayBand = null
-                    carriedPayInPayBand = null
-                    carriedGradePay = null
-                    showSixthToSeventh = true
-                }
-                FixationType.SEVENTH_CPC -> showCalculator = true
-            }
-        },
-        onHistory = { history = HistoryStore.getAll(context); showHistory = true },
-        onAbout = { showAboutDialog = true }
-    )
+    HomeFixationSelectionScreen(onSelected = { type ->
+        selectedFixationType = type
+        when (type) {
+            FixationType.FOURTH_TO_FIFTH -> { carriedFifthScaleTitle = null; carriedFifthBasicPay = null; showFourthToFifth = true }
+            FixationType.FIFTH_TO_SIXTH -> { carriedFifthScaleTitle = null; carriedFifthBasicPay = null; showFifthToSixth = true }
+            FixationType.SIXTH_TO_SEVENTH -> { carriedPayBand = null; carriedPayInPayBand = null; carriedGradePay = null; showSixthToSeventh = true }
+            FixationType.SEVENTH_CPC -> showCalculator = true
+        }
+    }, onHistory = { history = HistoryStore.getAll(context); showHistory = true }, onAbout = { showAboutDialog = true })
 
     if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })
 }
@@ -150,9 +134,7 @@ private fun HomeFixationSelectionScreen(onSelected: (FixationType) -> Unit, onHi
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Select Fixation Type", color = HomeNiyamTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
             Text("Choose the pay-revision or pay-fixation workflow you want to work out.", color = HomeNiyamTextSecondary, fontSize = 14.sp)
-            FixationType.values().forEach { type ->
-                FixationTypeCard(type = type, enabled = true, onClick = { onSelected(type) })
-            }
+            FixationType.values().forEach { type -> FixationTypeCard(type = type, enabled = true, onClick = { onSelected(type) }) }
         }
     }
 }
@@ -161,9 +143,7 @@ private fun HomeFixationSelectionScreen(onSelected: (FixationType) -> Unit, onHi
 private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (enabled) Color.White else Color(0xFFF0F2F5)), elevation = CardDefaults.cardElevation(defaultElevation = if (enabled) 2.dp else 0.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(46.dp).background(if (enabled) HomeNiyamBlue.copy(alpha = 0.10f) else Color(0xFFE1E4E8), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                Text(when (type) { FixationType.FOURTH_TO_FIFTH -> "4→5"; FixationType.FIFTH_TO_SIXTH -> "5→6"; FixationType.SIXTH_TO_SEVENTH -> "6→7"; FixationType.SEVENTH_CPC -> "7th" }, color = if (enabled) HomeNiyamBlue else HomeNiyamTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
-            }
+            Box(modifier = Modifier.size(46.dp).background(if (enabled) HomeNiyamBlue.copy(alpha = 0.10f) else Color(0xFFE1E4E8), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Text(when (type) { FixationType.FOURTH_TO_FIFTH -> "4→5"; FixationType.FIFTH_TO_SIXTH -> "5→6"; FixationType.SIXTH_TO_SEVENTH -> "6→7"; FixationType.SEVENTH_CPC -> "7th" }, color = if (enabled) HomeNiyamBlue else HomeNiyamTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold) }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(type.title, color = if (enabled) HomeNiyamTextPrimary else HomeNiyamTextSecondary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
