@@ -43,6 +43,8 @@ private val ContinuityTextSecondary = Color(0xFF5B6B7A)
 
 enum class ContinuityPromotionBasis { EVENT_DATE, DNI }
 
+data class ContinuityIncrementStep(val pay: Int, val date: Long)
+
 @Composable
 fun SeventhCpcContinuitySection(payBand: String, gradePay: Int, payInPayBand: Int) {
     val normalizedPayBand = payBand.substringBefore(":").trim()
@@ -65,9 +67,11 @@ fun SeventhCpcContinuitySection(payBand: String, gradePay: Int, payInPayBand: In
         }
         return
     }
-    var incrementSteps by remember(calculation.revisedBasicPay) { mutableStateOf<List<SeventhCpcIncrementStep>>(emptyList()) }
+
+    var incrementSteps by remember(calculation.revisedBasicPay) { mutableStateOf<List<ContinuityIncrementStep>>(emptyList()) }
     val latest7thPay = incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay
     val knownDni = incrementSteps.lastOrNull()?.let { addSeventhYears(it.date, 1) } ?: julyFirst2016ForContinuity()
+
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("7th CPC — Automatic Continuation", color = ContinuityTextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
         Text("The latest 6th CPC pay is carried forward automatically. The 7th CPC conversion is applied as on 01 January 2016; the user does not re-enter the 6th CPC pay.", color = ContinuityTextSecondary, fontSize = 12.sp)
@@ -93,6 +97,7 @@ fun SeventhCpcContinuitySection(payBand: String, gradePay: Int, payInPayBand: In
                 Text("DNI: 01 July 2016", color = ContinuityTextSecondary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
+
         if (incrementSteps.isNotEmpty()) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -109,15 +114,23 @@ fun SeventhCpcContinuitySection(payBand: String, gradePay: Int, payInPayBand: In
                             }
                         }
                     }
+                    if (getSixthToSeventhNextCell(calculation.level, incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay) == null) {
+                        Text("Final cell reached", color = ContinuityTextPrimary, fontWeight = FontWeight.ExtraBold)
+                    }
                 }
             }
         }
+
         Button(onClick = {
+            val currentPay = incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay
             val nextDate = incrementSteps.lastOrNull()?.let { addSeventhYears(it.date, 1) } ?: julyFirst2016ForContinuity()
-            calculation.nextIncrementPay?.let { nextPay -> incrementSteps = incrementSteps + SeventhCpcIncrementStep(nextPay, nextDate) }
+            getSixthToSeventhNextCell(calculation.level, currentPay)?.let { nextPay ->
+                incrementSteps = incrementSteps + ContinuityIncrementStep(nextPay, nextDate)
+            }
         }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = ContinuityBlue), shape = RoundedCornerShape(12.dp)) {
             Text("Next Increment", fontWeight = FontWeight.Bold)
         }
+
         SeventhCpcPromotionMacpContinuation(currentLevel = calculation.level, currentPay = latest7thPay, knownDni = knownDni)
     }
 }
@@ -130,8 +143,18 @@ private fun SeventhCpcPromotionMacpContinuation(currentLevel: String, currentPay
     var showDatePicker by remember { mutableStateOf(false) }
     var promotedMenu by remember { mutableStateOf(false) }
     var basis by remember { mutableStateOf(ContinuityPromotionBasis.EVENT_DATE) }
-    val fixation = if (promotedLevel != null && promotionDate != null) calculatePayFixation(currentLevel, currentPay, promotedLevel!!, promotionDate, knownDni, EmployeeCategory.ORDINARY) else null
+    var eventApplied by remember { mutableStateOf(false) }
+    var appliedPay by remember { mutableStateOf<Int?>(null) }
+    var appliedLevel by remember { mutableStateOf<String?>(null) }
+    var appliedDni by remember { mutableStateOf<Long?>(null) }
+    var postSteps by remember { mutableStateOf<List<ContinuityIncrementStep>>(emptyList()) }
+
+    val fixation = if (promotedLevel != null && promotionDate != null) {
+        calculatePayFixation(currentLevel, currentPay, promotedLevel!!, promotionDate, knownDni, EmployeeCategory.ORDINARY)
+    } else null
     val finalPay = fixation?.let { if (basis == ContinuityPromotionBasis.EVENT_DATE) it.option1.finalFixedPay else it.option2.finalFixedPay }
+    val firstPostIncrementDate = fixation?.let { if (basis == ContinuityPromotionBasis.EVENT_DATE) it.option1.nextDni else it.option2.nextDni }
+
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Promotion / MACP", color = ContinuityTextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
@@ -141,17 +164,35 @@ private fun SeventhCpcPromotionMacpContinuation(currentLevel: String, currentPay
                 ContinuityRow("Latest Basic Pay", currentPay)
                 Text("Known DNI: ${formatContinuityDate(knownDni)}", color = ContinuityTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Text("Date of Promotion / MACP", color = ContinuityTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(promotionDate?.let { formatContinuityDate(it) } ?: "Select Event Date", Modifier.weight(1f)) }
+                OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(promotionDate?.let { formatContinuityDate(it) } ?: "Select Event Date", Modifier.weight(1f))
+                }
                 Text("Fixation option", color = ContinuityTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Row(Modifier.fillMaxWidth()) { RadioButton(selected = basis == ContinuityPromotionBasis.EVENT_DATE, onClick = { basis = ContinuityPromotionBasis.EVENT_DATE }); Text("From Date of Event", Modifier.padding(top = 12.dp), color = ContinuityTextPrimary, fontSize = 13.sp) }
-                Row(Modifier.fillMaxWidth()) { RadioButton(selected = basis == ContinuityPromotionBasis.DNI, onClick = { basis = ContinuityPromotionBasis.DNI }); Text("From Date of DNI", Modifier.padding(top = 12.dp), color = ContinuityTextPrimary, fontSize = 13.sp) }
+                Row(Modifier.fillMaxWidth()) {
+                    RadioButton(selected = basis == ContinuityPromotionBasis.EVENT_DATE, onClick = { basis = ContinuityPromotionBasis.EVENT_DATE; eventApplied = false })
+                    Text("From Date of Event", Modifier.padding(top = 12.dp), color = ContinuityTextPrimary, fontSize = 13.sp)
+                }
+                Row(Modifier.fillMaxWidth()) {
+                    RadioButton(selected = basis == ContinuityPromotionBasis.DNI, onClick = { basis = ContinuityPromotionBasis.DNI; eventApplied = false })
+                    Text("From Date of DNI", Modifier.padding(top = 12.dp), color = ContinuityTextPrimary, fontSize = 13.sp)
+                }
                 Text("Promoted / Upgraded Pay Level", color = ContinuityTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 androidx.compose.foundation.layout.Box {
-                    OutlinedButton(onClick = { promotedMenu = true }, modifier = Modifier.fillMaxWidth()) { Text(promotedLevel?.let { "Level $it" } ?: "Select promoted / upgraded Level", Modifier.weight(1f)); Text("▼") }
+                    OutlinedButton(onClick = { promotedMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text(promotedLevel?.let { "Level $it" } ?: "Select promoted / upgraded Level", Modifier.weight(1f))
+                        Text("▼")
+                    }
                     DropdownMenu(expanded = promotedMenu, onDismissRequest = { promotedMenu = false }) {
-                        PayMatrixSelection.forCategory(EmployeeCategory.ORDINARY).levels.filter { it > currentLevel }.forEach { level -> DropdownMenuItem(text = { Text("Level $level") }, onClick = { promotedLevel = level; promotedMenu = false }) }
+                        PayMatrixSelection.forCategory(EmployeeCategory.ORDINARY).levels.filter { it > currentLevel }.forEach { level ->
+                            DropdownMenuItem(text = { Text("Level $level") }, onClick = {
+                                promotedLevel = level
+                                promotedMenu = false
+                                eventApplied = false
+                            })
+                        }
                     }
                 }
+
                 fixation?.let { result ->
                     HorizontalDivider(Modifier.padding(vertical = 4.dp))
                     Text("Fixation Result", color = ContinuityBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
@@ -171,13 +212,76 @@ private fun SeventhCpcPromotionMacpContinuation(currentLevel: String, currentPay
                             Text(formatContinuityCurrency(finalPay ?: result.option1.finalFixedPay), color = ContinuityBlue, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
                         }
                     }
+                    Button(
+                        onClick = {
+                            val pay = finalPay ?: return@Button
+                            eventApplied = true
+                            appliedPay = pay
+                            appliedLevel = promotedLevel
+                            appliedDni = firstPostIncrementDate
+                            postSteps = emptyList()
+                        },
+                        enabled = finalPay != null,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = ContinuityBlue),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(if (eventApplied) "Event Applied" else "Apply Event", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                if (eventApplied && appliedPay != null && appliedLevel != null) {
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                    Text("Event Applied — Continue from this Pay", color = ContinuityBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Pay Level: Level $appliedLevel", color = ContinuityTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    ContinuityRow("Pay after Promotion / MACP", appliedPay!!)
+                    appliedDni?.let { Text("Next Increment / DNI: ${formatContinuityDate(it)}", color = ContinuityTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+
+                    if (postSteps.isNotEmpty()) {
+                        postSteps.forEachIndexed { index, step ->
+                            Surface(Modifier.fillMaxWidth(), color = ContinuityBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
+                                Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text("Post-event Increment ${index + 1}", color = ContinuityTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        Text("Date: ${formatContinuityDate(step.date)}", color = ContinuityTextSecondary, fontSize = 12.sp)
+                                        Text("Pay thereon: ${formatContinuityCurrency(step.pay)}", color = ContinuityBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                                    }
+                                    TextButton(onClick = { postSteps = postSteps.toMutableList().also { it.removeAt(index) } }) { Text("Delete", fontWeight = FontWeight.Bold) }
+                                }
+                            }
+                        }
+                    }
+
+                    val postCurrentPay = postSteps.lastOrNull()?.pay ?: appliedPay!!
+                    val postNextDate = postSteps.lastOrNull()?.let { addSeventhYears(it.date, 1) } ?: appliedDni
+                    val postNextPay = appliedLevel?.let { getSixthToSeventhNextCell(it, postCurrentPay) }
+                    Button(
+                        onClick = {
+                            val date = postNextDate ?: return@Button
+                            postNextPay?.let { nextPay -> postSteps = postSteps + ContinuityIncrementStep(nextPay, date) }
+                        },
+                        enabled = postNextPay != null && postNextDate != null,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = ContinuityBlue),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Next Increment", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
     }
+
     if (showDatePicker) {
         val state = rememberDatePickerState(initialSelectedDateMillis = promotionDate)
-        DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { promotionDate = state.selectedDateMillis; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) } }) { DatePicker(state) }
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = { promotionDate = state.selectedDateMillis; showDatePicker = false; eventApplied = false }) {
+                    Text("Confirm", fontWeight = FontWeight.Bold)
+                }
+            }
+        ) { DatePicker(state) }
     }
 }
 
