@@ -23,6 +23,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,7 +41,6 @@ import java.util.Date
 import java.util.Locale
 
 enum class FifthCpcEventType { PROMOTION, ACP }
-
 enum class FifthCpcFixationOption { FROM_EVENT_DATE, FROM_DNI }
 
 data class FifthCpcEventResult(
@@ -129,7 +129,13 @@ private fun fifthCpcJuly2005Date(): Long = Calendar.getInstance().apply { clear(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, currentDate: Long, onLatestStateChange: ((FifthCpcScale, Int, Long) -> Unit)? = null, onContinueToSixth: ((FifthCpcScale, Int) -> Unit)? = null) {
+fun FourthToFifthEventSection(
+    currentPay: Int,
+    currentScale: FifthCpcScale,
+    currentDate: Long,
+    onLatestStateChange: ((FifthCpcScale, Int, Long) -> Unit)? = null,
+    onContinueToSixth: ((FifthCpcScale, Int) -> Unit)? = null
+) {
     var events by remember(currentPay, currentScale.title, currentDate) { mutableStateOf<List<FifthCpcEventResult>>(emptyList()) }
     var postIncrements by remember(currentPay, currentScale.title, currentDate) { mutableStateOf<List<Pair<Int, Long>>>(emptyList()) }
     var showForm by remember { mutableStateOf(false) }
@@ -146,7 +152,10 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
     val baseScale = latestEvent?.targetScale ?: currentScale
     val canContinueToSixth = baseDate >= fifthCpcJuly2005Date()
     val canAddEvent = baseDate < fifthCpcEndDate()
-    onLatestStateChange?.invoke(baseScale, basePay, baseDate)
+
+    LaunchedEffect(baseScale.title, basePay, baseDate) {
+        onLatestStateChange?.invoke(baseScale, basePay, baseDate)
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("5th CPC Events", color = Color(0xFF172B4D), fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
@@ -176,7 +185,7 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text("5th CPC Increment Progression", color = Color(0xFF1769AA), fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                     postIncrements.forEachIndexed { index, item ->
-                        Surface(Modifier.fillMaxWidth(), color = Color(0xFF1769AA).copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
+                        Surface(Modifier.fillMaxWidth().padding(vertical = 2.dp), color = Color(0xFF1769AA).copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
                             Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text("Increment ${index + 1} — ${formatFifthEventDate(item.second)}", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -258,7 +267,13 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
 
     if (showDatePicker) {
         val state = rememberDatePickerState(initialSelectedDateMillis = eventDate ?: baseDate)
-        DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = TextButton(onClick = { eventDate = state.selectedDateMillis; showDatePicker = false }) { Text("OK") }, dismissButton = TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }) { DatePicker(state = state) }
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = TextButton(onClick = { eventDate = state.selectedDateMillis; showDatePicker = false }) { Text("OK") },
+            dismissButton = TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+        ) {
+            DatePicker(state = state)
+        }
     }
 }
 
