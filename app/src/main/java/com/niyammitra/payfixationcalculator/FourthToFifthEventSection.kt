@@ -38,12 +38,14 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import kotlin.math.max
+
+enum class FifthCpcEventType { PROMOTION, ACP }
 
 enum class FifthCpcFixationOption { FROM_EVENT_DATE, FROM_DNI }
 
 data class FifthCpcEventResult(
     val eventDate: Long,
+    val eventType: FifthCpcEventType,
     val fixationOption: FifthCpcFixationOption,
     val oldPay: Int,
     val firstIncrementedPay: Int,
@@ -54,28 +56,43 @@ data class FifthCpcEventResult(
     val ruleBasis: List<String>
 )
 
-fun calculateFifthCpcEvent(eventDate: Long, currentPay: Int, currentScale: FifthCpcScale, targetScale: FifthCpcScale, fixationOption: FifthCpcFixationOption): FifthCpcEventResult {
+fun calculateFifthCpcEvent(
+    eventDate: Long,
+    currentPay: Int,
+    currentScale: FifthCpcScale,
+    targetScale: FifthCpcScale,
+    fixationOption: FifthCpcFixationOption,
+    eventType: FifthCpcEventType = FifthCpcEventType.PROMOTION
+): FifthCpcEventResult {
     require(currentPay > 0) { "Current 5th CPC basic pay must be positive." }
-    require(eventDate >= fifthCpcConversionDate() && eventDate <= fifthCpcEndDate()) { "The 5th CPC event date must fall between 01 January 1996 and 31 December 2005." }
+    require(eventDate >= fifthCpcConversionDate() && eventDate <= fifthCpcEndDate()) { "The event date must fall between 01 January 1996 and 31 December 2005." }
+    require(targetScale.title != currentScale.title) { "The target scale must differ from the current scale." }
+
     val firstIncrementedPay = calculateFifthCpcNextStage(currentPay, currentScale) ?: currentPay
-    val fixationBase = if (fixationOption == FifthCpcFixationOption.FROM_DNI) calculateFifthCpcNextStage(firstIncrementedPay, currentScale) ?: firstIncrementedPay else firstIncrementedPay
+    val fixationBase = if (fixationOption == FifthCpcFixationOption.FROM_DNI) {
+        calculateFifthCpcNextStage(firstIncrementedPay, currentScale) ?: firstIncrementedPay
+    } else firstIncrementedPay
     val newPay = findEqualOrNextHigherFifthCpcStage(fixationBase, targetScale)
-    val nextIncrementDate = if (fixationOption == FifthCpcFixationOption.FROM_DNI) addFifthCpcYear(nextJulyOnOrAfterFifthCpc(eventDate)) else nextJulyOnOrAfterFifthCpc(eventDate)
+    val eventDni = nextJulyOnOrAfterFifthCpc(eventDate)
+    val nextIncrementDate = if (fixationOption == FifthCpcFixationOption.FROM_DNI) addFifthCpcYear(eventDni) else eventDni
+
     val ruleBasis = buildList {
-        add("The event is processed under the 5th CPC revised-pay structure using the applicable Fundamental Rule pay-fixation method.")
-        add("One increment in the lower/current 5th CPC scale is taken for promotion / financial upgradation fixation.")
-        if (fixationOption == FifthCpcFixationOption.FROM_DNI) add("From-DNI option: the intervening annual increment is first allowed in the current scale, followed by the event-related increment before placement in the higher scale.")
-        add("The resulting pay is placed at the stage equal to or next higher than the fixation amount in the selected higher 5th CPC scale.")
-        add("The 5th CPC annual increment cycle is based on 01 July, subject to the applicable rule and service-history provisos.")
+        add("Event type: ${if (eventType == FifthCpcEventType.PROMOTION) "Promotion" else "ACP financial upgradation"}.")
+        add("Pay fixation uses the applicable Fundamental Rule promotion/fixation method under the 5th CPC pay structure.")
+        add("One increment in the current 5th CPC scale is allowed for the event before placement in the higher scale.")
+        if (fixationOption == FifthCpcFixationOption.FROM_DNI) add("From-DNI option: the intervening annual increment is allowed first, followed by the event-related increment before higher-scale placement.")
+        add("The resulting pay is placed at the stage equal to, or next higher than, the fixation amount in the selected higher scale.")
+        add("The normal 5th CPC increment cycle is 01 July; the employee's actual service record and applicable FR/departmental provisions govern special cases.")
     }
-    return FifthCpcEventResult(eventDate, fixationOption, currentPay, firstIncrementedPay, if (fixationOption == FifthCpcFixationOption.FROM_DNI) fixationBase else null, newPay, targetScale, nextIncrementDate, ruleBasis)
+
+    return FifthCpcEventResult(eventDate, eventType, fixationOption, currentPay, firstIncrementedPay, if (fixationOption == FifthCpcFixationOption.FROM_DNI) fixationBase else null, newPay, targetScale, nextIncrementDate, ruleBasis)
 }
 
 fun calculateFifthCpcNextStage(currentPay: Int, scale: FifthCpcScale): Int? = fifthCpcStages(scale.title).firstOrNull { it > currentPay }
 
 fun findEqualOrNextHigherFifthCpcStage(currentPay: Int, scale: FifthCpcScale): Int {
     val stages = fifthCpcStages(scale.title)
-    if (stages.isEmpty()) return max(scale.payBandMinimum, currentPay)
+    if (stages.isEmpty()) return maxOf(scale.payBandMinimum, currentPay)
     return stages.firstOrNull { it >= currentPay } ?: stages.last()
 }
 
@@ -117,6 +134,7 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
     var postIncrements by remember(currentPay, currentScale.title, currentDate) { mutableStateOf<List<Pair<Int, Long>>>(emptyList()) }
     var showForm by remember { mutableStateOf(false) }
     var eventDate by remember { mutableStateOf<Long?>(null) }
+    var eventType by remember { mutableStateOf(FifthCpcEventType.PROMOTION) }
     var fixationOption by remember { mutableStateOf(FifthCpcFixationOption.FROM_EVENT_DATE) }
     var targetScale by remember { mutableStateOf<FifthCpcScale?>(null) }
     var scaleMenu by remember { mutableStateOf(false) }
@@ -127,28 +145,28 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
     val baseDate = postIncrements.lastOrNull()?.second ?: latestEvent?.nextIncrementDate ?: currentDate
     val baseScale = latestEvent?.targetScale ?: currentScale
     val canContinueToSixth = baseDate >= fifthCpcJuly2005Date()
+    val canAddEvent = baseDate < fifthCpcEndDate()
     onLatestStateChange?.invoke(baseScale, basePay, baseDate)
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("5th CPC Events", color = Color(0xFF172B4D), fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
-        Text("Continue chronologically from the latest 5th CPC pay. Promotion / ACP-type financial events and subsequent increments feed the 01 January 2006 hand-off.", color = Color(0xFF5B6B7A), fontSize = 12.sp)
+        Text("Continue chronologically from the latest 5th CPC pay. Add Promotion / ACP events and continue the 01 July increment cycle.", color = Color(0xFF5B6B7A), fontSize = 12.sp)
 
         events.forEachIndexed { index, event ->
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Event ${index + 1}: Promotion / ACP", Modifier.weight(1f), color = Color(0xFF1769AA), fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("Event ${index + 1}: ${if (event.eventType == FifthCpcEventType.PROMOTION) "Promotion" else "ACP"}", Modifier.weight(1f), color = Color(0xFF1769AA), fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                         TextButton(onClick = { events = events.take(index); postIncrements = emptyList() }) { Text("Delete", fontWeight = FontWeight.Bold) }
                     }
                     Text("Date: ${formatFifthEventDate(event.eventDate)}", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Text("Fixation: ${if (event.fixationOption == FifthCpcFixationOption.FROM_EVENT_DATE) "From Date of Event" else "From Date of DNI (01 July)"}", color = Color(0xFF5B6B7A), fontSize = 12.sp)
                     FifthEventRow("Old 5th CPC Basic Pay", event.oldPay)
-                    FifthEventRow("Increment in current scale", event.firstIncrementedPay)
-                    event.secondIncrementedPay?.let { FifthEventRow("Additional increment at DNI", it) }
+                    FifthEventRow("Pay after event increment", event.firstIncrementedPay)
+                    event.secondIncrementedPay?.let { FifthEventRow("Pay after intervening DNI increment", it) }
                     FifthEventRow("Fixed Pay in higher scale", event.newPay)
                     Text("Higher 5th CPC Scale: ${event.targetScale.title}", color = Color(0xFF5B6B7A), fontSize = 13.sp)
                     Text("Next DNI: ${formatFifthEventDate(event.nextIncrementDate)}", color = Color(0xFF5B6B7A), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    event.ruleBasis.forEach { Text("• $it", color = Color(0xFF5B6B7A), fontSize = 11.sp) }
                 }
             }
         }
@@ -156,7 +174,7 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
         if (postIncrements.isNotEmpty()) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("Post-event 5th CPC Increment Progression", color = Color(0xFF1769AA), fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("5th CPC Increment Progression", color = Color(0xFF1769AA), fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                     postIncrements.forEachIndexed { index, item ->
                         Surface(Modifier.fillMaxWidth(), color = Color(0xFF1769AA).copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
                             Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -174,15 +192,11 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
 
         if (latestEvent != null) {
             val nextPostPay = calculateFifthCpcNextStage(basePay, baseScale)
-            val nextPostDate = if (postIncrements.isEmpty()) baseDate else Calendar.getInstance().apply { timeInMillis = baseDate; add(Calendar.YEAR, 1) }.timeInMillis
-            Button(onClick = { if (nextPostPay != null && nextPostDate <= fifthCpcEndDate()) postIncrements = postIncrements + (nextPostPay to nextPostDate) }, enabled = nextPostPay != null && nextPostDate <= fifthCpcEndDate(), modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) {
-                Text("Next Increment", fontWeight = FontWeight.Bold)
-            }
+            val nextPostDate = if (postIncrements.isEmpty()) baseDate else addFifthCpcYear(baseDate)
+            Button(onClick = { if (nextPostPay != null && nextPostDate <= fifthCpcEndDate()) postIncrements = postIncrements + (nextPostPay to nextPostDate) }, enabled = nextPostPay != null && nextPostDate <= fifthCpcEndDate(), modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Next Increment", fontWeight = FontWeight.Bold) }
         }
 
-        if (latestEvent == null || !canContinueToSixth) {
-            Button(onClick = { showForm = true }, enabled = baseDate < fifthCpcEndDate(), modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Add Event", fontWeight = FontWeight.Bold) }
-        }
+        Button(onClick = { showForm = true }, enabled = canAddEvent, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Add Promotion / ACP Event", fontWeight = FontWeight.Bold) }
 
         if (showForm) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
@@ -190,47 +204,61 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
                     Text("New 5th CPC Event", color = Color(0xFF1769AA), fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                     Text("Current: ${baseScale.title} | Basic Pay ${formatFifthEventCurrency(basePay)} | State date ${formatFifthEventDate(baseDate)}", color = Color(0xFF5B6B7A), fontSize = 12.sp)
                     Text("1. Date of Event", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(eventDate?.let { formatFifthEventDate(it) } ?: "Select Event Date", Modifier.weight(1f)) }
-                    Text("2. Type", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Text("Promotion / ACP", color = Color(0xFF1769AA), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(eventDate?.let { formatFifthEventDate(it) } ?: "Select Event Date", Modifier.weight(1f)); Text("📅") }
+                    Text("2. Event Type", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = eventType == FifthCpcEventType.PROMOTION, onClick = { eventType = FifthCpcEventType.PROMOTION }); Text("Promotion", Modifier.padding(end = 12.dp), fontSize = 12.sp)
+                        RadioButton(selected = eventType == FifthCpcEventType.ACP, onClick = { eventType = FifthCpcEventType.ACP }); Text("ACP", fontSize = 12.sp)
+                    }
                     Text("3. Fixation Option", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Row(Modifier.fillMaxWidth()) { RadioButton(selected = fixationOption == FifthCpcFixationOption.FROM_EVENT_DATE, onClick = { fixationOption = FifthCpcFixationOption.FROM_EVENT_DATE }); Text("From Date of Event", Modifier.padding(top = 12.dp), fontSize = 12.sp) }
-                    Row(Modifier.fillMaxWidth()) { RadioButton(selected = fixationOption == FifthCpcFixationOption.FROM_DNI, onClick = { fixationOption = FifthCpcFixationOption.FROM_DNI }); Text("From Date of DNI (01 July)", Modifier.padding(top = 12.dp), fontSize = 12.sp) }
-                    Text("4. Select higher 5th CPC scale", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { RadioButton(selected = fixationOption == FifthCpcFixationOption.FROM_EVENT_DATE, onClick = { fixationOption = FifthCpcFixationOption.FROM_EVENT_DATE }); Text("From Date of Event", fontSize = 12.sp) }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { RadioButton(selected = fixationOption == FifthCpcFixationOption.FROM_DNI, onClick = { fixationOption = FifthCpcFixationOption.FROM_DNI }); Text("From Date of DNI (01 July)", fontSize = 12.sp) }
+                    Text("4. Applicable higher 5th CPC scale", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text(if (eventType == FifthCpcEventType.ACP) "Select the ACP scale applicable to the employee/post hierarchy." else "Select the promotional scale applicable to the promoted post.", color = Color(0xFF5B6B7A), fontSize = 11.sp)
                     Box {
                         OutlinedButton(onClick = { scaleMenu = true }, modifier = Modifier.fillMaxWidth()) { Text(targetScale?.title ?: "Select higher 5th CPC scale", Modifier.weight(1f)); Text("▼") }
-                        DropdownMenu(expanded = scaleMenu, onDismissRequest = { scaleMenu = false }) { FifthToSixthCpcData.scales.filter { it.title != baseScale.title }.forEach { scale -> DropdownMenuItem(text = { Text(scale.title) }, onClick = { targetScale = scale; scaleMenu = false }) } }
+                        DropdownMenu(expanded = scaleMenu, onDismissRequest = { scaleMenu = false }) {
+                            FifthToSixthCpcData.scales.filter { it.title != baseScale.title }.forEach { scale -> DropdownMenuItem(text = { Text(scale.title) }, onClick = { targetScale = scale; scaleMenu = false }) }
+                        }
                     }
-                    val validDate = eventDate != null && eventDate!! >= baseDate && eventDate!! <= fifthCpcEndDate()
-                    val validTarget = targetScale != null && targetScale != baseScale
+                    val selectedDate = eventDate
+                    val validDate = selectedDate != null && selectedDate >= baseDate && selectedDate <= fifthCpcEndDate()
+                    val validTarget = targetScale != null && targetScale!!.title != baseScale.title
+                    if (selectedDate != null && selectedDate < baseDate) Text("The event date is earlier than the current pay state. Add the intervening increment/event first.", color = Color(0xFFC62828), fontSize = 11.sp)
                     Button(onClick = {
                         val date = eventDate ?: return@Button
                         val target = targetScale ?: return@Button
-                        val event = calculateFifthCpcEvent(date, basePay, baseScale, target, fixationOption)
+                        val event = calculateFifthCpcEvent(date, basePay, baseScale, target, fixationOption, eventType)
                         events = events + event
                         postIncrements = emptyList()
                         showForm = false
                         eventDate = null
                         targetScale = null
+                        eventType = FifthCpcEventType.PROMOTION
                         fixationOption = FifthCpcFixationOption.FROM_EVENT_DATE
                     }, enabled = validDate && validTarget, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Apply Event", fontWeight = FontWeight.Bold) }
-                    Text("The event date must not precede the latest pay state and must fall within the 5th CPC period ending 31 December 2005.", color = Color(0xFF5B6B7A), fontSize = 11.sp)
                 }
             }
         }
 
         if (canContinueToSixth && onContinueToSixth != null) {
-            Button(onClick = { onContinueToSixth(baseScale, basePay) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Continue to 6th CPC with Latest Pay", fontWeight = FontWeight.Bold) }
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFE8F5E9)), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("Ready for 6th CPC", color = Color(0xFF1B5E20), fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Latest 5th CPC state: ${formatFifthEventCurrency(basePay)} in ${baseScale.title}. This pay will be carried to the 5th CPC → 6th CPC calculator as pay on 01 January 2006.", color = Color(0xFF33691E), fontSize = 12.sp)
+                    Button(onClick = { onContinueToSixth(baseScale, basePay) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)), shape = RoundedCornerShape(12.dp)) { Text("Continue to 6th CPC", fontWeight = FontWeight.Bold) }
+                }
+            }
         }
 
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(16.dp)) {
-            Text("This event layer uses a standard 5th CPC stage-based fixation model. ACP applicability, special personal pay, stagnation increments, bunching, and case-specific FR provisions should be verified against the employee's actual service record and applicable orders.", Modifier.padding(16.dp), color = Color(0xFF172B4D), fontSize = 12.sp)
+            Text("ACP target-scale selection is deliberately manual because the applicable ACP hierarchy depends on the employee/post record. Verify case-specific fixation against the applicable Fundamental Rules and Government orders.", Modifier.padding(16.dp), color = Color(0xFF172B4D), fontSize = 11.sp)
         }
     }
 
     if (showDatePicker) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = eventDate)
-        DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { eventDate = state.selectedDateMillis; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) } }) { DatePicker(state) }
+        val state = rememberDatePickerState(initialSelectedDateMillis = eventDate ?: baseDate)
+        DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = TextButton(onClick = { eventDate = state.selectedDateMillis; showDatePicker = false }) { Text("OK") }, dismissButton = TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }) { DatePicker(state = state) }
     }
 }
 
