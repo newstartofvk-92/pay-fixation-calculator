@@ -2,18 +2,21 @@ package com.niyammitra.payfixationcalculator
 
 import kotlin.math.ceil
 
-/**
- * Fixation of pay on promotion / MACP within the 6th CPC revised pay structure.
- *
- * Promotion: Rule 13 applies one increment in the existing Pay Band, calculated
- * as 3% of (Pay in Pay Band + existing Grade Pay), rounded to the next Rs.10,
- * followed by the Grade Pay attached to the promotion post.
- *
- * MACP: the financial upgradation is to the immediate next higher Grade Pay in
- * the MACP hierarchy. The same fixation mechanism is used for the pay fixation.
- */
+/** Financial-upgradation regimes during the 6th CPC period. */
+enum class SixthCpcFinancialUpgradation {
+    ACP,
+    MACP
+}
+
+enum class SixthCpcFixationOption {
+    FROM_EVENT_DATE,
+    FROM_DNI
+}
+
 data class SixthCpcEventResult(
     val eventType: String,
+    val financialUpgradation: SixthCpcFinancialUpgradation? = null,
+    val fixationOption: SixthCpcFixationOption = SixthCpcFixationOption.FROM_EVENT_DATE,
     val eventDate: Long,
     val oldPayInPayBand: Int,
     val oldGradePay: Int,
@@ -26,43 +29,101 @@ data class SixthCpcEventResult(
     val ruleBasis: List<String>
 )
 
+private const val ACP_CUTOFF_YEAR = 2008
+private const val ACP_CUTOFF_MONTH = java.util.Calendar.AUGUST
+private const val ACP_CUTOFF_DAY = 31
+
+fun financialUpgradationForSixthCpcEvent(eventDate: Long): SixthCpcFinancialUpgradation {
+    val cutoff = java.util.Calendar.getInstance().apply {
+        clear()
+        set(ACP_CUTOFF_YEAR, ACP_CUTOFF_MONTH, ACP_CUTOFF_DAY, 23, 59, 59)
+        set(java.util.Calendar.MILLISECOND, 999)
+    }.timeInMillis
+    return if (eventDate <= cutoff) SixthCpcFinancialUpgradation.ACP else SixthCpcFinancialUpgradation.MACP
+}
+
+/**
+ * Calculates a 6th-CPC promotion or financial upgradation.
+ *
+ * For ACP (event on/before 31.08.2008), the applicable ACP promotional scale/GP
+ * is supplied by the user. For MACP (from 01.09.2008), the UI supplies the
+ * immediate next Grade Pay in the applicable hierarchy.
+ *
+ * From-DNI option: the annual 1 July increment is first granted in the lower
+ * grade on the DNI, and the promotion/financial-upgradation increment is then
+ * applied in accordance with FR 22(1)(a)(1). This keeps the two options
+ * auditable instead of treating them as identical calculations.
+ */
 fun calculateSixthCpcPromotionOrMacp(
     payInPayBand: Int,
     currentGradePay: Int,
     targetGradePay: Int,
     eventDate: Long,
-    eventType: String
+    eventType: String,
+    fixationOption: SixthCpcFixationOption = SixthCpcFixationOption.FROM_EVENT_DATE,
+    financialUpgradation: SixthCpcFinancialUpgradation? = null
 ): SixthCpcEventResult {
     require(payInPayBand > 0) { "Pay in Pay Band must be positive." }
     require(targetGradePay > currentGradePay) { "The target Grade Pay must be higher than the current Grade Pay." }
 
-    val incrementBase = payInPayBand + currentGradePay
-    val increment = (ceil((incrementBase * 0.03) / 10.0) * 10.0).toInt()
-    var newPayInBand = payInPayBand + increment
+    val scheme = financialUpgradation ?: if (eventType == "Financial Upgradation") financialUpgradationForSixthCpcEvent(eventDate) else null
+    val annualIncrementDate = nextSixthCpcIncrementDate(eventDate)
+
+    var fixationPayInBand = payInPayBand
+    var totalIncrement = calculateSixthCpcIncrement(payInPayBand, currentGradePay)
+
+    if (fixationOption == SixthCpcFixationOption.FROM_DNI) {
+        // The employee first receives the normal annual increment on 1 July,
+        // then the one increment attached to the promotion/FU fixation.
+        fixationPayInBand += totalIncrement
+        val promotionIncrement = calculateSixthCpcIncrement(fixationPayInBand, currentGradePay)
+        fixationPayInBand += promotionIncrement
+        totalIncrement += promotionIncrement
+    } else {
+        fixationPayInBand += totalIncrement
+    }
 
     val targetBand = bandForGradePay(targetGradePay)
-    newPayInBand = maxOf(newPayInBand, targetBand.payBandMinimum)
-    newPayInBand = minOf(newPayInBand, targetBand.payBandMaximum)
+    val newPayInBand = minOf(maxOf(fixationPayInBand, targetBand.payBandMinimum), targetBand.payBandMaximum)
+
+    val basis = mutableListOf<String>()
+    if (scheme == SixthCpcFinancialUpgradation.ACP) {
+        basis += "Event date is on or before 31 August 2008: ACP regime applies. The applicable ACP promotional scale/Grade Pay is selected by the user."
+        basis += "ACP financial upgradation is regulated under the applicable ACP instructions and FR 22(1)(a)(1); it is not treated as a post-01 September 2008 MACP event."
+    } else if (scheme == SixthCpcFinancialUpgradation.MACP) {
+        basis += "Event date is on or after 01 September 2008: Modified ACP (MACP) regime applies."
+        basis += "MACP financial upgradation is to the immediate next higher Grade Pay in the prescribed hierarchy and is personal financial upgradation."
+    } else {
+        basis += "Regular promotion fixation is governed by the applicable promotion/fixation provisions; the promoted post Grade Pay is selected by the user."
+    }
+    basis += "For 6th CPC fixation, the increment is 3% of Pay in Pay Band plus existing Grade Pay, rounded up to the next multiple of Rs.10, and added to Pay in Pay Band."
+    basis += if (fixationOption == SixthCpcFixationOption.FROM_DNI) {
+        "From-DNI option: the normal annual increment on the 1 July DNI is applied in the lower grade before the promotion/financial-upgradation fixation."
+    } else {
+        "From-event-date option: the promotion/financial-upgradation fixation is applied from the event date."
+    }
+    basis += "During the 6th CPC period the normal annual increment date is 1 July; there is no separate 1 January DNI in this workflow."
 
     return SixthCpcEventResult(
         eventType = eventType,
+        financialUpgradation = scheme,
+        fixationOption = fixationOption,
         eventDate = eventDate,
         oldPayInPayBand = payInPayBand,
         oldGradePay = currentGradePay,
-        increment = increment,
+        increment = totalIncrement,
         newPayInPayBand = newPayInBand,
         newGradePay = targetGradePay,
         newPayBand = targetBand.title,
         revisedBasicPay = newPayInBand + targetGradePay,
-        nextIncrementDate = nextSixthCpcIncrementDate(eventDate),
-        ruleBasis = listOf(
-            "CCS (Revised Pay) Rules, 2008, Rule 13: on promotion from one Grade Pay to another, one increment is calculated at 3% of Pay in Pay Band plus existing Grade Pay.",
-            "The increment is rounded off to the next multiple of Rs.10 and added to the existing Pay in Pay Band.",
-            "The Grade Pay corresponding to the promotion post is then granted in addition to the revised Pay in Pay Band.",
-            "For MACP, the financial upgradation is to the immediate next higher Grade Pay in the hierarchy; it is personal financial upgradation and not functional promotion.",
-            "The next annual increment in the revised structure is governed by Rule 10 and the applicable provisos."
-        )
+        nextIncrementDate = if (fixationOption == SixthCpcFixationOption.FROM_DNI) addSixthYears(annualIncrementDate, 1) else nextSixthCpcIncrementDate(eventDate),
+        ruleBasis = basis
     )
+}
+
+private fun calculateSixthCpcIncrement(payInPayBand: Int, gradePay: Int): Int {
+    val base = payInPayBand + gradePay
+    return (ceil((base * 0.03) / 10.0) * 10.0).toInt()
 }
 
 fun bandForGradePay(gradePay: Int): SixthCpcPayBand {
@@ -78,11 +139,13 @@ private fun nextSixthCpcIncrementDate(eventDate: Long): Long {
     val calendar = java.util.Calendar.getInstance().apply { timeInMillis = eventDate }
     val year = calendar.get(java.util.Calendar.YEAR)
     val july = java.util.Calendar.getInstance().apply {
+        clear()
         set(year, java.util.Calendar.JULY, 1, 0, 0, 0)
-        set(java.util.Calendar.MILLISECOND, 0)
     }
-    return if (eventDate <= july.timeInMillis) july.timeInMillis else {
-        july.add(java.util.Calendar.YEAR, 1)
-        july.timeInMillis
-    }
+    return if (eventDate <= july.timeInMillis) july.timeInMillis else addSixthYears(july.timeInMillis, 1)
 }
+
+private fun addSixthYears(date: Long, years: Int): Long = java.util.Calendar.getInstance().apply {
+    timeInMillis = date
+    add(java.util.Calendar.YEAR, years)
+}.timeInMillis
