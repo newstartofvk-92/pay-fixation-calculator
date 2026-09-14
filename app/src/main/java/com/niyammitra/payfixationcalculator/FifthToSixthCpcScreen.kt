@@ -91,22 +91,25 @@ fun FifthToSixthCpcScreen(onBack: () -> Unit, onContinueToSeventh: ((String, Int
                     SixthCpcIncrementProgressionCard(calculation = calculation, steps = incrementSteps, onDelete = { index -> incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) } })
                 }
 
-                Button(
-                    onClick = {
-                        val latest = incrementSteps.lastOrNull()
-                        val currentPayInBand = latest?.let { it.pay - calculation.gradePay } ?: calculation.payInPayBand
-                        val nextPay = calculateSixthCpcNextIncrement(currentPayInBand, calculation.gradePay, calculation.scale.payBandMaximum)
-                        if (nextPay != null) {
-                            val nextDate = latest?.let { addSixthCpcYears(it.date, 1) } ?: sixthCpcFirstIncrementDate()
-                            incrementSteps = incrementSteps + SixthCpcIncrementStep(nextPay, nextDate)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = FiveSixBlue),
-                    shape = RoundedCornerShape(12.dp)
-                ) { Text("Next Increment", fontWeight = FontWeight.Bold) }
+                Button(onClick = {
+                    val latest = incrementSteps.lastOrNull()
+                    val currentPayInBand = latest?.let { it.pay - calculation.gradePay } ?: calculation.payInPayBand
+                    val nextPay = calculateSixthCpcNextIncrement(currentPayInBand, calculation.gradePay, calculation.scale.payBandMaximum)
+                    if (nextPay != null) {
+                        val nextDate = latest?.let { addSixthCpcYears(it.date, 1) } ?: sixthCpcFirstIncrementDate()
+                        incrementSteps = incrementSteps + SixthCpcIncrementStep(nextPay, nextDate)
+                    }
+                }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = FiveSixBlue), shape = RoundedCornerShape(12.dp)) { Text("Next Increment", fontWeight = FontWeight.Bold) }
 
-                SixthCpcEventsSection(calculation = calculation, onContinueToSeventh = onContinueToSeventh)
+                val latestSixthIncrement = incrementSteps.lastOrNull()
+                val latestSixthPayInBand = latestSixthIncrement?.let { it.pay - calculation.gradePay } ?: calculation.payInPayBand
+                SixthCpcEventsSection(
+                    calculation = calculation,
+                    startingPayInBand = latestSixthPayInBand,
+                    startingGradePay = calculation.gradePay,
+                    startingPayBand = calculation.scale.payBand,
+                    onContinueToSeventh = onContinueToSeventh
+                )
             }
 
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
