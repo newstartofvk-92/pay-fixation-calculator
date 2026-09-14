@@ -30,16 +30,24 @@ fun calculateFourthToFifthCpcPrecise(existingBasicPay: Int, scale: FourthCpcScal
         fitmentTotal = fitmentTotal,
         revisedBasicPay = revisedBasic,
         conversionDate = "01 January 1996",
-        nextIncrementNote = "Under Rule 8, the next increment is generally due on the date on which it would have accrued in the existing scale, subject to the rule's provisos.",
+        nextIncrementNote = "Under Rule 8, the next increment is generally due on the date the employee would have drawn the increment had the employee continued in the existing scale, subject to the rule's provisos.",
         ruleBasis = listOf(
             "Rule 7: 40% of existing basic pay is added to existing emoluments.",
             "Existing emoluments include basic pay, DA at the 1510 CPI index, and the first and second interim relief instalments.",
             "DA at 01.01.1996: 148% of basic pay.",
             "First interim relief: Rs.100 per month; second interim relief: 10% of basic pay subject to a minimum of Rs.100.",
             "The resulting amount is fixed at the next stage in the corresponding 5th CPC revised scale, subject to the minimum/maximum provisions.",
+            "Rule 8: the next increment in the revised scale is granted on the date the employee would have drawn the increment in the existing scale, subject to the rule's provisos.",
             "The Rules also contain bunching and one-increment-for-every-three-existing-increments safeguards; those case-specific adjustments are not inferred without the necessary service-history data."
         )
     )
+}
+
+/** Returns the next 5th CPC stage after the current revised basic pay. */
+fun calculateFourthToFifthNextIncrement(currentPay: Int, scale: FourthCpcScale): Int? {
+    val stages = revisedStages(scale.revisedScale)
+    if (stages.isEmpty() || scale.fixed) return null
+    return stages.firstOrNull { it > currentPay }
 }
 
 private fun exactNextStage(value: Int, scale: FourthCpcScale): Int {
