@@ -54,7 +54,8 @@ class SixthCpcPromotionMacpUtilsTest {
         )
         assertEquals(830, result.increment)
         assertEquals(10130, result.newPayInPayBand)
-        assertEquals(148? 148? 0, 0)
+        assertEquals(4600, result.newGradePay)
+        assertEquals(14730, result.revisedBasicPay)
     }
 
     private fun calendarDate(year: Int, month: Int, day: Int): Long = Calendar.getInstance().apply {
