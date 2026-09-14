@@ -86,9 +86,9 @@ fun FifthToSixthCpcScreen(onBack: () -> Unit, onContinueToSeventh: ((String, Int
                     val nextPay = calculateSixthCpcNextIncrement(currentPayInBand, calculation.gradePay, calculation.scale.payBandMaximum)
                     if (nextPay != null) {
                         val nextDate = latest?.let { addSixthCpcYears(it.date, 1) } ?: sixthCpcFirstIncrementDate()
-                        incrementSteps = incrementSteps + SixthCpcIncrementStep(nextPay, nextDate)
+                        if (nextDate <= sixthCpcJuly2015Date()) incrementSteps = incrementSteps + SixthCpcIncrementStep(nextPay, nextDate)
                     }
-                }, Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = FiveSixBlue), shape = RoundedCornerShape(12.dp)) { Text("Next Increment", fontWeight = FontWeight.Bold) }
+                }, enabled = !reaches2016, Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = FiveSixBlue), shape = RoundedCornerShape(12.dp)) { Text(if (reaches2016) "6th CPC Sequence Complete — 7th CPC Starts" else "Next Increment", fontWeight = FontWeight.Bold) }
 
                 SixthCpcEventsSection(
                     calculation = calculation,
