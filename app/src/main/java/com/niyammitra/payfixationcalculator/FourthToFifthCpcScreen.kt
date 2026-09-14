@@ -27,7 +27,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -142,12 +141,24 @@ fun FourthToFifthCpcScreen(
 
                 if (incrementSteps.isEmpty() && validNextIncrementDate != null) Text("The first added increment will be shown on ${formatFourthFiveDate(validNextIncrementDate)}. Subsequent increments advance by one year.", color = FourFiveTextSecondary, fontSize = 12.sp)
 
-                val fifthScale = FifthToSixthCpcData.scales.firstOrNull { it.title == calculation.scale.revisedScale }
+                // Always expose the 5th CPC event workflow once the conversion result exists.
+                // Do not depend on an exact title match: several 4th CPC scales map to 5th CPC
+                // scales carrying PB-2/PB-3 suffixes, and NEW SCALE has a descriptive suffix.
+                val fifthScale = FifthToSixthCpcData.scales.firstOrNull { scale ->
+                    val calculatedTitle = calculation.scale.revisedScale.substringBefore(" (")
+                    val candidateTitle = scale.title.substringBefore(" (")
+                    candidateTitle == calculatedTitle
+                } ?: FifthToSixthCpcData.scales.firstOrNull { scale ->
+                    scale.payBand == "PB-1" && scale.gradePay == calculation.scale.revisedMinimum
+                }
+
                 if (fifthScale != null && currentPay != null) {
-                    // The event timeline starts from the actual current pay state. If the first
-                    // 5th-CPC increment has not yet been applied, the state date remains 01.01.1996;
-                    // the separately entered next-increment date is only a future event date.
-                    FourthToFifthEventSection(currentPay = currentPay, currentScale = fifthScale, currentDate = currentIncrementDate ?: fourthFiveConversionDate(), onContinueToSixth = onContinueToSixth)
+                    FourthToFifthEventSection(
+                        currentPay = currentPay,
+                        currentScale = fifthScale,
+                        currentDate = currentIncrementDate ?: fourthFiveConversionDate(),
+                        onContinueToSixth = onContinueToSixth
+                    )
                 }
 
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(16.dp)) { Text("Rule 8: the next increment is granted on the date it would have accrued in the existing scale. The progression shown here uses that supplied date for the first revised-scale increment and advances subsequent increments by one year. Case-specific provisos, bunching and other special adjustments require separate verification.", Modifier.padding(16.dp), color = FourFiveTextPrimary, fontSize = 12.sp) }
