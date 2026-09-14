@@ -27,11 +27,17 @@ private val FiveSixTextSecondary = Color(0xFF5B6B7A)
 data class SixthCpcIncrementStep(val pay: Int, val date: Long)
 
 @Composable
-fun FifthToSixthCpcScreen(onBack: () -> Unit, onContinueToSeventh: ((String, Int, Int) -> Unit)? = null) {
+fun FifthToSixthCpcScreen(
+    onBack: () -> Unit,
+    onContinueToSeventh: ((String, Int, Int) -> Unit)? = null,
+    initialScaleTitle: String? = null,
+    initialBasicPay: Int? = null
+) {
     BackHandler(onBack = onBack)
-    var selectedScale by remember { mutableStateOf<FifthCpcScale?>(null) }
+    val carriedScale = remember(initialScaleTitle) { initialScaleTitle?.let { title -> FifthToSixthCpcData.scales.firstOrNull { it.title == title } } }
+    var selectedScale by remember(initialScaleTitle) { mutableStateOf(carriedScale) }
     var scaleMenu by remember { mutableStateOf(false) }
-    var basicPayText by remember { mutableStateOf("") }
+    var basicPayText by remember(initialBasicPay) { mutableStateOf(initialBasicPay?.toString() ?: "") }
     var incrementSteps by remember(selectedScale, basicPayText) { mutableStateOf<List<SixthCpcIncrementStep>>(emptyList()) }
 
     var eventLatestPayBand by remember { mutableStateOf<String?>(null) }
@@ -41,33 +47,21 @@ fun FifthToSixthCpcScreen(onBack: () -> Unit, onContinueToSeventh: ((String, Int
     var automaticSeventhPayInBand by remember { mutableStateOf<Int?>(null) }
 
     val basicPay = basicPayText.toIntOrNull()
-    val result = if (selectedScale != null && basicPay != null && basicPay > 0) {
-        calculateFifthToSixthCpc(basicPay, selectedScale!!)
-    } else null
-
+    val result = if (selectedScale != null && basicPay != null && basicPay > 0) calculateFifthToSixthCpc(basicPay, selectedScale!!) else null
     val latestSixthStep = incrementSteps.lastOrNull()
-    val latestOuterPayInBand = latestSixthStep?.let { it.pay - (result?.gradePay ?: 0) } ?: result?.payInPayBand
+    val latestOuterPayInBand = latestSixthStep?.let { it.pay - (result?.gradePay ?: 0) } ?: result?.payInBand
     val reaches2015FromOuterSequence = latestSixthStep?.date == sixthCpcJuly2015Date()
-
     val continuityPayBand = eventLatestPayBand ?: result?.scale?.payBand
     val continuityGradePay = eventLatestGradePay ?: result?.gradePay
     val continuityPayInBand = eventLatestPayInBand ?: automaticSeventhPayInBand ?: latestOuterPayInBand
-    val reaches2016 = automaticSeventhPayInBand != null ||
-        eventLatestDate?.let { it >= sixthCpcJuly2015Date() } == true ||
-        reaches2015FromOuterSequence
+    val reaches2016 = automaticSeventhPayInBand != null || eventLatestDate?.let { it >= sixthCpcJuly2015Date() } == true || reaches2015FromOuterSequence
 
     Column(Modifier.fillMaxSize().background(FiveSixBackground)) {
         Surface(Modifier.fillMaxWidth(), color = FiveSixHeaderBlue, shadowElevation = 3.dp) {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("‹", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                    Text("Back", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("‹", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold); Text("Back", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 Spacer(Modifier.width(16.dp))
-                Column {
-                    Text("5th CPC → 6th CPC → 7th CPC", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Continuous Pay Journey", color = Color.White.copy(alpha = .88f), fontSize = 13.sp)
-                }
+                Column { Text("5th CPC → 6th CPC → 7th CPC", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold); Text("Continuous Pay Journey", color = Color.White.copy(alpha = .88f), fontSize = 13.sp) }
             }
         }
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -77,18 +71,11 @@ fun FifthToSixthCpcScreen(onBack: () -> Unit, onContinueToSeventh: ((String, Int
                     Text("Select the applicable pre-revised 5th CPC scale and enter the basic pay drawn as on 01 January 2006.", color = FiveSixTextSecondary, fontSize = 13.sp)
                     Box {
                         OutlinedButton(onClick = { scaleMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text(selectedScale?.title ?: "Select 5th CPC Pay Scale", Modifier.weight(1f), color = FiveSixTextPrimary, fontSize = 15.sp)
-                            Text("▼")
+                            Text(selectedScale?.title ?: "Select 5th CPC Pay Scale", Modifier.weight(1f), color = FiveSixTextPrimary, fontSize = 15.sp); Text("▼")
                         }
-                        DropdownMenu(expanded = scaleMenu, onDismissRequest = { scaleMenu = false }) {
-                            FifthToSixthCpcData.scales.forEach { scale ->
-                                DropdownMenuItem(text = { Text(scale.title) }, onClick = { selectedScale = scale; scaleMenu = false })
-                            }
-                        }
+                        DropdownMenu(expanded = scaleMenu, onDismissRequest = { scaleMenu = false }) { FifthToSixthCpcData.scales.forEach { scale -> DropdownMenuItem(text = { Text(scale.title) }, onClick = { selectedScale = scale; scaleMenu = false }) } }
                     }
-                    selectedScale?.let {
-                        Text("6th CPC: ${it.payBand}  |  Grade Pay: ${formatFiveSixCurrency(it.gradePay)}", color = FiveSixTextSecondary, fontSize = 12.sp)
-                    }
+                    selectedScale?.let { Text("6th CPC: ${it.payBand}  |  Grade Pay: ${formatFiveSixCurrency(it.gradePay)}", color = FiveSixTextSecondary, fontSize = 12.sp) }
                     OutlinedTextField(value = basicPayText, onValueChange = { if (it.all(Char::isDigit)) basicPayText = it }, label = { Text("5th CPC Basic Pay on 01 January 2006") }, placeholder = { Text("e.g. 4800") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 }
             }
@@ -105,68 +92,32 @@ fun FifthToSixthCpcScreen(onBack: () -> Unit, onContinueToSeventh: ((String, Int
                         FiveSixRow("Rounded up to next Rs.10", calculation.roundedPay)
                         FiveSixRow("Pay in ${calculation.scale.payBand}", calculation.payInPayBand)
                         FiveSixRow("Grade Pay", calculation.gradePay)
-                        Surface(Modifier.fillMaxWidth().padding(top = 4.dp), color = FiveSixBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
-                            Column(Modifier.padding(14.dp)) {
-                                Text("6th CPC Revised Basic Pay", color = FiveSixTextSecondary, fontSize = 13.sp)
-                                Text(formatFiveSixCurrency(calculation.revisedBasicPay), color = FiveSixBlue, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
-                            }
-                        }
+                        Surface(Modifier.fillMaxWidth().padding(top = 4.dp), color = FiveSixBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) { Column(Modifier.padding(14.dp)) { Text("6th CPC Revised Basic Pay", color = FiveSixTextSecondary, fontSize = 13.sp); Text(formatFiveSixCurrency(calculation.revisedBasicPay), color = FiveSixBlue, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold) } }
                         Text("Pay fixed as on ${calculation.conversionDate}", color = FiveSixTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         Text("DNI: ${calculation.nextIncrementDate}", color = FiveSixTextSecondary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
                 }
 
-                if (incrementSteps.isNotEmpty()) {
-                    SixthCpcIncrementProgressionCard(calculation, incrementSteps) { index -> incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) } }
-                }
+                if (incrementSteps.isNotEmpty()) SixthCpcIncrementProgressionCard(calculation, incrementSteps) { index -> incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) } }
 
-                Button(
-                    onClick = {
-                        val latest = incrementSteps.lastOrNull()
-                        val currentPayInBand = latest?.let { it.pay - calculation.gradePay } ?: calculation.payInPayBand
-                        val nextPay = calculateSixthCpcNextIncrement(currentPayInBand, calculation.gradePay, calculation.scale.payBandMaximum)
-                        if (nextPay != null) {
-                            val nextDate = latest?.let { addSixthCpcYears(it.date, 1) } ?: sixthCpcFirstIncrementDate()
-                            if (nextDate <= sixthCpcJuly2015Date()) {
-                                incrementSteps = incrementSteps + SixthCpcIncrementStep(nextPay, nextDate)
-                                if (nextDate == sixthCpcJuly2015Date()) {
-                                    automaticSeventhPayInBand = nextPay - calculation.gradePay
-                                    eventLatestPayBand = null
-                                    eventLatestGradePay = null
-                                    eventLatestPayInBand = null
-                                    eventLatestDate = null
-                                }
-                            }
+                Button(onClick = {
+                    val latest = incrementSteps.lastOrNull()
+                    val currentPayInBand = latest?.let { it.pay - calculation.gradePay } ?: calculation.payInPayBand
+                    val nextPay = calculateSixthCpcNextIncrement(currentPayInBand, calculation.gradePay, calculation.scale.payBandMaximum)
+                    if (nextPay != null) {
+                        val nextDate = latest?.let { addSixthCpcYears(it.date, 1) } ?: sixthCpcFirstIncrementDate()
+                        if (nextDate <= sixthCpcJuly2015Date()) {
+                            incrementSteps = incrementSteps + SixthCpcIncrementStep(nextPay, nextDate)
+                            if (nextDate == sixthCpcJuly2015Date()) { automaticSeventhPayInBand = nextPay - calculation.gradePay; eventLatestPayBand = null; eventLatestGradePay = null; eventLatestPayInBand = null; eventLatestDate = null }
                         }
-                    },
-                    enabled = !reaches2015FromOuterSequence,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = FiveSixBlue),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
+                    }
+                }, enabled = !reaches2015FromOuterSequence, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = FiveSixBlue), shape = RoundedCornerShape(12.dp)) {
                     Text(if (reaches2015FromOuterSequence) "01 July 2015 Reached — 7th CPC Starts Automatically" else "Next Increment", fontWeight = FontWeight.Bold)
                 }
 
-                SixthCpcEventsSection(
-                    calculation = calculation,
-                    startingPayInBand = latestOuterPayInBand ?: calculation.payInPayBand,
-                    startingGradePay = calculation.gradePay,
-                    startingPayBand = calculation.scale.payBand,
-                    onContinueToSeventh = null,
-                    onLatestStateChange = { band, gp, payInBand, date ->
-                        eventLatestPayBand = band
-                        eventLatestGradePay = gp
-                        eventLatestPayInBand = payInBand
-                        eventLatestDate = date
-                        if (date >= sixthCpcJuly2015Date()) {
-                            automaticSeventhPayInBand = payInBand
-                        }
-                    }
-                )
+                SixthCpcEventsSection(calculation = calculation, startingPayInBand = latestOuterPayInBand ?: calculation.payInPayBand, startingGradePay = calculation.gradePay, startingPayBand = calculation.scale.payBand, onContinueToSeventh = null, onLatestStateChange = { band, gp, payInBand, date -> eventLatestPayBand = band; eventLatestGradePay = gp; eventLatestPayInBand = payInBand; eventLatestDate = date; if (date >= sixthCpcJuly2015Date()) automaticSeventhPayInBand = payInBand })
 
-                if (reaches2016 && continuityPayBand != null && continuityGradePay != null && continuityPayInBand != null) {
-                    SeventhCpcContinuitySection(payBand = continuityPayBand, gradePay = continuityGradePay, payInPayBand = continuityPayInBand)
-                }
+                if (reaches2016 && continuityPayBand != null && continuityGradePay != null && continuityPayInBand != null) SeventhCpcContinuitySection(payBand = continuityPayBand, gradePay = continuityGradePay, payInPayBand = continuityPayInBand)
             }
 
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
@@ -175,9 +126,7 @@ fun FifthToSixthCpcScreen(onBack: () -> Unit, onContinueToSeventh: ((String, Int
                     Text("Conversion pay is shown as on 01 January 2006. The first added increment is dated 01 July 2006, and every further added increment is dated one year after the preceding increment. When 01 July 2015 is reached, the 7th CPC continuation for 01 January 2016 appears automatically on this same screen, using the latest 6th CPC pay reached through the journey.", color = FiveSixTextSecondary, fontSize = 12.sp)
                 }
             }
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(16.dp)) {
-                Text("This is an indicative conversion tool. Verify the result against the CCS (Revised Pay) Rules, 2008, applicable Government orders/clarifications and the employee's service/pay records before official use. Bunching, special pay/NPA, upgraded or merged scales and other special cases may require separate treatment.", Modifier.padding(16.dp), color = FiveSixTextPrimary, fontSize = 12.sp)
-            }
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(16.dp)) { Text("This is an indicative conversion tool. Verify the result against the CCS (Revised Pay) Rules, 2008, applicable Government orders/clarifications and the employee's service/pay records before official use. Bunching, special pay/NPA, upgraded or merged scales and other special cases may require separate treatment.", Modifier.padding(16.dp), color = FiveSixTextPrimary, fontSize = 12.sp) }
             Spacer(Modifier.height(20.dp))
         }
     }
@@ -193,12 +142,7 @@ private fun SixthCpcIncrementProgressionCard(calculation: FifthToSixthResult, st
                 val payInBand = step.pay - calculation.gradePay
                 Surface(Modifier.fillMaxWidth(), color = FiveSixBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
                     Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Increment ${index + 1}", color = FiveSixTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text("Date: ${formatSixthCpcDate(step.date)}", color = FiveSixTextPrimary, fontSize = 13.sp)
-                            Text("Pay in Pay Band: ${formatFiveSixCurrency(payInBand)}", color = FiveSixBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-                            Text("Grade Pay: ${formatFiveSixCurrency(calculation.gradePay)}", color = FiveSixTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        }
+                        Column(Modifier.weight(1f)) { Text("Increment ${index + 1}", color = FiveSixTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold); Text("Date: ${formatSixthCpcDate(step.date)}", color = FiveSixTextPrimary, fontSize = 13.sp); Text("Pay in Pay Band: ${formatFiveSixCurrency(payInBand)}", color = FiveSixBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold); Text("Grade Pay: ${formatFiveSixCurrency(calculation.gradePay)}", color = FiveSixTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold) }
                         TextButton(onClick = { onDelete(index) }) { Text("Delete", fontWeight = FontWeight.Bold) }
                     }
                 }
