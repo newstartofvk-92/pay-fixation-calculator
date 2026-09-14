@@ -54,7 +54,10 @@ private val FourFiveTextSecondary = Color(0xFF5B6B7A)
 data class FourthToFifthIncrementStep(val pay: Int, val date: Long)
 
 @Composable
-fun FourthToFifthCpcScreen(onBack: () -> Unit) {
+fun FourthToFifthCpcScreen(
+    onBack: () -> Unit,
+    onContinueToSixth: ((String, Int) -> Unit)? = null
+) {
     BackHandler(onBack = onBack)
     var selectedScale by remember { mutableStateOf<FourthCpcScale?>(null) }
     var basicPayText by remember { mutableStateOf("") }
@@ -123,19 +126,8 @@ fun FourthToFifthCpcScreen(onBack: () -> Unit) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("Next Increment Date", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                         Text("Under Rule 8, enter the date on which the employee would have drawn the next increment in the existing 4th CPC scale. This date becomes the first increment date in the revised 5th CPC scale.", color = FourFiveTextSecondary, fontSize = 12.sp)
-                        OutlinedTextField(
-                            value = nextIncrementDateText,
-                            onValueChange = { nextIncrementDateText = it.filter { ch -> ch.isDigit() || ch == '/' } },
-                            label = { Text("Next Increment Date in 4th CPC scale") },
-                            placeholder = { Text("dd/MM/yyyy") },
-                            supportingText = { Text(if (dateError) "Enter a valid date in dd/MM/yyyy format." else "Example: 01/07/1996") },
-                            isError = dateError,
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        if (parsedNextIncrementDate != null && parsedNextIncrementDate <= fourthFiveConversionDate()) {
-                            Text("The next increment date must be after 01 January 1996.", color = Color(0xFFC62828), fontSize = 12.sp)
-                        }
+                        OutlinedTextField(value = nextIncrementDateText, onValueChange = { nextIncrementDateText = it.filter { ch -> ch.isDigit() || ch == '/' } }, label = { Text("Next Increment Date in 4th CPC scale") }, placeholder = { Text("dd/MM/yyyy") }, supportingText = { Text(if (dateError) "Enter a valid date in dd/MM/yyyy format." else "Example: 01/07/1996") }, isError = dateError, singleLine = true, modifier = Modifier.fillMaxWidth())
+                        if (parsedNextIncrementDate != null && parsedNextIncrementDate <= fourthFiveConversionDate()) Text("The next increment date must be after 01 January 1996.", color = Color(0xFFC62828), fontSize = 12.sp)
                     }
                 }
 
@@ -167,26 +159,21 @@ fun FourthToFifthCpcScreen(onBack: () -> Unit) {
                     FourthToFifthIncrementProgressionCard(calculation, incrementSteps) { index -> incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) } }
                 }
 
-                Button(
-                    onClick = {
-                        val scale = selectedScale ?: return@Button
-                        val pay = currentPay ?: return@Button
-                        val nextPay = calculateFourthToFifthNextIncrement(pay, scale) ?: return@Button
-                        val nextDate = currentIncrementDate?.let { addFourthFiveYear(it) } ?: validNextIncrementDate ?: return@Button
-                        if (nextDate <= fourthFiveConversionEndDate()) {
-                            incrementSteps = incrementSteps + FourthToFifthIncrementStep(nextPay, nextDate)
-                        }
-                    },
-                    enabled = canAddIncrement,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = FourFiveBlue),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
+                Button(onClick = {
+                    val scale = selectedScale ?: return@Button
+                    val pay = currentPay ?: return@Button
+                    val nextPay = calculateFourthToFifthNextIncrement(pay, scale) ?: return@Button
+                    val nextDate = currentIncrementDate?.let { addFourthFiveYear(it) } ?: validNextIncrementDate ?: return@Button
+                    if (nextDate <= fourthFiveConversionEndDate()) incrementSteps = incrementSteps + FourthToFifthIncrementStep(nextPay, nextDate)
+                }, enabled = canAddIncrement, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = FourFiveBlue), shape = RoundedCornerShape(12.dp)) {
                     Text("Next Increment", fontWeight = FontWeight.Bold)
                 }
 
-                if (incrementSteps.isEmpty() && validNextIncrementDate != null) {
-                    Text("The first added increment will be shown on ${formatFourthFiveDate(validNextIncrementDate)}. Subsequent increments advance by one year.", color = FourFiveTextSecondary, fontSize = 12.sp)
+                if (incrementSteps.isEmpty() && validNextIncrementDate != null) Text("The first added increment will be shown on ${formatFourthFiveDate(validNextIncrementDate)}. Subsequent increments advance by one year.", color = FourFiveTextSecondary, fontSize = 12.sp)
+
+                val fifthScale = FifthToSixthCpcData.scales.firstOrNull { it.title == calculation.scale.revisedScale }
+                if (fifthScale != null && currentPay != null) {
+                    FourthToFifthEventSection(currentPay = currentPay, currentScale = fifthScale, currentDate = currentIncrementDate ?: validNextIncrementDate ?: fourthFiveConversionDate(), onContinueToSixth = onContinueToSixth)
                 }
 
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(16.dp)) {
