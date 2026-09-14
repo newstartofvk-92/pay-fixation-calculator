@@ -45,7 +45,11 @@ enum class ContinuityPromotionBasis { EVENT_DATE, DNI }
 
 /** Automatic continuation from the 6th CPC chain into the 7th CPC on the same screen. */
 @Composable
-fun SeventhCpcContinuitySection(payBand: String, gradePay: Int, payInPayBand: Int) {
+fun SeventhCpcContinuitySection(
+    payBand: String,
+    gradePay: Int,
+    payInPayBand: Int
+) {
     val seventhBand = remember(payBand, gradePay) {
         SixthToSeventhCpcData.payBands.firstOrNull { band ->
             band.title.substringBefore(":").trim() == payBand && gradePay in band.gradePays
@@ -53,22 +57,49 @@ fun SeventhCpcContinuitySection(payBand: String, gradePay: Int, payInPayBand: In
     }
 
     if (seventhBand == null) {
-        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(18.dp)) {
-            Text("7th CPC conversion could not be matched automatically to the 6th CPC Pay Band / Grade Pay. Verify the applicable pay structure before proceeding.", Modifier.padding(16.dp), color = ContinuityTextPrimary, fontSize = 12.sp)
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(Color(0xFFFFF8E1)),
+            shape = RoundedCornerShape(18.dp)
+        ) {
+            Text(
+                "7th CPC conversion could not be matched automatically to the 6th CPC Pay Band / Grade Pay. Verify the applicable pay structure before proceeding.",
+                Modifier.padding(16.dp),
+                color = ContinuityTextPrimary,
+                fontSize = 12.sp
+            )
         }
         return
     }
 
-    val calculation = remember(payBand, gradePay, payInPayBand) { calculateSixthToSeventhCpc(payInPayBand, gradePay, seventhBand) }
-    var incrementSteps by remember(calculation.revisedBasicPay) { mutableStateOf<List<SeventhCpcIncrementStep>>(emptyList()) }
+    val calculation = remember(payBand, gradePay, payInPayBand) {
+        calculateSixthToSeventhCpc(payInPayBand, gradePay, seventhBand)
+    }
+    var incrementSteps by remember(calculation.revisedBasicPay) {
+        mutableStateOf<List<SeventhCpcIncrementStep>>(emptyList())
+    }
     val latest7thPay = incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay
-    val knownDni = incrementSteps.lastOrNull()?.let { addSeventhYears(it.date, 1) } ?: julyFirst2016ForContinuity()
+    val knownDni = incrementSteps.lastOrNull()?.let { addSeventhYears(it.date, 1) }
+        ?: julyFirst2016ForContinuity()
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("7th CPC — Automatic Continuation", color = ContinuityTextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
-        Text("The latest 6th CPC pay is carried forward automatically. The 7th CPC conversion is applied as on 01 January 2016; the user does not re-enter the 6th CPC pay.", color = ContinuityTextSecondary, fontSize = 12.sp)
+        Text(
+            "7th CPC — Automatic Continuation",
+            color = ContinuityTextPrimary,
+            fontSize = 19.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+        Text(
+            "The latest 6th CPC pay is carried forward automatically. The 7th CPC conversion is applied as on 01 January 2016; the user does not re-enter the 6th CPC pay.",
+            color = ContinuityTextSecondary,
+            fontSize = 12.sp
+        )
 
-        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(Color.White),
+            shape = RoundedCornerShape(18.dp)
+        ) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text("6th CPC Pay Carried Forward", color = ContinuityBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                 ContinuityRow("Pay in Pay Band", payInPayBand)
@@ -77,10 +108,18 @@ fun SeventhCpcContinuitySection(payBand: String, gradePay: Int, payInPayBand: In
                 HorizontalDivider(Modifier.padding(vertical = 4.dp))
                 Text("7th CPC Conversion — 01 January 2016", color = ContinuityTextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 ContinuityRow("Existing Pay (PB + GP)", calculation.existingPay)
-                Text("${formatContinuityCurrency(calculation.existingPay)} × ${calculation.fitmentFactor} = ${String.format(Locale.US, "%.2f", calculation.multipliedPay)}", color = ContinuityTextSecondary, fontSize = 13.sp)
+                Text(
+                    "${formatContinuityCurrency(calculation.existingPay)} × ${calculation.fitmentFactor} = ${String.format(Locale.US, "%.2f", calculation.multipliedPay)}",
+                    color = ContinuityTextSecondary,
+                    fontSize = 13.sp
+                )
                 ContinuityRow("Rounded to nearest rupee", calculation.roundedPay)
                 Text("Applicable 7th CPC Level: Level ${calculation.level}", color = ContinuityBlue, fontSize = 16.sp, fontWeight = FontWeight.ExtraBold)
-                Surface(Modifier.fillMaxWidth(), color = ContinuityBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
+                Surface(
+                    Modifier.fillMaxWidth(),
+                    color = ContinuityBlue.copy(alpha = .06f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
                     Column(Modifier.padding(14.dp)) {
                         Text("7th CPC Revised Basic Pay", color = ContinuityTextSecondary, fontSize = 13.sp)
                         Text(formatContinuityCurrency(calculation.revisedBasicPay), color = ContinuityBlue, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
@@ -92,18 +131,33 @@ fun SeventhCpcContinuitySection(payBand: String, gradePay: Int, payInPayBand: In
         }
 
         if (incrementSteps.isNotEmpty()) {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(Color.White),
+                shape = RoundedCornerShape(18.dp)
+            ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text("7th CPC Increment Progression", color = ContinuityBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                     incrementSteps.forEachIndexed { index, step ->
-                        Surface(Modifier.fillMaxWidth(), color = ContinuityBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
-                            Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Surface(
+                            Modifier.fillMaxWidth(),
+                            color = ContinuityBlue.copy(alpha = .06f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
                                 Column(Modifier.weight(1f)) {
                                     Text("Increment ${index + 1}", color = ContinuityTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                                     Text("Date: ${formatContinuityDate(step.date)}", color = ContinuityTextSecondary, fontSize = 12.sp)
                                     Text("Pay thereon: ${formatContinuityCurrency(step.pay)}", color = ContinuityBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                                 }
-                                TextButton(onClick = { incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) } }) { Text("Delete", fontWeight = FontWeight.Bold) }
+                                TextButton(onClick = {
+                                    incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) }
+                                }) {
+                                    Text("Delete", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
@@ -111,48 +165,120 @@ fun SeventhCpcContinuitySection(payBand: String, gradePay: Int, payInPayBand: In
             }
         }
 
-        Button(onClick = {
-            val nextDate = incrementSteps.lastOrNull()?.let { addSeventhYears(it.date, 1) } ?: julyFirst2016ForContinuity()
-            getSixthToSeventhNextCell(calculation.level, latest7thPay)?.let { nextPay -> incrementSteps = incrementSteps + SeventhCpcIncrementStep(nextPay, nextDate) }
-        }, Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = ContinuityBlue), shape = RoundedCornerShape(12.dp)) {
+        Button(
+            onClick = {
+                val nextDate = incrementSteps.lastOrNull()?.let { addSeventhYears(it.date, 1) }
+                    ?: julyFirst2016ForContinuity()
+                getSixthToSeventhNextCell(calculation.level, latest7thPay)?.let { nextPay ->
+                    incrementSteps = incrementSteps + SeventhCpcIncrementStep(nextPay, nextDate)
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = ButtonDefaults.buttonColors(containerColor = ContinuityBlue),
+            shape = RoundedCornerShape(12.dp)
+        ) {
             Text("Next Increment", fontWeight = FontWeight.Bold)
         }
 
-        SeventhCpcPromotionMacpContinuation(calculation.level, latest7thPay, knownDni)
+        SeventhCpcPromotionMacpContinuation(
+            currentLevel = calculation.level,
+            currentPay = latest7thPay,
+            knownDni = knownDni
+        )
     }
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun SeventhCpcPromotionMacpContinuation(currentLevel: String, currentPay: Int, knownDni: Long) {
+private fun SeventhCpcPromotionMacpContinuation(
+    currentLevel: String,
+    currentPay: Int,
+    knownDni: Long
+) {
     var promotedLevel by remember { mutableStateOf<String?>(null) }
     var promotionDate by remember { mutableStateOf<Long?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
     var promotedMenu by remember { mutableStateOf(false) }
     var basis by remember { mutableStateOf(ContinuityPromotionBasis.EVENT_DATE) }
 
-    val fixation = if (promotedLevel != null && promotionDate != null) calculatePayFixation(currentLevel, currentPay, promotedLevel!!, promotionDate, knownDni, EmployeeCategory.ORDINARY) else null
-    val finalPay = fixation?.let { if (basis == ContinuityPromotionBasis.EVENT_DATE) it.option1.finalFixedPay else it.option2.finalFixedPay }
+    val fixation = if (promotedLevel != null && promotionDate != null) {
+        calculatePayFixation(
+            currentLevel,
+            currentPay,
+            promotedLevel!!,
+            promotionDate,
+            knownDni,
+            EmployeeCategory.ORDINARY
+        )
+    } else null
+    val finalPay = fixation?.let {
+        if (basis == ContinuityPromotionBasis.EVENT_DATE) it.option1.finalFixedPay else it.option2.finalFixedPay
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Promotion / MACP", color = ContinuityTextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
-        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(Color.White),
+            shape = RoundedCornerShape(18.dp)
+        ) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Pay carried forward from the latest 7th CPC stage", color = ContinuityBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                 Text("Present Pay Level: Level $currentLevel", color = ContinuityTextSecondary, fontSize = 13.sp)
                 ContinuityRow("Latest Basic Pay", currentPay)
                 Text("Known DNI: ${formatContinuityDate(knownDni)}", color = ContinuityTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Text("Date of Promotion / MACP", color = ContinuityTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(promotionDate?.let { formatContinuityDate(it) } ?: "Select Event Date", Modifier.weight(1f)) }
+                OutlinedButton(
+                    onClick = { showDatePicker = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        promotionDate?.let { formatContinuityDate(it) } ?: "Select Event Date",
+                        Modifier.weight(1f)
+                    )
+                }
                 Text("Fixation option", color = ContinuityTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                Row(Modifier.fillMaxWidth()) { RadioButton(selected = basis == ContinuityPromotionBasis.EVENT_DATE, onClick = { basis = ContinuityPromotionBasis.EVENT_DATE }); Text("From Date of Event", Modifier.padding(top = 12.dp), color = ContinuityTextPrimary, fontSize = 13.sp) }
-                Row(Modifier.fillMaxWidth()) { RadioButton(selected = basis == ContinuityPromotionBasis.DNI, onClick = { basis = ContinuityPromotionBasis.DNI }); Text("From Date of DNI", Modifier.padding(top = 12.dp), color = ContinuityTextPrimary, fontSize = 13.sp) }
+                Row(Modifier.fillMaxWidth()) {
+                    RadioButton(
+                        selected = basis == ContinuityPromotionBasis.EVENT_DATE,
+                        onClick = { basis = ContinuityPromotionBasis.EVENT_DATE }
+                    )
+                    Text("From Date of Event", Modifier.padding(top = 12.dp), color = ContinuityTextPrimary, fontSize = 13.sp)
+                }
+                Row(Modifier.fillMaxWidth()) {
+                    RadioButton(
+                        selected = basis == ContinuityPromotionBasis.DNI,
+                        onClick = { basis = ContinuityPromotionBasis.DNI }
+                    )
+                    Text("From Date of DNI", Modifier.padding(top = 12.dp), color = ContinuityTextPrimary, fontSize = 13.sp)
+                }
                 Text("Promoted / Upgraded Pay Level", color = ContinuityTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                val levels = PayMatrixSelection.forCategory(EmployeeCategory.ORDINARY).levels
                 androidx.compose.foundation.layout.Box {
-                    OutlinedButton(onClick = { promotedMenu = true }, modifier = Modifier.fillMaxWidth()) { Text(promotedLevel?.let { "Level $it" } ?: "Select promoted / upgraded Level", Modifier.weight(1f)); Text("▼") }
-                    DropdownMenu(expanded = promotedMenu, onDismissRequest = { promotedMenu = false }) {
-                        levels.filter { it > currentLevel }.forEach { level -> DropdownMenuItem(text = { Text("Level $level") }, onClick = { promotedLevel = level; promotedMenu = false }) }
+                    OutlinedButton(
+                        onClick = { promotedMenu = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            promotedLevel?.let { "Level $it" } ?: "Select promoted / upgraded Level",
+                            Modifier.weight(1f)
+                        )
+                        Text("▼")
+                    }
+                    DropdownMenu(
+                        expanded = promotedMenu,
+                        onDismissRequest = { promotedMenu = false }
+                    ) {
+                        PayMatrixSelection.forCategory(EmployeeCategory.ORDINARY).levels
+                            .filter { it > currentLevel }
+                            .forEach { level ->
+                                DropdownMenuItem(
+                                    text = { Text("Level $level") },
+                                    onClick = {
+                                        promotedLevel = level
+                                        promotedMenu = false
+                                    }
+                                )
+                            }
                     }
                 }
                 fixation?.let { result ->
@@ -168,10 +294,19 @@ private fun SeventhCpcPromotionMacpContinuation(currentLevel: String, currentPay
                         ContinuityRow("Promotion / MACP increment", result.option2.payWithPromotionIncrement)
                         ContinuityRow("Final placement", result.option2.finalFixedPay)
                     }
-                    Surface(Modifier.fillMaxWidth(), color = ContinuityBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
+                    Surface(
+                        Modifier.fillMaxWidth(),
+                        color = ContinuityBlue.copy(alpha = .06f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
                         Column(Modifier.padding(14.dp)) {
                             Text("Selected option final basic pay", color = ContinuityTextSecondary, fontSize = 13.sp)
-                            Text(formatContinuityCurrency(finalPay ?: result.option1.finalFixedPay), color = ContinuityBlue, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
+                            Text(
+                                formatContinuityCurrency(finalPay ?: result.option1.finalFixedPay),
+                                color = ContinuityBlue,
+                                fontSize = 23.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
                         }
                     }
                 }
@@ -181,15 +316,28 @@ private fun SeventhCpcPromotionMacpContinuation(currentLevel: String, currentPay
 
     if (showDatePicker) {
         val state = rememberDatePickerState(initialSelectedDateMillis = promotionDate)
-        DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = {
-            TextButton(onClick = { promotionDate = state.selectedDateMillis; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) }
-        }) { DatePicker(state) }
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    promotionDate = state.selectedDateMillis
+                    showDatePicker = false
+                }) {
+                    Text("Confirm", fontWeight = FontWeight.Bold)
+                }
+            }
+        ) {
+            DatePicker(state)
+        }
     }
 }
 
 @Composable
 private fun ContinuityRow(label: String, value: Int) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
         Text(label, color = ContinuityTextSecondary, fontSize = 13.sp)
         Text(formatContinuityCurrency(value), color = ContinuityTextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
     }
