@@ -114,7 +114,7 @@ fun SeventhCpcContinuitySection(payBand: String, gradePay: Int, payInPayBand: In
                             }
                         }
                     }
-                    if (getSixthToSeventhNextCell(calculation.level, incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay) == null) {
+                    if (getSixthToSeventhNextCellShared(calculation.level, incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay) == null) {
                         Text("Final cell reached", color = ContinuityTextPrimary, fontWeight = FontWeight.ExtraBold)
                     }
                 }
@@ -124,7 +124,7 @@ fun SeventhCpcContinuitySection(payBand: String, gradePay: Int, payInPayBand: In
         Button(onClick = {
             val currentPay = incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay
             val nextDate = incrementSteps.lastOrNull()?.let { addSeventhYears(it.date, 1) } ?: julyFirst2016ForContinuity()
-            getSixthToSeventhNextCell(calculation.level, currentPay)?.let { nextPay ->
+            getSixthToSeventhNextCellShared(calculation.level, currentPay)?.let { nextPay ->
                 incrementSteps = incrementSteps + ContinuityIncrementStep(nextPay, nextDate)
             }
         }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = ContinuityBlue), shape = RoundedCornerShape(12.dp)) {
@@ -254,7 +254,7 @@ private fun SeventhCpcPromotionMacpContinuation(currentLevel: String, currentPay
 
                     val postCurrentPay = postSteps.lastOrNull()?.pay ?: appliedPay!!
                     val postNextDate = postSteps.lastOrNull()?.let { addSeventhYears(it.date, 1) } ?: appliedDni
-                    val postNextPay = appliedLevel?.let { getSixthToSeventhNextCell(it, postCurrentPay) }
+                    val postNextPay = appliedLevel?.let { getSixthToSeventhNextCellShared(it, postCurrentPay) }
                     Button(
                         onClick = {
                             val date = postNextDate ?: return@Button
@@ -293,7 +293,7 @@ private fun ContinuityRow(label: String, value: Int) {
     }
 }
 
-private fun formatContinuityCurrency(value: Int): String = NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(value)
+private fun formatContinuityCurrency(value: Int): String = NumberFormat.getCurrencyInstance(Locale.forLanguageTag("en-IN")).format(value)
 private fun formatContinuityDate(value: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))
 private fun julyFirst2016ForContinuity(): Long = Calendar.getInstance().apply { clear(); set(2016, Calendar.JULY, 1, 0, 0, 0) }.timeInMillis
 private fun addSeventhYears(date: Long, years: Int): Long = Calendar.getInstance().apply { timeInMillis = date; add(Calendar.YEAR, years) }.timeInMillis
