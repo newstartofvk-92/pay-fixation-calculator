@@ -27,6 +27,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -143,7 +144,7 @@ fun FourthToFifthCpcScreen(
 
                 // Always expose the 5th CPC event workflow once the conversion result exists.
                 // Do not depend on an exact title match: several 4th CPC scales map to 5th CPC
-                // scales carrying PB-2/PB-3 suffixes, and NEW SCALE has a descriptive suffix.
+                // scales carrying PB-2/PB-3 suffixes, and descriptive suffixes may vary.
                 val fifthScale = FifthToSixthCpcData.scales.firstOrNull { scale ->
                     val calculatedTitle = calculation.scale.revisedScale.substringBefore(" (")
                     val candidateTitle = scale.title.substringBefore(" (")
