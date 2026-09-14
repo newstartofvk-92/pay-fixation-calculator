@@ -49,7 +49,7 @@ private fun eventBasicPay(chain: SixthCpcEventChain): Int? = chain.increments.la
 private fun eventPayInBand(chain: SixthCpcEventChain): Int? = chain.increments.lastOrNull()?.payInPayBand ?: chain.result?.newPayInPayBand ?: chain.scaleUpgrade?.newPayInPayBand
 private fun eventGradePay(chain: SixthCpcEventChain): Int? = chain.increments.lastOrNull()?.gradePay ?: chain.result?.newGradePay ?: chain.scaleUpgrade?.newGradePay
 private fun eventPayBand(chain: SixthCpcEventChain): String? = chain.result?.newPayBand ?: chain.scaleUpgrade?.newPayBand
-private fun eventLastDate(chain: SixthCpcEventChain): Long? = chain.increments.lastOrNull()?.date ?: chain.result?.eventDate ?: chain.scaleUpgrade?.eventDate
+private fun eventLastDate(chain: SixthCpcEventChain): Long? = chain.increments.lastOrNull()?.date ?: chain.result?.nextIncrementDate ?: chain.scaleUpgrade?.nextIncrementDate
 private fun july2015Date(): Long = Calendar.getInstance().apply { clear(); set(2015, Calendar.JULY, 1, 0, 0, 0) }.timeInMillis
 
 private fun eventKindLabel(kind: SixthCpcEventKind): String = when (kind) {
@@ -85,10 +85,12 @@ fun SixthCpcEventsSection(calculation: FifthToSixthResult, startingPayInBand: In
     val currentPayBand = latest?.let { eventPayBand(it) } ?: startingPayBand
     val currentBasicPay = currentPayInBand + currentGradePay
     val autoScheme = eventDate?.let { financialUpgradationForSixthCpcEvent(it) }
+    val latestDate = latest?.let { eventLastDate(it) }
+    val readyForSeventh = latestDate != null && latestDate >= july2015Date()
 
     if (latest != null) {
-        val latestPay = eventBasicPay(latest); val latestGp = eventGradePay(latest); val latestBand = eventPayBand(latest); val latestDate = eventLastDate(latest)
-        if (latestPay != null && latestGp != null && latestBand != null && latestDate != null) onLatestStateChange?.invoke(latestBand, latestGp, latestPay - latestGp, latestDate)
+        val latestPay = eventBasicPay(latest); val latestGp = eventGradePay(latest); val latestBand = eventPayBand(latest); val stateDate = eventLastDate(latest)
+        if (latestPay != null && latestGp != null && latestBand != null && stateDate != null) onLatestStateChange?.invoke(latestBand, latestGp, latestPay - latestGp, stateDate)
     }
 
     fun resetForm() { targetGradePay = null; targetPayBand = null; eventDate = null; eventKind = SixthCpcEventKind.FINANCIAL_UPGRADATION; fixationOption = SixthCpcFixationOption.FROM_EVENT_DATE; targetMenu = false; payBandMenu = false; showEventForm = true }
@@ -145,6 +147,17 @@ fun SixthCpcEventsSection(calculation: FifthToSixthResult, startingPayInBand: In
 
         if (events.isEmpty()) Button(onClick = { resetForm() }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Add Event", fontWeight = FontWeight.Bold) }
 
+        if (readyForSeventh && onContinueToSeventh != null) {
+            Button(onClick = {
+                val band = eventPayBand(latest ?: return@Button) ?: return@Button
+                val gp = eventGradePay(latest ?: return@Button) ?: return@Button
+                val payInBand = eventPayInBand(latest ?: return@Button) ?: return@Button
+                onContinueToSeventh(band, payInBand, gp)
+            }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) {
+                Text("Continue to 7th CPC", fontWeight = FontWeight.Bold)
+            }
+        }
+
         if (showEventForm) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -180,29 +193,11 @@ fun SixthCpcEventsSection(calculation: FifthToSixthResult, startingPayInBand: In
                         val gp = targetGradePay ?: return@Button
                         if (eventKind == SixthCpcEventKind.PAY_SCALE_UPGRADATION) {
                             val band = targetPayBand ?: return@Button
-                            val result = SixthCpcScaleUpgradeResult(
-                                eventDate = date,
-                                oldPayInPayBand = currentPayInBand,
-                                oldGradePay = currentGradePay,
-                                oldPayBand = currentPayBand,
-                                newPayInPayBand = currentPayInBand,
-                                newGradePay = gp,
-                                newPayBand = band.title.substringBefore(":"),
-                                revisedBasicPay = currentPayInBand + gp,
-                                nextIncrementDate = nextJulyOnOrAfter(date)
-                            )
+                            val result = SixthCpcScaleUpgradeResult(date, currentPayInBand, currentGradePay, currentPayBand, currentPayInBand, gp, band.title.substringBefore(":"), currentPayInBand + gp, nextJulyOnOrAfter(date))
                             events = events + SixthCpcEventChain(eventKind, scaleUpgrade = result)
                             showEventForm = false
                         } else {
-                            val result = calculateSixthCpcPromotionOrMacp(
-                                payInPayBand = currentPayInBand,
-                                currentGradePay = currentGradePay,
-                                targetGradePay = gp,
-                                eventDate = date,
-                                eventType = eventKindLabel(eventKind),
-                                fixationOption = fixationOption,
-                                financialUpgradation = if (eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION) autoScheme else null
-                            )
+                            val result = calculateSixthCpcPromotionOrMacp(currentPayInBand, currentGradePay, gp, date, eventKindLabel(eventKind), fixationOption, if (eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION) autoScheme else null)
                             events = events + SixthCpcEventChain(eventKind, result = result)
                             showEventForm = false
                         }
