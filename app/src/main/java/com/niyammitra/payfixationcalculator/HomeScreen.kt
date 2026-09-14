@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -63,57 +64,27 @@ fun V2AppScreen() {
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
 
-    if (showCalculator) {
-        BackHandler { showCalculator = false }
-        PayFixationCalculatorScreen()
-        return
-    }
-
+    if (showCalculator) { BackHandler { showCalculator = false }; PayFixationCalculatorScreen(); return }
     if (showFourthToFifth) {
-        FourthToFifthCpcScreen(
-            onBack = { showFourthToFifth = false },
-            onContinueToSixth = { scale, pay ->
-                carriedFifthScaleTitle = scale.title
-                carriedFifthBasicPay = pay
-                showFourthToFifth = false
-                showFifthToSixth = true
-            }
-        )
+        FourthToFifthCpcScreen(onBack = { showFourthToFifth = false }, onContinueToSixth = { scale, pay -> carriedFifthScaleTitle = scale.title; carriedFifthBasicPay = pay; showFourthToFifth = false; showFifthToSixth = true })
         return
     }
-
     if (showFifthToSixth) {
-        FifthToSixthCpcScreen(
-            onBack = { showFifthToSixth = false },
-            onContinueToSeventh = { payBand, payInPayBand, gradePay ->
-                carriedPayBand = payBand
-                carriedPayInPayBand = payInPayBand
-                carriedGradePay = gradePay
-                showFifthToSixth = false
-                showSixthToSeventh = true
-            },
-            initialScaleTitle = carriedFifthScaleTitle,
-            initialBasicPay = carriedFifthBasicPay
-        )
+        FifthToSixthCpcScreen(onBack = { showFifthToSixth = false }, onContinueToSeventh = { payBand, payInPayBand, gradePay -> carriedPayBand = payBand; carriedPayInPayBand = payInPayBand; carriedGradePay = gradePay; showFifthToSixth = false; showSixthToSeventh = true }, initialScaleTitle = carriedFifthScaleTitle, initialBasicPay = carriedFifthBasicPay)
         return
     }
-
     if (showSixthToSeventh) {
         SixthToSeventhCpcScreen(onBack = { showSixthToSeventh = false }, initialPayBand = carriedPayBand, initialGradePay = carriedGradePay, initialPayInPayBand = carriedPayInPayBand)
         return
     }
-
     if (showHistory) {
         BackHandler { showHistory = false }
         HistoryScreen(history = history, onBack = { showHistory = false }, onDelete = { id -> HistoryStore.delete(context, id); history = HistoryStore.getAll(context) }, onClear = { showClearHistoryDialog = true }, onOpen = { selectedHistory = it }, onAbout = { showAboutDialog = true })
-        if (showClearHistoryDialog) {
-            AlertDialog(onDismissRequest = { showClearHistoryDialog = false }, title = { Text("Clear History?") }, text = { Text("All saved calculations will be permanently removed from this device.") }, confirmButton = { TextButton(onClick = { HistoryStore.clear(context); history = emptyList(); showClearHistoryDialog = false }) { Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold) } }, dismissButton = { TextButton(onClick = { showClearHistoryDialog = false }) { Text("Cancel") } })
-        }
+        if (showClearHistoryDialog) AlertDialog(onDismissRequest = { showClearHistoryDialog = false }, title = { Text("Clear History?") }, text = { Text("All saved calculations will be permanently removed from this device.") }, confirmButton = { TextButton(onClick = { HistoryStore.clear(context); history = emptyList(); showClearHistoryDialog = false }) { Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold) } }, dismissButton = { TextButton(onClick = { showClearHistoryDialog = false }) { Text("Cancel") } })
         selectedHistory?.let { entry -> HistoryDetailDialog(entry) { selectedHistory = null } }
         if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })
         return
     }
-
     HomeFixationSelectionScreen(onSelected = { type ->
         selectedFixationType = type
         when (type) {
@@ -123,7 +94,6 @@ fun V2AppScreen() {
             FixationType.SEVENTH_CPC -> showCalculator = true
         }
     }, onHistory = { history = HistoryStore.getAll(context); showHistory = true }, onAbout = { showAboutDialog = true })
-
     if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })
 }
 
@@ -145,11 +115,7 @@ private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -
         Row(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(46.dp).background(if (enabled) HomeNiyamBlue.copy(alpha = 0.10f) else Color(0xFFE1E4E8), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Text(when (type) { FixationType.FOURTH_TO_FIFTH -> "4→5"; FixationType.FIFTH_TO_SIXTH -> "5→6"; FixationType.SIXTH_TO_SEVENTH -> "6→7"; FixationType.SEVENTH_CPC -> "7th" }, color = if (enabled) HomeNiyamBlue else HomeNiyamTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold) }
             Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(type.title, color = if (enabled) HomeNiyamTextPrimary else HomeNiyamTextSecondary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                Spacer(Modifier.height(4.dp))
-                Text(when (type) { FixationType.FOURTH_TO_FIFTH -> "Pay conversion using Rule 7 fitment"; FixationType.FIFTH_TO_SIXTH -> "Pay conversion using 1.86 fitment factor"; FixationType.SIXTH_TO_SEVENTH -> "Pay conversion using 2.57 fitment factor"; FixationType.SEVENTH_CPC -> "Promotion / MACP" }, color = HomeNiyamTextSecondary, fontSize = 13.sp)
-            }
+            Column(Modifier.weight(1f)) { Text(type.title, color = if (enabled) HomeNiyamTextPrimary else HomeNiyamTextSecondary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold); Spacer(Modifier.height(4.dp)); Text(when (type) { FixationType.FOURTH_TO_FIFTH -> "Pay conversion using Rule 7 fitment"; FixationType.FIFTH_TO_SIXTH -> "Pay conversion using 1.86 fitment factor"; FixationType.SIXTH_TO_SEVENTH -> "Pay conversion using 2.57 fitment factor"; FixationType.SEVENTH_CPC -> "Promotion / MACP" }, color = HomeNiyamTextSecondary, fontSize = 13.sp) }
         }
     }
 }
@@ -161,12 +127,10 @@ private fun HomeHeader(onHistory: (() -> Unit)? = null, onAbout: (() -> Unit)? =
             Box(modifier = Modifier.size(56.dp).background(Color.White, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Text("NM", color = HomeNiyamHeaderBlue, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) { Text("Pay Fixation Calculator", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold); Text("NiyamMitra", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium) }
-            if (onHistory != null && onAbout != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable(onClick = onHistory)) { Icon(Icons.Default.History, contentDescription = "History", modifier = Modifier.size(24.dp), tint = Color.White); Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                    Box(modifier = Modifier.padding(horizontal = 10.dp).height(34.dp).width(1.dp).background(Color.White.copy(alpha = 0.35f)))
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable(onClick = onAbout)) { Icon(Icons.Default.Info, contentDescription = "About", modifier = Modifier.size(24.dp), tint = Color.White); Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                }
+            if (onHistory != null && onAbout != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable(onClick = onHistory)) { Icon(Icons.Default.History, contentDescription = "History", modifier = Modifier.size(24.dp), tint = Color.White); Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                Box(modifier = Modifier.padding(horizontal = 10.dp).height(34.dp).width(1.dp).background(Color.White.copy(alpha = 0.35f)))
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable(onClick = onAbout)) { Icon(Icons.Default.Info, contentDescription = "About", modifier = Modifier.size(24.dp), tint = Color.White); Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
             }
         }
     }
