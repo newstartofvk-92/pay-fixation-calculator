@@ -95,7 +95,7 @@ fun FifthToSixthCpcScreen(onBack: () -> Unit, onContinueToSeventh: ((String, Int
                     startingPayInBand = latestSixthPayInBand ?: calculation.payInPayBand,
                     startingGradePay = calculation.gradePay,
                     startingPayBand = calculation.scale.payBand,
-                    onContinueToSeventh = onContinueToSeventh
+                    onContinueToSeventh = null
                 )
 
                 if (reaches2016 && latestSixthPayInBand != null && latestSixthBasicPay != null) {
