@@ -53,12 +53,8 @@ private val amendedLevel13Stages = listOf(123100, 126800, 130600, 134500, 138500
 
 private fun sixthToSeventhStages(level: String): List<Int> = if (level == "13") amendedLevel13Stages else PayMatrixData.getPayStages(level)
 
-/**
- * Returns the next cell in the applicable 7th CPC Level.
- * Kept public because the 7th CPC continuation screen uses the same
- * calculation engine for post-conversion increment progression.
- */
-fun getSixthToSeventhNextCell(level: String, currentPay: Int): Int? {
+/** Returns the next cell in the applicable 7th CPC Level. */
+fun getSixthToSeventhNextCellShared(level: String, currentPay: Int): Int? {
     val stages = sixthToSeventhStages(level)
     val index = stages.indexOf(currentPay)
     return if (index >= 0 && index < stages.lastIndex) stages[index + 1] else null
@@ -73,7 +69,7 @@ fun calculateSixthToSeventhCpc(payInPayBand: Int, gradePay: Int, payBand: SixthC
     val stages = sixthToSeventhStages(level)
     if (stages.isEmpty()) return null
     val revised = stages.firstOrNull { it >= rounded } ?: stages.last()
-    val next = getSixthToSeventhNextCell(level, revised)
+    val next = getSixthToSeventhNextCellShared(level, revised)
     return SixthToSeventhResult(payInPayBand, gradePay, existingPay, 2.57, multiplied, rounded, level, revised, "01 July 2016", next, listOf(
         "Existing basic pay = Pay in Pay Band + Grade Pay.",
         "Existing basic pay is multiplied by the uniform fitment factor of 2.57.",
