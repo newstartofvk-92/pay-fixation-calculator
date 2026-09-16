@@ -129,8 +129,13 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
     var showDatePicker by remember { mutableStateOf(false) }
 
     val latestEvent = events.lastOrNull()
+
+    // Keep the pay state date separate from the next-DNI date. The latter is a
+    // future entitlement date and must not move the employee's current state
+    // forward. This mirrors the chronological event/increment flow used by
+    // the 5th-to-6th CPC journey.
     val basePay = postIncrements.lastOrNull()?.first ?: latestEvent?.newPay ?: currentPay
-    val baseDate = postIncrements.lastOrNull()?.second ?: latestEvent?.nextIncrementDate ?: currentDate
+    val baseDate = postIncrements.lastOrNull()?.second ?: latestEvent?.eventDate ?: currentDate
     val baseScale = latestEvent?.targetScale ?: currentScale
     val canContinueToSixth = baseDate >= fifthCpcJuly2005Date()
     val canAddEvent = baseDate < fifthCpcEndDate()
@@ -139,7 +144,7 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("5th CPC Events", color = Color(0xFF172B4D), fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
-        Text("Continue chronologically from the latest 5th CPC pay. Add Promotion / ACP events and continue the 01 July increment cycle.", color = Color(0xFF5B6B7A), fontSize = 12.sp)
+        Text("Add events one by one. After each event, continue the 01 July increment cycle before adding the next event.", color = Color(0xFF5B6B7A), fontSize = 12.sp)
 
         events.forEachIndexed { index, event ->
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
@@ -181,17 +186,17 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
 
         if (latestEvent != null) {
             val nextPostPay = calculateFifthCpcNextStage(basePay, baseScale)
-            val nextPostDate = if (postIncrements.isEmpty()) baseDate else addFifthCpcYear(baseDate)
+            val nextPostDate = if (postIncrements.isEmpty()) latestEvent.nextIncrementDate else addFifthCpcYear(postIncrements.last().second)
             Button(onClick = { if (nextPostPay != null && nextPostDate <= fifthCpcEndDate()) postIncrements = postIncrements + (nextPostPay to nextPostDate) }, enabled = nextPostPay != null && nextPostDate <= fifthCpcEndDate(), modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Next Increment", fontWeight = FontWeight.Bold) }
         }
 
-        Button(onClick = { showForm = true }, enabled = canAddEvent, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Add Promotion / ACP Event", fontWeight = FontWeight.Bold) }
+        Button(onClick = { showForm = true; eventDate = null; targetScale = null }, enabled = canAddEvent, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Add Promotion / ACP Event", fontWeight = FontWeight.Bold) }
 
         if (showForm) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("New 5th CPC Event", color = Color(0xFF1769AA), fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Current: ${baseScale.title} | Basic Pay ${formatFifthEventCurrency(basePay)} | State date ${formatFifthEventDate(baseDate)}", color = Color(0xFF5B6B7A), fontSize = 12.sp)
+                    Text("Current: ${baseScale.title} | Basic Pay ${formatFifthEventCurrency(basePay)} | Pay-state date ${formatFifthEventDate(baseDate)}", color = Color(0xFF5B6B7A), fontSize = 12.sp)
                     Text("1. Date of Event", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(eventDate?.let { formatFifthEventDate(it) } ?: "Select Event Date", Modifier.weight(1f)); Text("📅") }
                     Text("2. Event Type", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
@@ -213,7 +218,7 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
                     val selectedDate = eventDate
                     val validDate = selectedDate != null && selectedDate >= baseDate && selectedDate <= fifthCpcEndDate()
                     val validTarget = targetScale != null && targetScale!!.title != baseScale.title
-                    if (selectedDate != null && selectedDate < baseDate) Text("The event date is earlier than the current pay state. Add the intervening increment/event first.", color = Color(0xFFC62828), fontSize = 11.sp)
+                    if (selectedDate != null && selectedDate < baseDate) Text("The event date is earlier than the current pay state. Complete the preceding increment/event first.", color = Color(0xFFC62828), fontSize = 11.sp)
                     Button(onClick = {
                         val date = eventDate
                         val target = targetScale
