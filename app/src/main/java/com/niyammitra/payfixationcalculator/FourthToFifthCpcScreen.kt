@@ -64,6 +64,7 @@ fun FourthToFifthCpcScreen(
     var nextIncrementDateText by remember { mutableStateOf("") }
     var scaleMenu by remember { mutableStateOf(false) }
     var incrementSteps by remember(selectedScale, basicPayText) { mutableStateOf<List<FourthToFifthIncrementStep>>(emptyList()) }
+    var showEvents by remember { mutableStateOf(false) }
 
     val basicPay = basicPayText.toIntOrNull()
     val parsedNextIncrementDate = parseFourthFiveDate(nextIncrementDateText)
@@ -100,11 +101,11 @@ fun FourthToFifthCpcScreen(
                             Text("▼")
                         }
                         DropdownMenu(expanded = scaleMenu, onDismissRequest = { scaleMenu = false }) {
-                            FourthToFifthCpcData.scales.forEach { scale -> DropdownMenuItem(text = { Text("${scale.grade}: ${scale.existingScale}") }, onClick = { selectedScale = scale; basicPayText = ""; nextIncrementDateText = ""; incrementSteps = emptyList(); scaleMenu = false }) }
+                            FourthToFifthCpcData.scales.forEach { scale -> DropdownMenuItem(text = { Text("${scale.grade}: ${scale.existingScale}") }, onClick = { selectedScale = scale; basicPayText = ""; nextIncrementDateText = ""; incrementSteps = emptyList(); showEvents = false; scaleMenu = false }) }
                         }
                     }
                     selectedScale?.let { Text("Corresponding 5th CPC scale: ${it.revisedScale}", color = FourFiveTextSecondary, fontSize = 12.sp) }
-                    OutlinedTextField(value = basicPayText, onValueChange = { if (it.all(Char::isDigit)) { basicPayText = it; incrementSteps = emptyList() } }, label = { Text("Basic Pay as on 01.01.1996") }, placeholder = { Text("e.g. 870") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(value = basicPayText, onValueChange = { if (it.all(Char::isDigit)) { basicPayText = it; incrementSteps = emptyList(); showEvents = false } }, label = { Text("Basic Pay as on 01.01.1996") }, placeholder = { Text("e.g. 870") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                     if (selectedScale != null && basicPay != null && result == null) Text("Enter a basic pay within the selected 4th CPC scale.", color = Color(0xFFC62828), fontSize = 12.sp)
                 }
             }
@@ -130,7 +131,7 @@ fun FourthToFifthCpcScreen(
                     }
                 }
 
-                if (incrementSteps.isNotEmpty()) FourthToFifthIncrementProgressionCard(calculation, incrementSteps) { index -> incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) } }
+                if (incrementSteps.isNotEmpty()) FourthToFifthIncrementProgressionCard(calculation, incrementSteps) { index -> incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) }; showEvents = false }
 
                 Button(onClick = {
                     val scale = selectedScale ?: return@Button
@@ -142,9 +143,6 @@ fun FourthToFifthCpcScreen(
 
                 if (incrementSteps.isEmpty() && validNextIncrementDate != null) Text("The first added increment will be shown on ${formatFourthFiveDate(validNextIncrementDate)}. Subsequent increments advance by one year.", color = FourFiveTextSecondary, fontSize = 12.sp)
 
-                // Always expose the 5th CPC event workflow once the conversion result exists.
-                // Do not depend on an exact title match: several 4th CPC scales map to 5th CPC
-                // scales carrying PB-2/PB-3 suffixes, and descriptive suffixes may vary.
                 val fifthScale = FifthToSixthCpcData.scales.firstOrNull { scale ->
                     val calculatedTitle = calculation.scale.revisedScale.substringBefore(" (")
                     val candidateTitle = scale.title.substringBefore(" (")
@@ -153,7 +151,19 @@ fun FourthToFifthCpcScreen(
                     scale.payBand == "PB-1" && scale.gradePay == calculation.scale.revisedMinimum
                 }
 
-                if (fifthScale != null && currentPay != null) {
+                if (!showEvents) {
+                    Button(
+                        onClick = { showEvents = true },
+                        enabled = fifthScale != null && currentPay != null,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = FourFiveBlue),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Add Events", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                if (showEvents && fifthScale != null && currentPay != null) {
                     FourthToFifthEventSection(
                         currentPay = currentPay,
                         currentScale = fifthScale,
