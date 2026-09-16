@@ -143,13 +143,14 @@ fun FourthToFifthCpcScreen(
 
                 if (incrementSteps.isEmpty() && validNextIncrementDate != null) Text("The first added increment will be shown on ${formatFourthFiveDate(validNextIncrementDate)}. Subsequent increments advance by one year.", color = FourFiveTextSecondary, fontSize = 12.sp)
 
-                val fifthScale = FifthToSixthCpcData.scales.firstOrNull { scale ->
-                    val calculatedTitle = calculation.scale.revisedScale.substringBefore(" (")
-                    val candidateTitle = scale.title.substringBefore(" (")
-                    candidateTitle == calculatedTitle
-                } ?: FifthToSixthCpcData.scales.firstOrNull { scale ->
-                    scale.payBand == "PB-1" && scale.gradePay == calculation.scale.revisedMinimum
+                val calculatedTitle = calculation.scale.revisedScale.removePrefix("Rs. ").substringBefore(" (").trim()
+                val matchingFifthScales = FifthToSixthCpcData.scales.filter { scale ->
+                    scale.title.removePrefix("Rs. ").substringBefore(" (").trim() == calculatedTitle
                 }
+                val fifthScale = matchingFifthScales.firstOrNull { scale ->
+                    val payInBand = currentPay?.minus(scale.gradePay)
+                    payInBand != null && payInBand in scale.payBandMinimum..scale.payBandMaximum
+                } ?: matchingFifthScales.firstOrNull()
 
                 if (!showEvents) {
                     Button(
