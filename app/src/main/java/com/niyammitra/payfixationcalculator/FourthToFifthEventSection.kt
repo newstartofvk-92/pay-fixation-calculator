@@ -15,12 +15,12 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,7 +56,14 @@ data class FifthCpcEventResult(
     val ruleBasis: List<String>
 )
 
-fun calculateFifthCpcEvent(eventDate: Long, currentPay: Int, currentScale: FifthCpcScale, targetScale: FifthCpcScale, fixationOption: FifthCpcFixationOption, eventType: FifthCpcEventType = FifthCpcEventType.PROMOTION): FifthCpcEventResult {
+fun calculateFifthCpcEvent(
+    eventDate: Long,
+    currentPay: Int,
+    currentScale: FifthCpcScale,
+    targetScale: FifthCpcScale,
+    fixationOption: FifthCpcFixationOption,
+    eventType: FifthCpcEventType = FifthCpcEventType.PROMOTION
+): FifthCpcEventResult {
     require(currentPay > 0) { "Current 5th CPC basic pay must be positive." }
     require(eventDate >= fifthCpcConversionDate() && eventDate <= fifthCpcEndDate()) { "The event date must fall between 01 January 1996 and 31 December 2005." }
     require(targetScale.title != currentScale.title) { "The target scale must differ from the current scale." }
@@ -117,10 +124,16 @@ private fun fifthCpcJuly2005Date(): Long = Calendar.getInstance().apply { clear(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, currentDate: Long, onLatestStateChange: ((FifthCpcScale, Int, Long) -> Unit)? = null, onContinueToSixth: ((FifthCpcScale, Int) -> Unit)? = null) {
+fun FourthToFifthEventSection(
+    currentPay: Int,
+    currentScale: FifthCpcScale,
+    currentDate: Long,
+    onLatestStateChange: ((FifthCpcScale, Int, Long) -> Unit)? = null,
+    onContinueToSixth: ((FifthCpcScale, Int) -> Unit)? = null
+) {
     var events by remember(currentPay, currentScale.title, currentDate) { mutableStateOf<List<FifthCpcEventResult>>(emptyList()) }
     var postIncrements by remember(currentPay, currentScale.title, currentDate) { mutableStateOf<List<Pair<Int, Long>>>(emptyList()) }
-    var showForm by remember { mutableStateOf(false) }
+    var showForm by remember(currentPay, currentScale.title, currentDate) { mutableStateOf(true) }
     var eventDate by remember { mutableStateOf<Long?>(null) }
     var eventType by remember { mutableStateOf(FifthCpcEventType.PROMOTION) }
     var fixationOption by remember { mutableStateOf(FifthCpcFixationOption.FROM_EVENT_DATE) }
@@ -129,16 +142,10 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
     var showDatePicker by remember { mutableStateOf(false) }
 
     val latestEvent = events.lastOrNull()
-
-    // Keep the pay state date separate from the next-DNI date. The latter is a
-    // future entitlement date and must not move the employee's current state
-    // forward. This mirrors the chronological event/increment flow used by
-    // the 5th-to-6th CPC journey.
     val basePay = postIncrements.lastOrNull()?.first ?: latestEvent?.newPay ?: currentPay
     val baseDate = postIncrements.lastOrNull()?.second ?: latestEvent?.eventDate ?: currentDate
     val baseScale = latestEvent?.targetScale ?: currentScale
     val canContinueToSixth = baseDate >= fifthCpcJuly2005Date()
-    val canAddEvent = baseDate < fifthCpcEndDate()
 
     LaunchedEffect(baseScale.title, basePay, baseDate) { onLatestStateChange?.invoke(baseScale, basePay, baseDate) }
 
@@ -190,7 +197,9 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
             Button(onClick = { if (nextPostPay != null && nextPostDate <= fifthCpcEndDate()) postIncrements = postIncrements + (nextPostPay to nextPostDate) }, enabled = nextPostPay != null && nextPostDate <= fifthCpcEndDate(), modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Next Increment", fontWeight = FontWeight.Bold) }
         }
 
-        Button(onClick = { showForm = true; eventDate = null; targetScale = null }, enabled = canAddEvent, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Add Promotion / ACP Event", fontWeight = FontWeight.Bold) }
+        if (events.isNotEmpty() && !showForm) {
+            Button(onClick = { showForm = true; eventDate = null; targetScale = null; fixationOption = FifthCpcFixationOption.FROM_EVENT_DATE }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Add Another Event", fontWeight = FontWeight.Bold) }
+        }
 
         if (showForm) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
@@ -212,27 +221,24 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
                     Box {
                         OutlinedButton(onClick = { scaleMenu = true }, modifier = Modifier.fillMaxWidth()) { Text(targetScale?.title ?: "Select higher 5th CPC scale", Modifier.weight(1f)); Text("▼") }
                         DropdownMenu(expanded = scaleMenu, onDismissRequest = { scaleMenu = false }) {
-                            FifthToSixthCpcData.scales.filter { it.title != baseScale.title }.forEach { scale -> DropdownMenuItem(text = { Text(scale.title) }, onClick = { targetScale = scale; scaleMenu = false }) }
+                            FifthToSixthCpcData.scales.filter { it.title != baseScale.title }.forEach { scale ->
+                                DropdownMenuItem(text = { Text(scale.title) }, onClick = { targetScale = scale; scaleMenu = false })
+                            }
                         }
                     }
-                    val selectedDate = eventDate
-                    val validDate = selectedDate != null && selectedDate >= baseDate && selectedDate <= fifthCpcEndDate()
-                    val validTarget = targetScale != null && targetScale!!.title != baseScale.title
-                    if (selectedDate != null && selectedDate < baseDate) Text("The event date is earlier than the current pay state. Complete the preceding increment/event first.", color = Color(0xFFC62828), fontSize = 11.sp)
+                    val canSave = eventDate != null && targetScale != null
                     Button(onClick = {
-                        val date = eventDate
-                        val target = targetScale
-                        if (date != null && target != null) {
-                            val event = calculateFifthCpcEvent(date, basePay, baseScale, target, fixationOption, eventType)
-                            events = events + event
-                            postIncrements = emptyList()
-                            showForm = false
-                            eventDate = null
-                            targetScale = null
-                            eventType = FifthCpcEventType.PROMOTION
-                            fixationOption = FifthCpcFixationOption.FROM_EVENT_DATE
-                        }
-                    }, enabled = validDate && validTarget, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Apply Event", fontWeight = FontWeight.Bold) }
+                        val selectedDate = eventDate ?: return@Button
+                        val selectedTarget = targetScale ?: return@Button
+                        runCatching { calculateFifthCpcEvent(selectedDate, basePay, baseScale, selectedTarget, fixationOption, eventType) }
+                            .onSuccess { result ->
+                                events = events + result
+                                postIncrements = emptyList()
+                                showForm = false
+                                eventDate = null
+                                targetScale = null
+                            }
+                    }, enabled = canSave, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1769AA)), shape = RoundedCornerShape(12.dp)) { Text("Save Event", fontWeight = FontWeight.Bold) }
                 }
             }
         }
@@ -256,14 +262,9 @@ fun FourthToFifthEventSection(currentPay: Int, currentScale: FifthCpcScale, curr
         val state = rememberDatePickerState(initialSelectedDateMillis = eventDate ?: baseDate)
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = { eventDate = state.selectedDateMillis; showDatePicker = false }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
-            },
-            content = { DatePicker(state = state) }
-        )
+            confirmButton = { TextButton(onClick = { eventDate = state.selectedDateMillis; showDatePicker = false }) { Text("OK") } },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } }
+        ) { DatePicker(state = state) }
     }
 }
 
