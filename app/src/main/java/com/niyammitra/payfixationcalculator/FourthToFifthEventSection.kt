@@ -44,6 +44,7 @@ private fun addFifthCpcYear(d:Long):Long=Calendar.getInstance().apply{timeInMill
 private fun firstDayOfFollowingYearSameMonth(d:Long):Long=Calendar.getInstance().apply{timeInMillis=d;add(Calendar.YEAR,1);set(Calendar.DAY_OF_MONTH,1)}.timeInMillis
 private fun fifthCpcConversionDate():Long=Calendar.getInstance().apply{clear();set(1996,Calendar.JANUARY,1)}.timeInMillis
 private fun fifthCpcEndDate():Long=Calendar.getInstance().apply{clear();set(2005,Calendar.DECEMBER,31)}.timeInMillis
+private fun fifthCpcSixthStartDate():Long=Calendar.getInstance().apply{clear();set(2006,Calendar.JANUARY,1)}.timeInMillis
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,18 +58,46 @@ fun FourthToFifthEventSection(currentPay:Int,currentScale:FifthCpcScale,currentD
 
     Column(verticalArrangement=Arrangement.spacedBy(12.dp)){
         Text("5th CPC Events",fontSize=19.sp,fontWeight=FontWeight.ExtraBold,color=Color(0xFF172B4D))
-        events.forEachIndexed{idx,e->Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(Color.White),shape=RoundedCornerShape(16.dp)){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text("Event ${idx+1}: ${if(e.eventType==FifthCpcEventType.PROMOTION)"Promotion" else "ACP"}",Modifier.weight(1f),fontWeight=FontWeight.Bold,color=Color(0xFF1769AA));TextButton(onClick={events=events.take(idx);increments=emptyList();sixthConversion=null}){Text("Delete")}};Text("Date: ${fmt(e.eventDate)}");Text("Fixation: ${if(e.fixationOption==FifthCpcFixationOption.FROM_EVENT_DATE)"From Date of Event" else "From Date of DNI"}");Text("Fixed Pay: ${money(e.newPay)}",fontWeight=FontWeight.Bold);Text("Next DNI: ${fmt(e.nextIncrementDate)}",fontWeight=FontWeight.Bold)}}}
+        events.forEachIndexed{idx,e->Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(Color.White),shape=RoundedCornerShape(16.dp)){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(7.dp)){Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text("Event ${idx+1}: ${if(e.eventType==FifthCpcEventType.PROMOTION)"Promotion" else "ACP"}",Modifier.weight(1f),fontWeight=FontWeight.Bold,color=Color(0xFF1769AA));TextButton(onClick={events=events.take(idx);increments=emptyList();sixthConversion=null}){Text("Delete")}};Text("Date: ${fmt(e.eventDate)}");Text("Fixation: ${if(e.fixationOption==FifthCpcFixationOption.FROM_EVENT_DATE)"From Date of Event" else "From Date of DNI"}");Text("Fixed Pay: ${money(e.newPay)}",fontWeight=FontWeight.Bold);Text("Next Increment: ${fmt(e.nextIncrementDate)}",fontWeight=FontWeight.Bold)}}}
 
         if(last!=null){
             val nextPay=calculateFifthCpcNextStage(pay,scale)
             val nextDate=if(increments.isEmpty())last.nextIncrementDate else addFifthCpcYear(increments.last().second)
             val crossesIntoSixth=nextDate>fifthCpcEndDate()
+
+            if(increments.isNotEmpty()){
+                Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(Color.White),shape=RoundedCornerShape(18.dp)){
+                    Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+                        Text("5th CPC Increment Progression",fontSize=17.sp,fontWeight=FontWeight.ExtraBold,color=Color(0xFF1769AA))
+                        increments.forEachIndexed{idx,step->
+                            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){
+                                Column(Modifier.weight(1f)){
+                                    Text("Increment ${idx+1}",fontSize=12.sp,fontWeight=FontWeight.Bold,color=Color(0xFF5B6B7A))
+                                    Text("Date: ${fmt(step.second)}",fontSize=13.sp,color=Color(0xFF172B4D))
+                                    Text("Pay: ${money(step.first)}",fontSize=16.sp,fontWeight=FontWeight.ExtraBold,color=Color(0xFF1769AA))
+                                }
+                                TextButton(onClick={increments=increments.toMutableList().also{it.removeAt(idx)}}){Text("Delete")}
+                            }
+                        }
+                    }
+                }
+            }
+
+            Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(Color.White),shape=RoundedCornerShape(16.dp)){
+                Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(6.dp)){
+                    Text("Next 5th CPC Increment",fontWeight=FontWeight.Bold,color=Color(0xFF1769AA))
+                    Text("Date: ${fmt(nextDate)}",color=Color(0xFF172B4D))
+                    if(nextPay!=null) Text("Pay after increment: ${money(nextPay)}",fontWeight=FontWeight.Bold,color=Color(0xFF1769AA))
+                    if(crossesIntoSixth) Text("This next increment falls after 31 December 2005. The journey will now move to 6th CPC conversion.",fontSize=13.sp,color=Color(0xFF5B6B7A))
+                }
+            }
+
             Button(
                 onClick={
                     if(nextPay!=null){
                         if(crossesIntoSixth){
-                            // The increment falling after 31.12.2005 is the transition point.
-                            // Carry the resulting 5th CPC pay into the 6th CPC fitment and keep the journey here.
+                            // Preserve the visible 5th CPC timeline up to the transition,
+                            // then carry the calculated pay state into the existing 6th CPC engine.
                             sixthConversion=calculateFifthToSixthCpc(nextPay,scale)
                         }else{
                             increments=increments+(nextPay to nextDate)
@@ -84,9 +113,7 @@ fun FourthToFifthEventSection(currentPay:Int,currentScale:FifthCpcScale,currentD
         if(!showForm&&events.isNotEmpty()&&sixthConversion==null)Button(onClick={showForm=true;eventDate=null;target=null}){Text("Add Another Event")}
         if(showForm&&sixthConversion==null)Card(Modifier.fillMaxWidth(),colors=CardDefaults.cardColors(Color.White),shape=RoundedCornerShape(16.dp)){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Text("New 5th CPC Event",fontWeight=FontWeight.Bold,color=Color(0xFF1769AA));OutlinedButton(onClick={picker=true},modifier=Modifier.fillMaxWidth()){Text(eventDate?.let(::fmt)?:"Select Event Date",Modifier.weight(1f))};Row(verticalAlignment=Alignment.CenterVertically){RadioButton(eventType==FifthCpcEventType.PROMOTION,{eventType=FifthCpcEventType.PROMOTION});Text("Promotion");RadioButton(eventType==FifthCpcEventType.ACP,{eventType=FifthCpcEventType.ACP});Text("ACP")};Row(verticalAlignment=Alignment.CenterVertically){RadioButton(option==FifthCpcFixationOption.FROM_EVENT_DATE,{option=FifthCpcFixationOption.FROM_EVENT_DATE});Text("From Date of Event")};Row(verticalAlignment=Alignment.CenterVertically){RadioButton(option==FifthCpcFixationOption.FROM_DNI,{option=FifthCpcFixationOption.FROM_DNI});Text("From Date of DNI")};Box{OutlinedButton(onClick={menu=true},modifier=Modifier.fillMaxWidth()){Text(target?.title?:"Select higher 5th CPC scale",Modifier.weight(1f))};DropdownMenu(menu,{menu=false}){FifthToSixthCpcData.scales.filter{it.title!=scale.title}.forEach{s->DropdownMenuItem(text={Text(s.title)},onClick={target=s;menu=false})}}};val valid=eventDate!=null&&eventDate!!>=date&&eventDate!!<=fifthCpcEndDate()&&target!=null&&(option!=FifthCpcFixationOption.FROM_DNI||knownDniDate!=null);Button(onClick={val e=calculateFifthCpcEvent(eventDate!!,pay,scale,target!!,option,eventType,knownDniDate);events=events+e;increments=emptyList();sixthConversion=null;showForm=false;eventDate=null;target=null},enabled=valid,modifier=Modifier.fillMaxWidth()){Text("Apply Event")}}}
 
-        sixthConversion?.let { conversion ->
-            FifthToSixthContinuationSection(conversion=conversion)
-        }
+        sixthConversion?.let { conversion -> FifthToSixthContinuationSection(conversion=conversion) }
     }
     if(picker){val s=rememberDatePickerState(initialSelectedDateMillis=eventDate?:date);DatePickerDialog(onDismissRequest={picker=false},confirmButton={TextButton(onClick={eventDate=s.selectedDateMillis;picker=false}){Text("OK")}},dismissButton={TextButton(onClick={picker=false}){Text("Cancel")}}){DatePicker(s)}}
 }
