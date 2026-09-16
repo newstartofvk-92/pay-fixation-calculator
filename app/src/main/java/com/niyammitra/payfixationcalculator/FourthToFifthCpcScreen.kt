@@ -44,7 +44,8 @@ fun FourthToFifthCpcScreen(
     var showEvents by remember { mutableStateOf(false) }
 
     val basicPay = basicPayText.toIntOrNull()
-    val parsedNextIncrementDate = parseFourthFiveDate(nextIncrementDateText)
+    val formattedNextIncrementDate = formatFourthFiveDateInput(nextIncrementDateText)
+    val parsedNextIncrementDate = parseFourthFiveDate(formattedNextIncrementDate)
     val result = if (selectedScale != null && basicPay != null) {
         runCatching { calculateFourthToFifthCpcPrecise(basicPay, selectedScale!!) }.getOrNull()
     } else null
@@ -123,13 +124,16 @@ fun FourthToFifthCpcScreen(
                         Text("Under Rule 8, enter the date on which the employee would have drawn the next increment in the existing 4th CPC scale. This date becomes the first increment date in the revised 5th CPC scale.", color = FourFiveTextSecondary, fontSize = 12.sp)
                         OutlinedTextField(
                             value = nextIncrementDateText,
-                            onValueChange = { newValue -> nextIncrementDateText = formatFourthFiveDateInput(newValue) },
+                            onValueChange = { newValue ->
+                                nextIncrementDateText = newValue.filter(Char::isDigit).take(8)
+                            },
                             label = { Text("Next Increment Date in 4th CPC scale") },
                             placeholder = { Text("dd/MM/yyyy") },
                             supportingText = { Text(if (dateError) "Enter a valid date in dd/MM/yyyy format." else "The date may be 01/01/1996 where the increment fell on the conversion date.") },
                             isError = dateError,
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            visualTransformation = FourthFiveDateVisualTransformation,
                             modifier = Modifier.fillMaxWidth()
                         )
                         if (parsedNextIncrementDate != null && parsedNextIncrementDate < fourthFiveConversionDate()) {
@@ -245,13 +249,36 @@ private fun addFourthFiveYear(date: Long): Long = Calendar.getInstance().apply {
 private fun parseFourthFiveDate(value: String): Long? = runCatching { SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH).apply { isLenient = false }.parse(value)?.time }.getOrNull()
 private fun formatFourthFiveDate(value: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))
 
-private fun formatFourthFiveDateInput(value: String): String {
-    val digits = value.filter(Char::isDigit).take(8)
-    return buildString {
-        digits.forEachIndexed { index, char ->
-            if (index == 2 || index == 4) append('/')
-            append(char)
+private fun formatFourthFiveDateInput(digits: String): String = buildString {
+    digits.filter(Char::isDigit).take(8).forEachIndexed { index, digit ->
+        if (index == 2 || index == 4) append('/')
+        append(digit)
+    }
+}
+
+private object FourthFiveDateVisualTransformation : androidx.compose.ui.text.input.VisualTransformation {
+    override fun filter(text: androidx.compose.ui.text.AnnotatedString): androidx.compose.ui.text.input.TransformedText {
+        val transformed = formatFourthFiveDateInput(text.text)
+        val offsetMapping = object : androidx.compose.ui.text.input.OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                return when {
+                    offset <= 2 -> offset
+                    offset <= 4 -> offset + 1
+                    offset <= 8 -> offset + 2
+                    else -> transformed.length
+                }
+            }
+
+            override fun transformedToOriginal(offset: Int): Int {
+                return when {
+                    offset <= 2 -> offset
+                    offset <= 5 -> offset - 1
+                    offset <= 10 -> offset - 2
+                    else -> text.text.length
+                }.coerceIn(0, text.text.length)
+            }
         }
+        return androidx.compose.ui.text.input.TransformedText(androidx.compose.ui.text.AnnotatedString(transformed), offsetMapping)
     }
 }
 
