@@ -29,7 +29,7 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult) {
     var automaticSeventhPayInBand by remember { mutableStateOf<Int?>(null) }
 
     val latest = incrementSteps.lastOrNull()
-    val latestPayInBand = latest?.let { it.pay - conversion.gradePay } ?: conversion.payInBand
+    val latestPayInBand = latest?.let { it.pay - conversion.gradePay } ?: conversion.payInPayBand
     val reaches2015 = latest?.date == inlineSixthJuly2015Date()
     val continuityPayBand = eventLatestPayBand ?: conversion.scale.payBand
     val continuityGradePay = eventLatestGradePay ?: conversion.gradePay
@@ -47,7 +47,7 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult) {
                 Text("6th CPC Fitment", color = ContinuationText, fontWeight = FontWeight.Bold)
                 Text("${formatInlineCurrency(conversion.existingBasicPay)} × 1.86 = ${String.format(Locale.US, "%.2f", conversion.multipliedPay)}", color = ContinuationSecondary, fontSize = 13.sp)
                 Text("Rounded pay: ${formatInlineCurrency(conversion.roundedPay)}", color = ContinuationSecondary, fontSize = 13.sp)
-                Text("Pay in ${conversion.scale.payBand}: ${formatInlineCurrency(conversion.payInBand)}", color = ContinuationSecondary, fontSize = 13.sp)
+                Text("Pay in ${conversion.scale.payBand}: ${formatInlineCurrency(conversion.payInPayBand)}", color = ContinuationSecondary, fontSize = 13.sp)
                 Text("Grade Pay: ${formatInlineCurrency(conversion.gradePay)}", color = ContinuationSecondary, fontSize = 13.sp)
                 Surface(Modifier.fillMaxWidth(), color = ContinuationBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
                     Column(Modifier.padding(14.dp)) {
@@ -82,7 +82,7 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult) {
 
         Button(
             onClick = {
-                val currentPayInBand = latest?.let { it.pay - conversion.gradePay } ?: conversion.payInBand
+                val currentPayInBand = latest?.let { it.pay - conversion.gradePay } ?: conversion.payInPayBand
                 val nextPay = calculateSixthCpcNextIncrement(currentPayInBand, conversion.gradePay, conversion.scale.payBandMaximum) ?: return@Button
                 val nextDate = latest?.let { addInlineSixthYear(it.date) } ?: inlineSixthFirstIncrementDate()
                 if (nextDate <= inlineSixthJuly2015Date()) {
