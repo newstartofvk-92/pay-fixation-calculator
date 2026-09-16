@@ -2,11 +2,13 @@ package com.niyammitra.payfixationcalculator
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.NumberFormat
@@ -27,12 +29,15 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult) {
     var eventLatestPayInBand by remember { mutableStateOf<Int?>(null) }
     var eventLatestDate by remember { mutableStateOf<Long?>(null) }
     var automaticSeventhPayInBand by remember { mutableStateOf<Int?>(null) }
+    var gradePayText by remember(conversion.gradePay) { mutableStateOf(conversion.gradePay.toString()) }
 
+    val editedGradePay = gradePayText.toIntOrNull()?.takeIf { it > 0 } ?: conversion.gradePay
     val latest = incrementSteps.lastOrNull()
-    val latestPayInBand = latest?.let { it.pay - conversion.gradePay } ?: conversion.payInPayBand
+    val latestPayInBand = latest?.let { it.pay - editedGradePay } ?: conversion.payInPayBand
+    val currentSixthBasicPay = latestPayInBand + editedGradePay
     val reaches2015 = latest?.date == inlineSixthJuly2015Date()
     val continuityPayBand = eventLatestPayBand ?: conversion.scale.payBand
-    val continuityGradePay = eventLatestGradePay ?: conversion.gradePay
+    val continuityGradePay = eventLatestGradePay ?: editedGradePay
     val continuityPayInBand = eventLatestPayInBand ?: automaticSeventhPayInBand ?: latestPayInBand
     val reaches2016 = automaticSeventhPayInBand != null || eventLatestDate?.let { it >= inlineSixthJuly2015Date() } == true || reaches2015
 
@@ -48,12 +53,23 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult) {
                 Text("${formatInlineCurrency(conversion.existingBasicPay)} × 1.86 = ${String.format(Locale.US, "%.2f", conversion.multipliedPay)}", color = ContinuationSecondary, fontSize = 13.sp)
                 Text("Rounded pay: ${formatInlineCurrency(conversion.roundedPay)}", color = ContinuationSecondary, fontSize = 13.sp)
                 Text("Pay in ${conversion.scale.payBand}: ${formatInlineCurrency(conversion.payInPayBand)}", color = ContinuationSecondary, fontSize = 13.sp)
-                Text("Grade Pay: ${formatInlineCurrency(conversion.gradePay)}", color = ContinuationSecondary, fontSize = 13.sp)
+
+                OutlinedTextField(
+                    value = gradePayText,
+                    onValueChange = { value -> gradePayText = value.filter(Char::isDigit) },
+                    label = { Text("Grade Pay") },
+                    supportingText = { Text("Edit the Grade Pay if the applicable Grade Pay is different from the mapped value.") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 Surface(Modifier.fillMaxWidth(), color = ContinuationBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
                     Column(Modifier.padding(14.dp)) {
                         Text("6th CPC Revised Basic Pay", color = ContinuationSecondary, fontSize = 13.sp)
-                        Text(formatInlineCurrency(conversion.revisedBasicPay), color = ContinuationBlue, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(formatInlineCurrency(currentSixthBasicPay), color = ContinuationBlue, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
                         Text("Pay fixed as on 01 January 2006", color = ContinuationSecondary, fontSize = 12.sp)
+                        Text("Pay in Pay Band ${formatInlineCurrency(latestPayInBand)} + Grade Pay ${formatInlineCurrency(editedGradePay)}", color = ContinuationSecondary, fontSize = 12.sp)
                     }
                 }
             }
@@ -64,13 +80,13 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text("6th CPC Increment Progression", color = ContinuationBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                     incrementSteps.forEachIndexed { index, step ->
-                        val payInBand = step.pay - conversion.gradePay
+                        val payInBand = step.pay - editedGradePay
                         Surface(Modifier.fillMaxWidth(), color = ContinuationBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
                             Row(Modifier.fillMaxWidth().padding(14.dp)) {
                                 Column(Modifier.weight(1f)) {
                                     Text("Increment ${index + 1}", color = ContinuationSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     Text("Date: ${formatInlineDate(step.date)}", color = ContinuationText, fontSize = 13.sp)
-                                    Text("Pay in Pay Band: ${formatInlineCurrency(payInBand)}", color = ContinuationBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                                    Text("Pay in Pay Band: ${formatInlineCurrency(payInBand)} + GP ${formatInlineCurrency(editedGradePay)} = ${formatInlineCurrency(step.pay)}", color = ContinuationBlue, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
                                 }
                                 TextButton(onClick = { incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) } }) { Text("Delete") }
                             }
@@ -82,15 +98,15 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult) {
 
         Button(
             onClick = {
-                val currentPayInBand = latest?.let { it.pay - conversion.gradePay } ?: conversion.payInPayBand
-                val nextPay = calculateSixthCpcNextIncrement(currentPayInBand, conversion.gradePay, conversion.scale.payBandMaximum) ?: return@Button
+                val currentPayInBand = latest?.let { it.pay - editedGradePay } ?: conversion.payInPayBand
+                val nextPay = calculateSixthCpcNextIncrement(currentPayInBand, editedGradePay, conversion.scale.payBandMaximum) ?: return@Button
                 val nextDate = latest?.let { addInlineSixthYear(it.date) } ?: inlineSixthFirstIncrementDate()
                 if (nextDate <= inlineSixthJuly2015Date()) {
                     incrementSteps = incrementSteps + InlineSixthCpcIncrementStep(nextPay, nextDate)
-                    if (nextDate == inlineSixthJuly2015Date()) automaticSeventhPayInBand = nextPay - conversion.gradePay
+                    if (nextDate == inlineSixthJuly2015Date()) automaticSeventhPayInBand = nextPay - editedGradePay
                 }
             },
-            enabled = !reaches2015,
+            enabled = !reaches2015 && gradePayText.toIntOrNull()?.let { it > 0 } == true,
             modifier = Modifier.fillMaxWidth(),
             colors = ButtonDefaults.buttonColors(containerColor = ContinuationBlue),
             shape = RoundedCornerShape(12.dp)
@@ -99,7 +115,7 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult) {
         SixthCpcEventsSection(
             calculation = conversion,
             startingPayInBand = latestPayInBand,
-            startingGradePay = conversion.gradePay,
+            startingGradePay = editedGradePay,
             startingPayBand = conversion.scale.payBand,
             onContinueToSeventh = null,
             onLatestStateChange = { band, gp, payInBand, date ->
