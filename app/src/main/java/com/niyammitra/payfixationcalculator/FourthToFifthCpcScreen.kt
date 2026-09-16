@@ -123,7 +123,7 @@ fun FourthToFifthCpcScreen(
                         Text("Under Rule 8, enter the date on which the employee would have drawn the next increment in the existing 4th CPC scale. This date becomes the first increment date in the revised 5th CPC scale.", color = FourFiveTextSecondary, fontSize = 12.sp)
                         OutlinedTextField(
                             value = nextIncrementDateText,
-                            onValueChange = { newValue -> nextIncrementDateText = newValue.filter { it.isDigit() || it == '/' } },
+                            onValueChange = { newValue -> nextIncrementDateText = formatFourthFiveDateInput(newValue) },
                             label = { Text("Next Increment Date in 4th CPC scale") },
                             placeholder = { Text("dd/MM/yyyy") },
                             supportingText = { Text(if (dateError) "Enter a valid date in dd/MM/yyyy format." else "The date may be 01/01/1996 where the increment fell on the conversion date.") },
@@ -244,5 +244,16 @@ private fun fourthFiveConversionEndDate(): Long = Calendar.getInstance().apply {
 private fun addFourthFiveYear(date: Long): Long = Calendar.getInstance().apply { timeInMillis = date; add(Calendar.YEAR, 1) }.timeInMillis
 private fun parseFourthFiveDate(value: String): Long? = runCatching { SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH).apply { isLenient = false }.parse(value)?.time }.getOrNull()
 private fun formatFourthFiveDate(value: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))
+
+private fun formatFourthFiveDateInput(value: String): String {
+    val digits = value.filter(Char::isDigit).take(8)
+    return buildString {
+        digits.forEachIndexed { index, char ->
+            if (index == 2 || index == 4) append('/')
+            append(char)
+        }
+    }
+}
+
 @Composable private fun RowValue(label: String, value: Int) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text(label, color = FourFiveTextSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f)); Text(formatFourFiveCurrency(value), color = FourFiveTextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp) } }
 private fun formatFourFiveCurrency(value: Int): String = NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(value)
