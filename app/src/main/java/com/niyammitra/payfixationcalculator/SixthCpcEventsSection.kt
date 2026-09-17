@@ -171,26 +171,45 @@ fun SixthCpcEventsSection(calculation: FifthToSixthResult, startingPayInBand: In
                     Text("Current: $currentPayBand | Pay in Pay Band ${formatSixthEventCurrency(currentPayInBand)} | Grade Pay ${formatSixthEventCurrency(currentGradePay)} | Basic Pay ${formatSixthEventCurrency(currentBasicPay)}", color = Color(0xFF5B6B7A), fontSize = 12.sp)
                     Text("1. Date of event", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(eventDate?.let { formatSixthEventDate(it) } ?: "Select Event Date", Modifier.weight(1f)) }
+
+                    // Historical method selection is deliberately placed immediately after the date.
+                    // This makes the two historical routes visible as soon as a date is selected.
+                    if (eventDate != null) {
+                        if (isInterimEvent) {
+                            Surface(Modifier.fillMaxWidth(), color = Color(0xFF1769AA).copy(alpha = .10f), shape = RoundedCornerShape(14.dp)) {
+                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text("HISTORICAL 6TH CPC EVENT", color = Color(0xFF1769AA), fontWeight = FontWeight.ExtraBold, fontSize = 14.sp)
+                                    Text("Event date falls between 01 January 2006 and 29 August 2008.", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                    Text("Select the historical fixation route:", color = Color(0xFF5B6B7A), fontSize = 12.sp)
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                                        RadioButton(selected = interimMethod == InterimSixthCpcMethod.VIA_FIFTH_CPC_PRE_REVISED, onClick = { interimMethod = InterimSixthCpcMethod.VIA_FIFTH_CPC_PRE_REVISED })
+                                        Column(Modifier.padding(top = 8.dp)) {
+                                            Text("Method 1", color = Color(0xFF1769AA), fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                                            Text("Upgradation via 5th CPC Pre-Revised Scale First, Followed by 6th CPC Conversion", color = Color(0xFF172B4D), fontSize = 13.sp)
+                                        }
+                                    }
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                                        RadioButton(selected = interimMethod == InterimSixthCpcMethod.WITHIN_SIXTH_CPC_RULE_13, onClick = { interimMethod = InterimSixthCpcMethod.WITHIN_SIXTH_CPC_RULE_13 })
+                                        Column(Modifier.padding(top = 8.dp)) {
+                                            Text("Method 2", color = Color(0xFF1769AA), fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                                            Text("Upgradation within 6th CPC Structure (Rule 13)", color = Color(0xFF172B4D), fontSize = 13.sp)
+                                        }
+                                    }
+                                    Text("Selected: ${if (interimMethod == InterimSixthCpcMethod.VIA_FIFTH_CPC_PRE_REVISED) "Method 1" else "Method 2"}. Calculation logic will be added separately.", color = Color(0xFF1769AA), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
+                            }
+                        } else {
+                            Surface(Modifier.fillMaxWidth(), color = Color(0xFF5B6B7A).copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
+                                Text("Historical fixation methods apply only to events dated 01 January 2006 to 29 August 2008. The selected date is outside that interim period.", Modifier.padding(12.dp), color = Color(0xFF5B6B7A), fontSize = 12.sp)
+                            }
+                        }
+                    }
+
                     Text("2. Type of event", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     EventTypeRadio("Promotion", eventKind == SixthCpcEventKind.PROMOTION) { eventKind = SixthCpcEventKind.PROMOTION; targetGradePay = null }
                     EventTypeRadio("Financial Upgradation (ACP / MACP)", eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION) { eventKind = SixthCpcEventKind.FINANCIAL_UPGRADATION; targetGradePay = null }
                     EventTypeRadio("Pay Scale Upgradation / Revision (Placement / Conversion)", eventKind == SixthCpcEventKind.PAY_SCALE_UPGRADATION) { eventKind = SixthCpcEventKind.PAY_SCALE_UPGRADATION; targetGradePay = null; targetPayBand = null }
                     if (eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION && eventDate != null) Surface(Modifier.fillMaxWidth(), color = Color(0xFF1769AA).copy(alpha = .07f), shape = RoundedCornerShape(12.dp)) { Text(if (autoScheme == SixthCpcFinancialUpgradation.ACP) "ACP — applicable up to 31 August 2008" else "MACP — applicable from 01 September 2008", Modifier.padding(14.dp), color = Color(0xFF1769AA), fontWeight = FontWeight.ExtraBold, fontSize = 13.sp) }
-                    if (isInterimEvent) {
-                        Text("3. Fixation Method for Interim Period", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        Text("For an event between 01 January 2006 and 29 August 2008, select the method that will be used for the historical fixation. The calculation for these two methods will be implemented separately.", color = Color(0xFF5B6B7A), fontSize = 12.sp)
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                            RadioButton(selected = interimMethod == InterimSixthCpcMethod.VIA_FIFTH_CPC_PRE_REVISED, onClick = { interimMethod = InterimSixthCpcMethod.VIA_FIFTH_CPC_PRE_REVISED })
-                            Text("Method 1: Upgradation via 5th CPC Pre-Revised Scale First, Followed by 6th CPC Conversion", Modifier.padding(top = 12.dp), color = Color(0xFF172B4D), fontSize = 13.sp)
-                        }
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                            RadioButton(selected = interimMethod == InterimSixthCpcMethod.WITHIN_SIXTH_CPC_RULE_13, onClick = { interimMethod = InterimSixthCpcMethod.WITHIN_SIXTH_CPC_RULE_13 })
-                            Text("Method 2: Upgradation within 6th CPC Structure (Rule 13)", Modifier.padding(top = 12.dp), color = Color(0xFF172B4D), fontSize = 13.sp)
-                        }
-                        Surface(Modifier.fillMaxWidth(), color = Color(0xFF1769AA).copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
-                            Text("Selected method: ${if (interimMethod == InterimSixthCpcMethod.VIA_FIFTH_CPC_PRE_REVISED) "Method 1" else "Method 2"}. No historical fixation calculation is applied yet.", Modifier.padding(14.dp), color = Color(0xFF1769AA), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        }
-                    }
                     if (eventKind == SixthCpcEventKind.PAY_SCALE_UPGRADATION) {
                         Text("3. Select upgraded / revised pay band", color = Color(0xFF172B4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         Box { OutlinedButton(onClick = { payBandMenu = true }, modifier = Modifier.fillMaxWidth()) { Text(targetPayBand?.title ?: "Select upgraded / revised pay band", Modifier.weight(1f)); Text("▼") }; DropdownMenu(expanded = payBandMenu, onDismissRequest = { payBandMenu = false }) { SixthToSeventhCpcData.payBands.forEach { band -> DropdownMenuItem(text = { Text(band.title) }, onClick = { targetPayBand = band; targetGradePay = null; payBandMenu = false }) } } }
