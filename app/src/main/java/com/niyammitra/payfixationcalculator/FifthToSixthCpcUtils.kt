@@ -61,11 +61,6 @@ fun calculateFifthToSixthCpc(existingBasicPay: Int, scale: FifthCpcScale): Fifth
  * Calculates one annual increment under the 6th CPC structure.
  * The decimal/fractional part of the 3% result is ignored first.
  * The resulting whole-rupee amount is then rounded upward to the next multiple of Rs.10.
- *
- * Examples:
- * 540.5 -> 540 -> 540
- * 540.9 -> 540 -> 540
- * 541.0 -> 541 -> 550
  */
 fun calculateSixthCpcNextIncrement(payInPayBand: Int, gradePay: Int, payBandMaximum: Int): Int? {
     if (payInPayBand >= payBandMaximum) return null
