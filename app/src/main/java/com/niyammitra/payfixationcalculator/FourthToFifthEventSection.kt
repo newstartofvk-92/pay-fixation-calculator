@@ -96,9 +96,10 @@ fun FourthToFifthEventSection(currentPay:Int,currentScale:FifthCpcScale,currentD
                 onClick={
                     if(nextPay!=null){
                         if(crossesIntoSixth){
-                            // Preserve the visible 5th CPC timeline up to the transition,
-                            // then carry the calculated pay state into the existing 6th CPC engine.
-                            sixthConversion=calculateFifthToSixthCpc(nextPay,scale)
+                            // Do NOT apply the future 5th CPC increment dated after 31.12.2005.
+                            // 6th CPC conversion is based on the pay actually held on 01.01.2006,
+                            // i.e. the current pay state before the next 5th CPC increment.
+                            sixthConversion=calculateFifthToSixthCpc(pay,scale)
                         }else{
                             increments=increments+(nextPay to nextDate)
                         }
@@ -107,7 +108,7 @@ fun FourthToFifthEventSection(currentPay:Int,currentScale:FifthCpcScale,currentD
                 enabled=nextPay!=null,
                 modifier=Modifier.fillMaxWidth(),
                 colors=ButtonDefaults.buttonColors(containerColor=Color(0xFF1769AA))
-            ){Text(if(crossesIntoSixth)"Next Increment → Convert to 6th CPC" else "Next Increment")}
+            ){Text(if(crossesIntoSixth)"Convert to 6th CPC (01 January 2006)" else "Next Increment")}
         }
 
         if(!showForm&&events.isNotEmpty()&&sixthConversion==null)Button(onClick={showForm=true;eventDate=null;target=null}){Text("Add Another Event")}
