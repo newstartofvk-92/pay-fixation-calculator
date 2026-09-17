@@ -114,7 +114,7 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult) {
 
         SixthCpcEventsSection(
             calculation = conversion,
-            startingPayInBand = latestPayInBand,
+            startingPayInPayBand = latestPayInBand,
             startingGradePay = editedGradePay,
             startingPayBand = conversion.scale.payBand,
             onContinueToSeventh = null,
@@ -141,4 +141,4 @@ private fun inlineSixthFirstIncrementDate(): Long = Calendar.getInstance().apply
 private fun inlineSixthJuly2015Date(): Long = Calendar.getInstance().apply { clear(); set(2015, Calendar.JULY, 1, 0, 0, 0) }.timeInMillis
 private fun addInlineSixthYear(date: Long): Long = Calendar.getInstance().apply { timeInMillis = date; add(Calendar.YEAR, 1) }.timeInMillis
 private fun formatInlineDate(value: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))
-private fun formatInlineCurrency(value: Int): String = NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(value)
+private fun formatInlineCurrency(value: Int): String = NumberFormat.getCurrencyInstance(Locale.Builder().setLanguage("en").setRegion("IN").build()).format(value)
