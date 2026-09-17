@@ -4,7 +4,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 
 data class FifthCpcScale(val title: String, val payBand: String, val payBandMinimum: Int, val payBandMaximum: Int, val gradePay: Int)
-data class FifthToSixthResult(val scale: FifthCpcScale, val existingBasicPay: Int, val multipliedPay: Double, val roundedPay: Int, val payInBand: Int, val gradePay: Int, val revisedBasicPay: Int, val conversionDate: String, val nextIncrementDate: String, val ruleBasis: List<String>)
+data class FifthToSixthResult(val scale: FifthCpcScale, val existingBasicPay: Int, val multipliedPay: Double, val roundedPay: Int, val payInPayBand: Int, val gradePay: Int, val revisedBasicPay: Int, val conversionDate: String, val nextIncrementDate: String, val ruleBasis: List<String>)
 
 object FifthToSixthCpcData {
     val scales = listOf(
@@ -60,8 +60,7 @@ fun calculateFifthToSixthCpc(existingBasicPay: Int, scale: FifthCpcScale): Fifth
 /**
  * Calculates one annual increment under the 6th CPC structure.
  * The decimal/fractional part of the 3% result is ignored first.
- * The resulting whole-rupee amount is then rounded upward to the next
- * multiple of Rs.10.
+ * The resulting whole-rupee amount is then rounded upward to the next multiple of Rs.10.
  *
  * Examples:
  * 540.5 -> 540 -> 540
