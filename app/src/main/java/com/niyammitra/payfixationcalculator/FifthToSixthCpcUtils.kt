@@ -1,10 +1,10 @@
 package com.niyammitra.payfixationcalculator
 
 import kotlin.math.ceil
-import kotlin.math.round
+import kotlin.math.floor
 
 data class FifthCpcScale(val title: String, val payBand: String, val payBandMinimum: Int, val payBandMaximum: Int, val gradePay: Int)
-data class FifthToSixthResult(val scale: FifthCpcScale, val existingBasicPay: Int, val multipliedPay: Double, val roundedPay: Int, val payInPayBand: Int, val gradePay: Int, val revisedBasicPay: Int, val conversionDate: String, val nextIncrementDate: String, val ruleBasis: List<String>)
+data class FifthToSixthResult(val scale: FifthCpcScale, val existingBasicPay: Int, val multipliedPay: Double, val roundedPay: Int, val payInBand: Int, val gradePay: Int, val revisedBasicPay: Int, val conversionDate: String, val nextIncrementDate: String, val ruleBasis: List<String>)
 
 object FifthToSixthCpcData {
     val scales = listOf(
@@ -59,13 +59,21 @@ fun calculateFifthToSixthCpc(existingBasicPay: Int, scale: FifthCpcScale): Fifth
 
 /**
  * Calculates one annual increment under the 6th CPC structure.
- * The increment is 3% of (pay in Pay Band + Grade Pay), rounded to the
- * nearest multiple of Rs.10, then added to pay in Pay Band.
+ * The decimal/fractional part of the 3% result is ignored first.
+ * The resulting whole-rupee amount is then rounded upward to the next
+ * multiple of Rs.10.
+ *
+ * Examples:
+ * 540.5 -> 540 -> 540
+ * 540.9 -> 540 -> 540
+ * 541.0 -> 541 -> 550
  */
 fun calculateSixthCpcNextIncrement(payInPayBand: Int, gradePay: Int, payBandMaximum: Int): Int? {
     if (payInPayBand >= payBandMaximum) return null
     val incrementBase = payInPayBand + gradePay
-    val increment = (round((incrementBase * 0.03) / 10.0) * 10.0).toInt()
+    val threePercent = incrementBase * 0.03
+    val wholeRupeeIncrement = floor(threePercent).toInt()
+    val increment = (ceil(wholeRupeeIncrement / 10.0) * 10.0).toInt()
     val nextPayInBand = minOf(payInPayBand + increment, payBandMaximum)
     return if (nextPayInBand > payInPayBand) nextPayInBand + gradePay else null
 }
