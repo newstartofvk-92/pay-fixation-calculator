@@ -61,6 +61,14 @@ fun FourthToFifthCpcScreen(
     val currentPay = eventPay ?: latestIncrement?.pay ?: basicPay
     val currentIncrementDate = eventDate ?: latestIncrement?.date
     val currentScale = eventScale ?: selectedScale
+    val conversionPay = currentPay
+    val conversionScale = currentScale
+    val conversionReached = conversionPay != null && conversionScale != null &&
+        ((currentIncrementDate != null && currentIncrementDate >= fourthFiveConversionDate()) ||
+            (currentIncrementDate == null && payDate == fourthFiveConversionDate()))
+    val conversionResult = if (conversionReached && conversionPay != null && conversionScale != null) {
+        runCatching { calculateFourthToFifthCpc(conversionPay, conversionScale) }.getOrNull()
+    } else null
     val canAddIncrement = validStartingPosition && currentPay != null &&
         (currentIncrementDate == null || currentIncrementDate < fourthFiveConversionEndDate()) &&
         (currentIncrementDate != null || validNextIncrementDate != null) &&
@@ -231,8 +239,8 @@ fun FourthToFifthCpcScreen(
                     Text("The first added increment will be shown on ${formatFourthFiveDate(validNextIncrementDate)}. Subsequent increments advance by one year.", color = FourFiveTextSecondary, fontSize = 12.sp)
                 }
 
-                if (payDate == fourthFiveConversionDate()) {
-                    result?.let { calculation ->
+                if (conversionResult != null) {
+                    conversionResult.let { calculation ->
                         Text("Conversion Result", color = FourFiveTextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
                         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -318,7 +326,15 @@ private fun fourthCpcStartDate(): Long = Calendar.getInstance().apply { clear();
 
 private fun fourthFiveConversionDate(): Long = Calendar.getInstance().apply { clear(); set(1996, Calendar.JANUARY, 1, 0, 0, 0) }.timeInMillis
 private fun fourthFiveConversionEndDate(): Long = fourthFiveConversionDate()
-private fun addFourthFiveYear(date: Long): Long = Calendar.getInstance().apply { timeInMillis = date; add(Calendar.YEAR, 1) }.timeInMillis
+private fun addFourthFiveYear(date: Long): Long = Calendar.getInstance().apply {
+    timeInMillis = date
+    add(Calendar.YEAR, 1)
+    set(Calendar.DAY_OF_MONTH, 1)
+    set(Calendar.HOUR_OF_DAY, 0)
+    set(Calendar.MINUTE, 0)
+    set(Calendar.SECOND, 0)
+    set(Calendar.MILLISECOND, 0)
+}.timeInMillis
 private fun parseFourthFiveDate(value: String): Long? = runCatching { SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH).apply { isLenient = false }.parse(value)?.time }.getOrNull()
 private fun formatFourthFiveDate(value: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))
 
