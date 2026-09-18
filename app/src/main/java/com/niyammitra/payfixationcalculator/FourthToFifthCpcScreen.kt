@@ -150,8 +150,10 @@ fun FourthToFifthCpcScreen(
                             visualTransformation = FourthFiveDateVisualTransformation,
                             modifier = Modifier.fillMaxWidth()
                         )
-                        if (parsedNextIncrementDate != null && parsedNextIncrementDate < fourthFiveConversionDate()) {
-                            Text("The next increment date cannot be before 01 January 1996.", color = Color(0xFFC62828), fontSize = 12.sp)
+                        if (parsedNextIncrementDate != null && payDate != null && parsedNextIncrementDate <= payDate) {
+                            Text("The next increment date must be after the entered pay date.", color = Color(0xFFC62828), fontSize = 12.sp)
+                        } else if (parsedNextIncrementDate != null && parsedNextIncrementDate > fourthFiveConversionDate()) {
+                            Text("The next increment date cannot be after 01 January 1996.", color = Color(0xFFC62828), fontSize = 12.sp)
                         }
                     }
                 }
