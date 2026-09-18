@@ -64,6 +64,33 @@ fun FifthCpcHistoricalIncrementSection(
             }
         }
 
+        if (!showEventSection) {
+            Button(
+                onClick = { showEventSection = true },
+                enabled = currentScale != null && currentPay > 0,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = FifthHistoricalBlue),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Add 5th CPC Event", fontWeight = FontWeight.Bold)
+            }
+        }
+
+        if (showEventSection && currentScale != null) {
+            FifthCpcEventSection(
+                currentPay = currentPay,
+                currentScale = currentScale,
+                currentDate = currentDate,
+                onEventApplied = { newScale, newPay, newDate ->
+                    eventScale = newScale
+                    eventPay = newPay
+                    eventDate = newDate
+                    incrementSteps = emptyList()
+                    showEventSection = false
+                }
+            )
+        }
+
         if (incrementSteps.isNotEmpty()) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
