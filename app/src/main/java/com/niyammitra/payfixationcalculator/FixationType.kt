@@ -11,20 +11,20 @@ enum class FixationType(
     val description: String
 ) {
     FOURTH_TO_FIFTH(
-        title = "4th CPC → 5th CPC",
-        description = "Revision of pay from the 4th CPC structure to the 5th CPC structure."
+        title = "Fixation Starting from 4th CPC",
+        description = "4th CPC pay to 5th CPC fixation, with subsequent 5th CPC events."
     ),
     FIFTH_TO_SIXTH(
-        title = "5th CPC → 6th CPC",
-        description = "Revision of pay from the 5th CPC structure to the 6th CPC structure."
+        title = "Fixation Starting from 5th CPC",
+        description = "5th CPC pay to 6th CPC fixation, with subsequent 6th CPC events."
     ),
     SIXTH_TO_SEVENTH(
-        title = "6th CPC → 7th CPC",
-        description = "Revision of pay from the 6th CPC structure to the 7th CPC structure."
+        title = "Fixation Starting from 6th CPC",
+        description = "6th CPC pay to 7th CPC fixation, with subsequent 7th CPC events."
     ),
     SEVENTH_CPC(
-        title = "7th CPC Pay Fixation",
-        description = "Pay fixation for Promotion / MACP within the 7th CPC Pay Matrix."
+        title = "Fixation under 7th CPC",
+        description = "Promotion / MACP pay fixation within the 7th CPC Pay Matrix."
     )
 }
 
