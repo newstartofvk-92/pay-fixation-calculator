@@ -329,7 +329,7 @@ fun FourthToFifthCpcScreen(
                     }
 
                     val firstFifthIncrementDate =
-                        timelineDate?.let { addFourthFiveYear(it) }
+                        timelineDate?.let { getFifthCpcNextIncrementDate(it) }
 
                     FifthCpcHistoricalIncrementSection(
                         initialPay = calculation.revisedBasicPay,
@@ -395,6 +395,16 @@ private fun fourthCpcStartDate(): Long = Calendar.getInstance().apply { clear();
 
 private fun fourthFiveConversionDate(): Long = Calendar.getInstance().apply { clear(); set(1996, Calendar.JANUARY, 1, 0, 0, 0) }.timeInMillis
 private fun fourthFiveConversionEndDate(): Long = fourthFiveConversionDate()
+private fun getFifthCpcNextIncrementDate(existingIncrementDate: Long): Long =
+    Calendar.getInstance().apply {
+        timeInMillis = existingIncrementDate
+        add(Calendar.YEAR, 1)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
 private fun addFourthFiveYear(date: Long): Long = Calendar.getInstance().apply {
     timeInMillis = date
     add(Calendar.YEAR, 1)
