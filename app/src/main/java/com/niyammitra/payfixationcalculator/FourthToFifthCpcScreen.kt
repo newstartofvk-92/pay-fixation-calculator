@@ -42,7 +42,7 @@ fun FourthToFifthCpcScreen(
     var nextIncrementDateText by remember { mutableStateOf("") }
     var scaleMenu by remember { mutableStateOf(false) }
     var incrementSteps by remember(selectedScale, basicPayText) { mutableStateOf<List<FourthToFifthIncrementStep>>(emptyList()) }
-    var showEvents by remember { mutableStateOf(false) }
+    var showEvents by remember { mutableStateOf(false) }\n    var eventScale by remember { mutableStateOf<FourthCpcScale?>(null) }\n    var eventPay by remember { mutableStateOf<Int?>(null) }\n    var eventDate by remember { mutableStateOf<Long?>(null) }
 
     val basicPay = basicPayText.toIntOrNull()
     val payDate = parseFourthFiveDate(formatFourthFiveDateInput(payDateText))
@@ -60,7 +60,7 @@ fun FourthToFifthCpcScreen(
     val canAddIncrement = validStartingPosition && currentPay != null &&
         (currentIncrementDate == null || currentIncrementDate < fourthFiveConversionEndDate()) &&
         (currentIncrementDate != null || validNextIncrementDate != null) &&
-        calculateFourthCpcNextIncrement(currentPay, selectedScale!!) != null
+        currentScale != null && calculateFourthCpcNextIncrement(currentPay, currentScale) != null
 
     Column(Modifier.fillMaxSize().background(FourFiveBackground)) {
         Surface(Modifier.fillMaxWidth(), color = FourFiveHeaderBlue, shadowElevation = 3.dp) {
@@ -119,7 +119,7 @@ fun FourthToFifthCpcScreen(
                     )
                     OutlinedTextField(
                         value = payDateText,
-                        onValueChange = { newValue -> payDateText = newValue.filter(Char::isDigit).take(8); incrementSteps = emptyList(); showEvents = false },
+                        onValueChange = { newValue -> payDateText = newValue.filter(Char::isDigit).take(8); incrementSteps = emptyList(); eventScale = null; eventPay = null; eventDate = null; showEvents = false },
                         label = { Text("Pay Date (dd/MM/yyyy)") },
                         placeholder = { Text("e.g. 01/07/1988") },
                         supportingText = { Text("Enter a date from 01 January 1986 through 01 January 1996.") },
