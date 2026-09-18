@@ -69,8 +69,7 @@ fun FourthToFifthCpcScreen(
     Column(Modifier.fillMaxSize().background(FourFiveBackground)) {
         Surface(Modifier.fillMaxWidth(), color = FourFiveHeaderBlue, shadowElevation = 3.dp) {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack) { Text("‹
-Back", color = Color.White, fontWeight = FontWeight.Bold) }
+                TextButton(onClick = onBack) { Text("‹ Back", color = Color.White, fontWeight = FontWeight.Bold) }
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text("4th CPC → 5th CPC", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
@@ -304,7 +303,7 @@ private fun FourthToFifthIncrementProgressionCard(calculation: FourthToFifthResu
 private fun fourthCpcStartDate(): Long = Calendar.getInstance().apply { clear(); set(1986, Calendar.JANUARY, 1) }.timeInMillis
 
 private fun fourthFiveConversionDate(): Long = Calendar.getInstance().apply { clear(); set(1996, Calendar.JANUARY, 1, 0, 0, 0) }.timeInMillis
-private fun fourthFiveConversionEndDate(): Long = Calendar.getInstance().apply { clear(); set(2005, Calendar.DECEMBER, 31, 0, 0, 0) }.timeInMillis
+private fun fourthFiveConversionEndDate(): Long = fourthFiveConversionDate()
 private fun addFourthFiveYear(date: Long): Long = Calendar.getInstance().apply { timeInMillis = date; add(Calendar.YEAR, 1) }.timeInMillis
 private fun parseFourthFiveDate(value: String): Long? = runCatching { SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH).apply { isLenient = false }.parse(value)?.time }.getOrNull()
 private fun formatFourthFiveDate(value: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))
