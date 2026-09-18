@@ -66,7 +66,7 @@ fun FourthToFifthCpcScreen(
     val conversionScale = currentScale
     val timelineDate = currentIncrementDate ?: payDate
     val conversionReached = conversionPay != null && conversionScale != null &&
-        timelineDate != null && timelineDate >= fourthFiveConversionDate()
+        timelineDate != null && timelineDate <= fourthFiveConversionDate()
     val conversionResult = if (conversionActivated && conversionReached && conversionPay != null && conversionScale != null) {
         runCatching { calculateFourthToFifthCpc(conversionPay, conversionScale) }.getOrNull()
     } else null
@@ -251,7 +251,7 @@ fun FourthToFifthCpcScreen(
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Convert to 5th CPC", fontWeight = FontWeight.Bold) }
                     Text(
-                        "The 4th CPC timeline has reached 01 January 1996. Tap above to calculate the 5th CPC revised basic pay.",
+                        "The 4th CPC timeline is ready for conversion effective 01 January 1996. Tap above to calculate the 5th CPC revised basic pay.",
                         color = FourFiveTextSecondary,
                         fontSize = 12.sp
                     )
