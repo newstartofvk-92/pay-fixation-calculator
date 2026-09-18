@@ -64,9 +64,9 @@ fun FourthToFifthCpcScreen(
     val currentScale = eventScale ?: selectedScale
     val conversionPay = currentPay
     val conversionScale = currentScale
+    val timelineDate = currentIncrementDate ?: payDate
     val conversionReached = conversionPay != null && conversionScale != null &&
-        ((currentIncrementDate != null && currentIncrementDate >= fourthFiveConversionDate()) ||
-            (currentIncrementDate == null && payDate == fourthFiveConversionDate()))
+        timelineDate != null && timelineDate >= fourthFiveConversionDate()
     val conversionResult = if (conversionActivated && conversionReached && conversionPay != null && conversionScale != null) {
         runCatching { calculateFourthToFifthCpc(conversionPay, conversionScale) }.getOrNull()
     } else null
