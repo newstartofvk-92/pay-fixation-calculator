@@ -257,9 +257,8 @@ fun FourthToFifthCpcScreen(
                     )
                 }
 
-                if (conversionResult != null) {
-                    conversionResult.let { calculation ->
-                        Text("Conversion Result", color = FourFiveTextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
+                conversionResult?.let { calculation ->
+                    Text("Conversion Result", color = FourFiveTextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
                         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("Audit Trail", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
