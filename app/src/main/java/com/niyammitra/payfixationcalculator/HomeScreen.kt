@@ -115,7 +115,7 @@ private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -
         Row(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(46.dp).background(if (enabled) HomeNiyamBlue.copy(alpha = 0.10f) else Color(0xFFE1E4E8), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Text(when (type) { FixationType.FOURTH_TO_FIFTH -> "4→5"; FixationType.FIFTH_TO_SIXTH -> "5→6"; FixationType.SIXTH_TO_SEVENTH -> "6→7"; FixationType.SEVENTH_CPC -> "7th" }, color = if (enabled) HomeNiyamBlue else HomeNiyamTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold) }
             Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) { Text(type.title, color = if (enabled) HomeNiyamTextPrimary else HomeNiyamTextSecondary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold); Spacer(Modifier.height(4.dp)); Text(when (type) { FixationType.FOURTH_TO_FIFTH -> "Pay conversion using Rule 7 fitment"; FixationType.FIFTH_TO_SIXTH -> "Pay conversion using 1.86 fitment factor"; FixationType.SIXTH_TO_SEVENTH -> "Pay conversion using 2.57 fitment factor"; FixationType.SEVENTH_CPC -> "Promotion / MACP" }, color = HomeNiyamTextSecondary, fontSize = 13.sp) }
+            Column(Modifier.weight(1f)) { Text(type.title, color = if (enabled) HomeNiyamTextPrimary else HomeNiyamTextSecondary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold); Spacer(Modifier.height(4.dp)); Text(type.description, color = HomeNiyamTextSecondary, fontSize = 13.sp) }
         }
     }
 }
