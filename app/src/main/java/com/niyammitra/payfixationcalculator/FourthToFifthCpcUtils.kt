@@ -97,7 +97,7 @@ fun calculateFourthToFifthCpc(existingBasicPay: Int, scale: FourthCpcScale): Fou
 fun parsePayScaleStages(notation: String): List<Int> {
     val alternatives = notation.split("/")
     return alternatives.flatMap { part ->
-        val numbers = Regex("\d+").findAll(part).map { it.value.toInt() }.toList()
+        val numbers = Regex("\\d+").findAll(part).map { it.value.toInt() }.toList()
         if (numbers.size == 1) numbers
         else if (numbers.size >= 3) {
             val result = mutableListOf<Int>()
