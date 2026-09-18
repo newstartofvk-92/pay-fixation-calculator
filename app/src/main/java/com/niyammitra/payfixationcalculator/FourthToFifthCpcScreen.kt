@@ -43,7 +43,9 @@ fun FourthToFifthCpcScreen(
     var scaleMenu by remember { mutableStateOf(false) }
     var incrementSteps by remember(selectedScale, basicPayText) { mutableStateOf<List<FourthToFifthIncrementStep>>(emptyList()) }
     var showEvents by remember { mutableStateOf(false) }
-    var eventScale by remember { mutableStateOf<FourthCpcScale?>(null) }\n    var eventPay by remember { mutableStateOf<Int?>(null) }\n    var eventDate by remember { mutableStateOf<Long?>(null) }
+    var eventScale by remember { mutableStateOf<FourthCpcScale?>(null) }
+    var eventPay by remember { mutableStateOf<Int?>(null) }
+    var eventDate by remember { mutableStateOf<Long?>(null) }
 
     val basicPay = basicPayText.toIntOrNull()
     val payDate = parseFourthFiveDate(formatFourthFiveDateInput(payDateText))
@@ -67,7 +69,8 @@ fun FourthToFifthCpcScreen(
     Column(Modifier.fillMaxSize().background(FourFiveBackground)) {
         Surface(Modifier.fillMaxWidth(), color = FourFiveHeaderBlue, shadowElevation = 3.dp) {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack) { Text("‹\nBack", color = Color.White, fontWeight = FontWeight.Bold) }
+                TextButton(onClick = onBack) { Text("‹
+Back", color = Color.White, fontWeight = FontWeight.Bold) }
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text("4th CPC → 5th CPC", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
