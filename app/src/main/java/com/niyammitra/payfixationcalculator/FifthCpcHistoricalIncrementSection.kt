@@ -30,12 +30,26 @@ fun FifthCpcHistoricalIncrementSection(
     var incrementSteps by remember(initialPay, revisedScale, conversionDate, firstIncrementDate) {
         mutableStateOf<List<FifthCpcHistoricalIncrementStep>>(emptyList())
     }
+    var eventScale by remember(revisedScale) {
+        mutableStateOf(findFifthScaleForHistoricalJourney(revisedScale))
+    }
+    var eventPay by remember { mutableStateOf<Int?>(null) }
+    var eventDate by remember { mutableStateOf<Long?>(null) }
+    var showEventSection by remember { mutableStateOf(false) }
 
-    val stages = remember(revisedScale) { parseFifthCpcScaleStages(revisedScale) }
+    val initialScale = remember(revisedScale) {
+        findFifthScaleForHistoricalJourney(revisedScale)
+    }
     val latest = incrementSteps.lastOrNull()
-    val currentPay = latest?.pay ?: initialPay
-    val currentDate = latest?.date ?: conversionDate
-    val nextDate = latest?.let { addFifthHistoricalYear(it.date) } ?: firstIncrementDate
+    val currentScale = eventScale ?: initialScale
+    val currentPay = eventPay ?: latest?.pay ?: initialPay
+    val currentDate = eventDate ?: latest?.date ?: conversionDate
+    val stages = remember(currentScale) {
+        currentScale?.let { parseFifthCpcScaleStages(it.title) }.orEmpty()
+    }
+    val nextDate = latest?.let { addFifthHistoricalYear(it.date) }
+        ?: eventDate?.let { addFifthHistoricalYear(it) }
+        ?: firstIncrementDate
     val nextPay = stages.firstOrNull { it > currentPay }
     val endDate = fifthCpcEndDate()
     val canAdd = nextPay != null && nextDate != null && nextDate <= endDate
@@ -139,7 +153,7 @@ fun FifthCpcHistoricalIncrementSection(
         }
 
         if (onContinueToSixth != null && currentDate >= endDate) {
-            val mappedScale = findFifthScaleForHistoricalJourney(revisedScale)
+            val mappedScale = currentScale
             if (mappedScale != null) {
                 Button(
                     onClick = { onContinueToSixth(mappedScale, currentPay) },
