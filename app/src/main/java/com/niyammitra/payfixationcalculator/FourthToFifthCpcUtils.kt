@@ -1,7 +1,5 @@
 package com.niyammitra.payfixationcalculator
 
-import kotlin.math.roundToInt
-
 data class FourthCpcScale(
     val grade: String,
     val existingScale: String,
@@ -10,7 +8,11 @@ data class FourthCpcScale(
     val revisedMaximum: Int,
     val revisedIncrement: Int,
     val fixed: Boolean = false
-)
+) {
+    /** Every valid stage of the 4th CPC scale, including stepped increment portions. */
+    val existingStages: List<Int>
+        get() = parsePayScaleStages(existingScale)
+}
 
 data class FourthToFifthResult(
     val scale: FourthCpcScale,
@@ -68,85 +70,59 @@ object FourthToFifthCpcData {
     )
 }
 
-/** Rule 7 of CCS (Revised Pay) Rules, 1997. */
+/** Standard Rule 7 replacement-scale calculation. */
 fun calculateFourthToFifthCpc(existingBasicPay: Int, scale: FourthCpcScale): FourthToFifthResult {
-    require(existingBasicPay > 0) { "Existing basic pay must be positive." }
-    require(existingBasicPay in scale.existingPayRange()) { "Existing basic pay is outside the selected 4th CPC scale." }
-
-    val da = (existingBasicPay * 1.48).roundToInt()
+    require(existingBasicPay in scale.existingStages) { "Basic pay must be a valid stage of the selected 4th CPC scale." }
+    val da = (existingBasicPay * 1.48).toInt()
     val firstIr = 100
-    val secondIr = maxOf(100, (existingBasicPay * 0.10).roundToInt())
+    val secondIr = maxOf(100, (existingBasicPay * 0.10).toInt())
     val existingEmoluments = existingBasicPay + da + firstIr + secondIr
-    val fitmentWeightage = (existingBasicPay * 0.40).roundToInt()
+    val fitmentWeightage = (existingBasicPay * 0.40).toInt()
     val fitmentTotal = existingEmoluments + fitmentWeightage
-    val revisedBasic = if (scale.fixed) scale.revisedMinimum else nextStageAtOrAbove(fitmentTotal, scale)
-
+    val revisedBasic = if (scale.fixed) scale.revisedMinimum else parsePayScaleStages(scale.revisedScale).firstOrNull { it >= fitmentTotal } ?: scale.revisedMaximum
     return FourthToFifthResult(
-        scale = scale,
-        existingBasicPay = existingBasicPay,
-        dearnessAllowance = da,
-        firstInterimRelief = firstIr,
-        secondInterimRelief = secondIr,
-        existingEmoluments = existingEmoluments,
-        fitmentWeightage = fitmentWeightage,
-        fitmentTotal = fitmentTotal,
-        revisedBasicPay = revisedBasic,
-        conversionDate = "01 January 1996",
-        nextIncrementNote = "Under Rule 8, the next increment is generally due on the date on which it would have accrued in the existing scale, subject to the rule's provisos.",
-        ruleBasis = listOf(
-            "Rule 7: 40% of existing basic pay is added to existing emoluments.",
-            "Existing emoluments include basic pay, DA at the 1510 CPI index, and the first and second interim relief instalments.",
-            "DA at 01.01.1996: 148% of basic pay.",
-            "First interim relief: Rs.100 per month; second interim relief: 10% of basic pay subject to a minimum of Rs.100.",
-            "Pay is fixed at the next stage above the computed amount in the corresponding 5th CPC revised scale, subject to the minimum/maximum provisions.",
-            "Bunching and the one-increment-for-every-three-existing-increments safeguard can affect individual cases and should be verified where applicable."
+        scale, existingBasicPay, da, firstIr, secondIr, existingEmoluments, fitmentWeightage, fitmentTotal,
+        revisedBasic, "01 January 1996",
+        "The next increment date is determined from the 4th CPC service/pay history and is carried into the revised scale under the applicable Rule 8 provisions.",
+        listOf(
+            "Rule 7 standard fitment: existing emoluments plus 40% of existing basic pay.",
+            "The employee's basic pay must correspond to an actual stage of the selected existing scale.",
+            "The revised pay is selected from the stages of the corresponding revised scale.",
+            "Bunching and the one-increment-for-every-three-existing-increments safeguard require the employee's prior service history and are handled separately."
         )
     )
 }
 
-private fun FourthCpcScale.existingPayRange(): IntRange = when (grade) {
-    "S-1" -> 750..940
-    "S-2" -> 775..1025
-    "S-2A" -> 775..1150
-    "S-3" -> 800..1150
-    "S-4" -> 825..1200
-    "S-5" -> 950..1500
-    "S-6" -> 975..1660
-    "S-7" -> 1200..2040
-    "S-8" -> 1350..2300
-    "S-9" -> 1400..2600
-    "S-10" -> 1640..2900
-    "S-11" -> 2000..2120
-    "S-12" -> 2000..3500
-    "S-13" -> 2375..3750
-    "S-14" -> 2500..4000
-    "S-15", "NEW SCALE" -> 2200..4000
-    "S-16" -> 2630..2630
-    "S-17" -> 2630..2780
-    "S-18" -> 3150..3350
-    "S-19" -> 3000..5000
-    "S-20" -> 3200..4700
-    "S-21" -> 3700..5000
-    "S-22" -> 3950..5000
-    "S-23" -> 3700..5700
-    "S-24" -> 4100..5700
-    "S-25" -> 4800..5700
-    "S-26" -> 5100..6300
-    "S-27" -> 5100..6700
-    "S-28" -> 4500..7300
-    "S-29" -> 5900..7300
-    "S-30" -> 7300..7600
-    "S-31" -> 7300..8000
-    "S-32" -> 7600..8000
-    "S-33" -> 8000..8000
-    "S-34" -> 9000..9000
-    else -> 1..0
+/** Parse one or more CPC scale notations into all valid pay stages. */
+fun parsePayScaleStages(notation: String): List<Int> {
+    val alternatives = notation.split("/")
+    return alternatives.flatMap { part ->
+        val numbers = Regex("\d+").findAll(part).map { it.value.toInt() }.toList()
+        if (numbers.size == 1) numbers
+        else if (numbers.size >= 3) {
+            val result = mutableListOf<Int>()
+            var current = numbers[0]
+            result += current
+            var i = 1
+            while (i + 1 < numbers.size) {
+                val increment = numbers[i]
+                val end = numbers[i + 1]
+                if (increment <= 0 || end < current) break
+                while (current + increment <= end) {
+                    current += increment
+                    result += current
+                }
+                if (current < end) {
+                    current = end
+                    result += current
+                }
+                i += 2
+            }
+            result
+        } else emptyList()
+    }.distinct().sorted()
 }
 
-private fun nextStageAtOrAbove(value: Int, scale: FourthCpcScale): Int {
-    if (value <= scale.revisedMinimum) return scale.revisedMinimum
-    if (value >= scale.revisedMaximum) return scale.revisedMaximum
-    var stage = scale.revisedMinimum
-    while (stage < value && stage < scale.revisedMaximum) stage += scale.revisedIncrement
-    return minOf(stage, scale.revisedMaximum)
+fun calculateFourthCpcNextIncrement(currentPay: Int, scale: FourthCpcScale): Int? {
+    return scale.existingStages.firstOrNull { it > currentPay }
 }
