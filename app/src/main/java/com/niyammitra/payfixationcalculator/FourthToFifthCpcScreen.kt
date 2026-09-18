@@ -42,7 +42,8 @@ fun FourthToFifthCpcScreen(
     var nextIncrementDateText by remember { mutableStateOf("") }
     var scaleMenu by remember { mutableStateOf(false) }
     var incrementSteps by remember(selectedScale, basicPayText) { mutableStateOf<List<FourthToFifthIncrementStep>>(emptyList()) }
-    var showEvents by remember { mutableStateOf(false) }\n    var eventScale by remember { mutableStateOf<FourthCpcScale?>(null) }\n    var eventPay by remember { mutableStateOf<Int?>(null) }\n    var eventDate by remember { mutableStateOf<Long?>(null) }
+    var showEvents by remember { mutableStateOf(false) }
+    var eventScale by remember { mutableStateOf<FourthCpcScale?>(null) }\n    var eventPay by remember { mutableStateOf<Int?>(null) }\n    var eventDate by remember { mutableStateOf<Long?>(null) }
 
     val basicPay = basicPayText.toIntOrNull()
     val payDate = parseFourthFiveDate(formatFourthFiveDateInput(payDateText))
@@ -55,8 +56,9 @@ fun FourthToFifthCpcScreen(
     val dateError = nextIncrementDateText.isNotBlank() && parsedNextIncrementDate == null
     val validNextIncrementDate = parsedNextIncrementDate?.takeIf { payDate != null && it > payDate && it <= fourthFiveConversionDate() }
     val latestIncrement = incrementSteps.lastOrNull()
-    val currentPay = latestIncrement?.pay ?: basicPay
-    val currentIncrementDate = latestIncrement?.date
+    val currentPay = eventPay ?: latestIncrement?.pay ?: basicPay
+    val currentIncrementDate = eventDate ?: latestIncrement?.date
+    val currentScale = eventScale ?: selectedScale
     val canAddIncrement = validStartingPosition && currentPay != null &&
         (currentIncrementDate == null || currentIncrementDate < fourthFiveConversionEndDate()) &&
         (currentIncrementDate != null || validNextIncrementDate != null) &&
@@ -96,6 +98,9 @@ fun FourthToFifthCpcScreen(
                                         basicPayText = ""
                                         nextIncrementDateText = ""
                                         incrementSteps = emptyList()
+                                        eventScale = null
+                                        eventPay = null
+                                        eventDate = null
                                         showEvents = false
                                         scaleMenu = false
                                     }
@@ -109,6 +114,9 @@ fun FourthToFifthCpcScreen(
                         onValueChange = { newValue ->
                             basicPayText = newValue.filter(Char::isDigit)
                             incrementSteps = emptyList()
+                            eventScale = null
+                            eventPay = null
+                            eventDate = null
                             showEvents = false
                         },
                         label = { Text("Basic Pay") },
@@ -178,12 +186,14 @@ fun FourthToFifthCpcScreen(
 
                 Button(
                     onClick = {
-                        val scale = selectedScale ?: return@Button
+                        val scale = currentScale ?: return@Button
                         val pay = currentPay ?: return@Button
                         val nextPay = calculateFourthCpcNextIncrement(pay, scale) ?: return@Button
                         val nextDate = currentIncrementDate?.let { addFourthFiveYear(it) } ?: validNextIncrementDate ?: return@Button
                         if (nextDate <= fourthFiveConversionEndDate()) {
                             incrementSteps = incrementSteps + FourthToFifthIncrementStep(nextPay, nextDate)
+                            eventPay = nextPay
+                            eventDate = nextDate
                             showEvents = false
                         }
                     },
@@ -235,11 +245,17 @@ fun FourthToFifthCpcScreen(
                     ) { Text("Add 4th CPC Event", fontWeight = FontWeight.Bold) }
                 }
 
-                if (showEvents && selectedScale != null && currentPay != null) {
+                if (showEvents && currentScale != null && currentPay != null) {
                     FourthCpcEventSection(
                         currentPay = currentPay,
-                        currentScale = selectedScale!!,
-                        currentDate = currentIncrementDate ?: payDate ?: fourthCpcStartDate()
+                        currentScale = currentScale,
+                        currentDate = currentIncrementDate ?: payDate ?: fourthCpcStartDate(),
+                        onEventApplied = { newScale, newPay, newDate ->
+                            eventScale = newScale
+                            eventPay = newPay
+                            eventDate = newDate
+                            showEvents = false
+                        }
                     )
                 }
 
