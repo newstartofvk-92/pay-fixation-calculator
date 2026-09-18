@@ -259,7 +259,7 @@ fun FourthToFifthCpcScreen(
 
                 conversionResult?.let { calculation ->
                     Text("Conversion Result", color = FourFiveTextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
-                        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("Audit Trail", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                                 RowValue("Existing Basic Pay", calculation.existingBasicPay)
@@ -316,10 +316,6 @@ fun FourthToFifthCpcScreen(
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(16.dp)) {
                     Text("Rule 8: the next increment is granted on the date it would have accrued in the existing scale. Case-specific provisos, bunching and other special adjustments require separate verification.", Modifier.padding(16.dp), color = FourFiveTextPrimary, fontSize = 12.sp)
                 }
-            }
-
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(16.dp)) {
-                Text("Rule 8: the next increment is granted on the date it would have accrued in the existing scale. The progression shown here uses that supplied date for the first revised-scale increment and advances subsequent increments by one year. Case-specific provisos, bunching and other special adjustments require separate verification.", Modifier.padding(16.dp), color = FourFiveTextPrimary, fontSize = 12.sp)
             }
 
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(16.dp)) {
