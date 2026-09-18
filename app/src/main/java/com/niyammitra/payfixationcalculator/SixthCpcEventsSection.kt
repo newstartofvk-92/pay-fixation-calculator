@@ -2,14 +2,12 @@ package com.niyammitra.payfixationcalculator
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.NumberFormat
@@ -19,7 +17,11 @@ import kotlin.math.ceil
 import kotlin.math.floor
 
 enum class SixthCpcEventKind { PROMOTION, FINANCIAL_UPGRADATION, PAY_SCALE_UPGRADATION }
-enum class InterimSixthCpcMethod { VIA_FIFTH_CPC_PRE_REVISED, WITHIN_SIXTH_CPC_RULE_13 }
+enum class HistoricalSixthCpcRoute {
+    SCALE_6500_10500_FROM_5500_9000,
+    SCALE_7450_11500_FROM_6500_10500,
+    RULE_13_IN_SIXTH_CPC
+}
 
 data class SixthCpcScaleUpgradeResult(
     val eventDate: Long,
@@ -31,7 +33,7 @@ data class SixthCpcScaleUpgradeResult(
     val newPayBand: String,
     val revisedBasicPay: Int,
     val nextIncrementDate: Long,
-    val interimMethod: InterimSixthCpcMethod? = null,
+    val historicalRoute: HistoricalSixthCpcRoute? = null,
     val sourcePreRevisedBasicPay: Int? = null,
     val fixationIncrement: Int? = null
 )
@@ -62,18 +64,28 @@ private fun payBandMinimum(title: String): Int = when (title.substringBefore(":"
     else -> 0
 }
 
-/** Rule 13 route: 3% of Basic Pay, discard decimal fraction, then round the increment up to next Rs.10. */
-private fun calculateInterimMethod2(payInPayBand: Int, gradePay: Int): Pair<Int, Int> {
+/**
+ * Historical fitment-table minima:
+ * 6500–10500 -> PB-2 minimum ₹12,090
+ * 7450–11500 -> PB-2 minimum ₹13,860
+ *
+ * Existing 6th-CPC Pay in Pay Band is NOT multiplied by 1.86 again.
+ */
+private fun historical6500Minimum(): Int = 12090
+private fun historical7450Minimum(): Int = 13860
+
+private fun calculate6500Fitment(existingPayInBand: Int): Int =
+    maxOf(existingPayInBand, historical6500Minimum())
+
+private fun calculate7450Fitment(existingPayInBand: Int): Int =
+    maxOf(existingPayInBand, historical7450Minimum())
+
+/** Rule 13: 3% of Basic Pay, discard decimal fraction, then round the increment up to next Rs.10. */
+private fun calculateRule13Increment(payInPayBand: Int, gradePay: Int): Pair<Int, Int> {
     val basic = payInPayBand + gradePay
     val wholeRupees = floor(basic * 0.03).toInt()
     val increment = (ceil(wholeRupees / 10.0) * 10.0).toInt()
     return (payInPayBand + increment) to increment
-}
-
-/** Pre-revised route: the upgraded 5th CPC basic is converted once using Rule 7 fitment. */
-private fun calculateInterimMethod1(preRevisedBasicPay: Int, targetMinimum: Int): Int {
-    val converted = (ceil((preRevisedBasicPay * 1.86) / 10.0) * 10.0).toInt()
-    return maxOf(converted, targetMinimum)
 }
 
 private fun currentPayInBand(chain: SixthCpcEventChain) = chain.increments.lastOrNull()?.payInPayBand
@@ -98,7 +110,7 @@ fun SixthCpcEventsSection(
     var showForm by remember { mutableStateOf(false) }
     var eventDate by remember { mutableStateOf<Long?>(null) }
     var eventKind by remember { mutableStateOf(SixthCpcEventKind.FINANCIAL_UPGRADATION) }
-    var interimMethod by remember { mutableStateOf(InterimSixthCpcMethod.VIA_FIFTH_CPC_PRE_REVISED) }
+    var historicalRoute by remember { mutableStateOf(HistoricalSixthCpcRoute.SCALE_6500_10500_FROM_5500_9000) }
     var targetBand by remember { mutableStateOf<SixthCpcPayBand?>(null) }
     var targetGp by remember { mutableStateOf<Int?>(null) }
     var fifthBasicText by remember { mutableStateOf("") }
@@ -157,14 +169,84 @@ fun SixthCpcEventsSection(
                     }
 
                     if (eventKind == SixthCpcEventKind.PAY_SCALE_UPGRADATION) {
-                        Box(Modifier.fillMaxWidth()) {
-                            OutlinedButton(onClick = { bandMenu = true }, modifier = Modifier.fillMaxWidth()) { Text(targetBand?.title ?: "Select upgraded / revised pay band", Modifier.weight(1f)); Text("▼") }
-                            DropdownMenu(expanded = bandMenu, onDismissRequest = { bandMenu = false }) { SixthToSeventhCpcData.payBands.forEach { band -> DropdownMenuItem(text = { Text(band.title) }, onClick = { targetBand = band; targetGp = null; bandMenu = false }) } }
+                        Text("Historical / scale-upgradation route", color = EventPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+
+                        EventRadio(
+                            "15.09.2006: ₹5500–9000 → ₹6500–10500",
+                            historicalRoute == HistoricalSixthCpcRoute.SCALE_6500_10500_FROM_5500_9000
+                        ) {
+                            historicalRoute = HistoricalSixthCpcRoute.SCALE_6500_10500_FROM_5500_9000
                         }
-                        targetBand?.let { band ->
-                            Box(Modifier.fillMaxWidth()) {
-                                OutlinedButton(onClick = { gpMenu = true }, modifier = Modifier.fillMaxWidth()) { Text(targetGp?.let(::money) ?: "Select Grade Pay", Modifier.weight(1f)); Text("▼") }
-                                DropdownMenu(expanded = gpMenu, onDismissRequest = { gpMenu = false }) { band.gradePays.forEach { gp -> DropdownMenuItem(text = { Text(money(gp)) }, onClick = { targetGp = gp; gpMenu = false }) } }
+
+                        EventRadio(
+                            "13.11.2009: ₹6500–10500 → ₹7450–11500 / GP ₹4600",
+                            historicalRoute == HistoricalSixthCpcRoute.SCALE_7450_11500_FROM_6500_10500
+                        ) {
+                            historicalRoute = HistoricalSixthCpcRoute.SCALE_7450_11500_FROM_6500_10500
+                        }
+
+                        EventRadio(
+                            "Other historical event: 6th CPC Rule 13",
+                            historicalRoute == HistoricalSixthCpcRoute.RULE_13_IN_SIXTH_CPC
+                        ) {
+                            historicalRoute = HistoricalSixthCpcRoute.RULE_13_IN_SIXTH_CPC
+                        }
+
+                        when (historicalRoute) {
+                            HistoricalSixthCpcRoute.SCALE_6500_10500_FROM_5500_9000 -> {
+                                Surface(
+                                    Modifier.fillMaxWidth(),
+                                    color = EventBlue.copy(alpha = .08f),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text("6500–10500 historical fixation", color = EventBlue, fontWeight = FontWeight.ExtraBold)
+                                        Text(
+                                            "For the ₹10,230 Pay-in-Pay-Band case, use the ₹6500–10500 fitment-table minimum of ₹12,090. Do NOT multiply ₹10,230 by 1.86 again.",
+                                            color = EventSecondary,
+                                            fontSize = 12.sp
+                                        )
+                                        Text(
+                                            "Expected: ₹10,230 + GP ₹4,200 → ₹12,090 + GP ₹4,200 = ₹16,290.",
+                                            color = EventPrimary,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+
+                            HistoricalSixthCpcRoute.SCALE_7450_11500_FROM_6500_10500 -> {
+                                Surface(
+                                    Modifier.fillMaxWidth(),
+                                    color = EventBlue.copy(alpha = .08f),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text("7450–11500 / GP ₹4600 historical fixation", color = EventBlue, fontWeight = FontWeight.ExtraBold)
+                                        Text("Use the ₹7450–11500 fitment-table minimum of ₹13,860 in PB-2.", color = EventSecondary, fontSize = 12.sp)
+                                        Text("Expected minimum: ₹13,860 + GP ₹4,600 = ₹18,460.", color = EventPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+
+                            HistoricalSixthCpcRoute.RULE_13_IN_SIXTH_CPC -> {
+                                Surface(
+                                    Modifier.fillMaxWidth(),
+                                    color = EventBlue.copy(alpha = .08f),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Column(Modifier.padding(14.dp)) {
+                                        val raw = basicPay * .03
+                                        val whole = floor(raw).toInt()
+                                        val increment = (ceil(whole / 10.0) * 10.0).toInt()
+                                        Text(
+                                            "Rule 13: 3% of Basic = ${String.format(Locale.US, "%.1f", raw)} → decimal ignored = ₹$whole → fixation increment = ₹$increment.",
+                                            color = EventSecondary,
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
                             }
                         }
                     } else {
@@ -185,9 +267,9 @@ fun SixthCpcEventsSection(
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text("HISTORICAL 6TH CPC EVENT", color = EventBlue, fontWeight = FontWeight.ExtraBold)
                                 Text("For dates 01 January 2006–29 August 2008, select the applicable historical route.", color = EventSecondary, fontSize = 12.sp)
-                                EventRadio("Method 1 — 5th CPC pre-revised scale first, then 6th CPC conversion", interimMethod == InterimSixthCpcMethod.VIA_FIFTH_CPC_PRE_REVISED) { interimMethod = InterimSixthCpcMethod.VIA_FIFTH_CPC_PRE_REVISED }
-                                EventRadio("Method 2 — within 6th CPC structure (Rule 13)", interimMethod == InterimSixthCpcMethod.WITHIN_SIXTH_CPC_RULE_13) { interimMethod = InterimSixthCpcMethod.WITHIN_SIXTH_CPC_RULE_13 }
-                                if (interimMethod == InterimSixthCpcMethod.VIA_FIFTH_CPC_PRE_REVISED) {
+                                EventRadio("Method 1 — 5th CPC pre-revised scale first, then 6th CPC conversion", interimMethod == HistoricalSixthCpcRoute.VIA_FIFTH_CPC_PRE_REVISED) { interimMethod = HistoricalSixthCpcRoute.VIA_FIFTH_CPC_PRE_REVISED }
+                                EventRadio("Method 2 — within 6th CPC structure (Rule 13)", interimMethod == HistoricalSixthCpcRoute.WITHIN_SIXTH_CPC_RULE_13) { interimMethod = HistoricalSixthCpcRoute.WITHIN_SIXTH_CPC_RULE_13 }
+                                if (interimMethod == HistoricalSixthCpcRoute.VIA_FIFTH_CPC_PRE_REVISED) {
                                     OutlinedTextField(value = fifthBasicText, onValueChange = { if (it.all(Char::isDigit)) fifthBasicText = it }, label = { Text("5th CPC basic pay after upgradation") }, supportingText = { Text("Enter the upgraded pre-revised basic immediately before 6th CPC conversion.") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true, modifier = Modifier.fillMaxWidth())
                                 } else {
                                     val raw = basicPay * .03
@@ -199,25 +281,64 @@ fun SixthCpcEventsSection(
                         }
                     }
 
-                    val canSave = eventDate != null && targetGp != null && (eventKind != SixthCpcEventKind.PAY_SCALE_UPGRADATION || targetBand != null) && (!isInterim || eventKind != SixthCpcEventKind.PAY_SCALE_UPGRADATION || interimMethod == InterimSixthCpcMethod.WITHIN_SIXTH_CPC_RULE_13 || fifthBasicText.toIntOrNull() != null)
+                    val canSave = when {
+                        eventDate == null -> false
+                        eventKind == SixthCpcEventKind.PAY_SCALE_UPGRADATION -> true
+                        else -> targetGp != null
+                    }
+
                     Button(onClick = {
                         val date = eventDate ?: return@Button
                         val gp = targetGp ?: return@Button
                         if (eventKind == SixthCpcEventKind.PAY_SCALE_UPGRADATION) {
-                            val band = targetBand ?: return@Button
-                            val source: Int
+                            val oldPb = payInBand
+                            val oldGp = gradePay
                             val newPb: Int
-                            val increment: Int
-                            if (isInterim && interimMethod == InterimSixthCpcMethod.VIA_FIFTH_CPC_PRE_REVISED) {
-                                source = fifthBasicText.toIntOrNull() ?: return@Button
-                                newPb = calculateInterimMethod1(source, payBandMinimum(band.title))
-                                increment = 0
-                            } else if (isInterim) {
-                                source = basicPay
-                                val calculated = calculateInterimMethod2(payInBand, gradePay)
-                                newPb = calculated.first
-                                increment = calculated.second
-                            } else {
+                            val newGp: Int
+                            val newBand = "PB-2: ₹9,300–34,800"
+                            val fixationIncrement: Int?
+                            val source = oldPb
+
+                            when (historicalRoute) {
+                                HistoricalSixthCpcRoute.SCALE_6500_10500_FROM_5500_9000 -> {
+                                    newPb = calculate6500Fitment(oldPb)
+                                    newGp = 4200
+                                    fixationIncrement = null
+                                }
+
+                                HistoricalSixthCpcRoute.SCALE_7450_11500_FROM_6500_10500 -> {
+                                    newPb = calculate7450Fitment(oldPb)
+                                    newGp = 4600
+                                    fixationIncrement = null
+                                }
+
+                                HistoricalSixthCpcRoute.RULE_13_IN_SIXTH_CPC -> {
+                                    val gp = targetGp ?: return@Button
+                                    val calculated = calculateRule13Increment(oldPb, oldGp)
+                                    newPb = calculated.first
+                                    newGp = gp
+                                    fixationIncrement = calculated.second
+                                }
+                            }
+
+                            events = events + SixthCpcEventChain(
+                                kind = SixthCpcEventKind.PAY_SCALE_UPGRADATION,
+                                scaleUpgrade = SixthCpcScaleUpgradeResult(
+                                    eventDate = date,
+                                    oldPayInPayBand = oldPb,
+                                    oldGradePay = oldGp,
+                                    oldPayBand = payBand,
+                                    newPayInPayBand = newPb,
+                                    newGradePay = newGp,
+                                    newPayBand = newBand,
+                                    revisedBasicPay = newPb + newGp,
+                                    nextIncrementDate = nextJuly(date),
+                                    historicalRoute = historicalRoute,
+                                    sourcePreRevisedBasicPay = source,
+                                    fixationIncrement = fixationIncrement
+                                )
+                            )
+                        } else {
                                 source = basicPay
                                 newPb = payInBand
                                 increment = 0
@@ -259,7 +380,7 @@ private fun EventCard(chain: SixthCpcEventChain, index: Int, onDelete: () -> Uni
             }
             chain.scaleUpgrade?.let { r ->
                 Text("Date: ${dateText(r.eventDate)}", color = EventPrimary, fontWeight = FontWeight.Bold)
-                Text(if (r.interimMethod == InterimSixthCpcMethod.VIA_FIFTH_CPC_PRE_REVISED) "Historical Method 1 — 5th CPC pre-revised scale first" else if (r.interimMethod == InterimSixthCpcMethod.WITHIN_SIXTH_CPC_RULE_13) "Historical Method 2 — 6th CPC Rule 13" else "Ordinary scale placement", color = EventBlue, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                Text(if (r.historicalRoute == HistoricalSixthCpcRoute.VIA_FIFTH_CPC_PRE_REVISED) "Historical Method 1 — 5th CPC pre-revised scale first" else if (r.historicalRoute == HistoricalSixthCpcRoute.WITHIN_SIXTH_CPC_RULE_13) "Historical Method 2 — 6th CPC Rule 13" else "Ordinary scale placement", color = EventBlue, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
                 r.sourcePreRevisedBasicPay?.let { RowValue("Source 5th CPC basic", it) }
                 r.fixationIncrement?.takeIf { it > 0 }?.let { RowValue("Fixation Increment", it) }
                 RowValue("Old Pay in Pay Band", r.oldPayInPayBand); RowValue("Old Grade Pay", r.oldGradePay); RowValue("Placed Pay in Pay Band", r.newPayInPayBand); RowValue("New Grade Pay", r.newGradePay); RowValue("Revised Basic Pay", r.revisedBasicPay)
