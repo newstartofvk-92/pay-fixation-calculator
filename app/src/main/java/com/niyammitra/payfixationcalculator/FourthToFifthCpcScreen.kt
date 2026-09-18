@@ -238,11 +238,6 @@ fun FourthToFifthCpcScreen(
             }
 
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(16.dp)) {
-                    Text("Rule 8: the next increment is granted on the date it would have accrued in the existing scale. The progression shown here uses that supplied date for the first revised-scale increment and advances subsequent increments by one year. Case-specific provisos, bunching and other special adjustments require separate verification.", Modifier.padding(16.dp), color = FourFiveTextPrimary, fontSize = 12.sp)
-                }
-            }
-
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(16.dp)) {
                 Text("This calculator implements the standard Rule 7 replacement-scale calculation. Special pay, NPA, personal pay, bunching, stagnation increments and post-01.01.1996 fixation require case-specific verification.", Modifier.padding(16.dp), color = FourFiveTextPrimary, fontSize = 12.sp)
             }
             Spacer(Modifier.height(20.dp))
