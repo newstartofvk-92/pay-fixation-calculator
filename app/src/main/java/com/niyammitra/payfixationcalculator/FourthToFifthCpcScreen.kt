@@ -283,6 +283,19 @@ fun FourthToFifthCpcScreen(
                             }
                         }
                     }
+
+                    // Continue the historical journey inside the 5th CPC after
+                    // the 01.01.1996 conversion. The first 5th CPC increment
+                    // follows the next annual increment date from the final
+                    // 4th CPC position used for conversion.
+                    val firstFifthIncrementDate = timelineDate?.let { addFourthFiveYear(it) }
+                    FifthCpcHistoricalIncrementSection(
+                        initialPay = calculation.revisedBasicPay,
+                        revisedScale = calculation.scale.revisedScale,
+                        firstIncrementDate = firstFifthIncrementDate,
+                        conversionDate = fourthFiveConversionDate(),
+                        onContinueToSixth = onContinueToSixth
+                    )
                 }
 
                 if (showEvents && currentScale != null && currentPay != null) {
