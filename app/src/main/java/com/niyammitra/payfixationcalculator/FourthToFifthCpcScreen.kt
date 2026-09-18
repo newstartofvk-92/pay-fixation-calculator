@@ -134,7 +134,98 @@ fun FourthToFifthCpcScreen(
                 }
             }
 
-            result?.let { calculation ->
+            if (payDate == fourthFiveConversionDate() && validStartingPosition) {
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Next Increment Date", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("Under Rule 8, enter the date on which the employee would have drawn the next increment in the existing 4th CPC scale. This date becomes the first increment date in the revised 5th CPC scale.", color = FourFiveTextSecondary, fontSize = 12.sp)
+                        OutlinedTextField(
+                            value = nextIncrementDateText,
+                            onValueChange = { newValue ->
+                                nextIncrementDateText = newValue.filter(Char::isDigit).take(8)
+                            },
+                            label = { Text("Next Increment Date in 4th CPC scale") },
+                            placeholder = { Text("dd/MM/yyyy") },
+                            supportingText = { Text(if (dateError) "Enter a valid date in dd/MM/yyyy format." else "The date may be 01/01/1996 where the increment fell on the conversion date.") },
+                            isError = dateError,
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            visualTransformation = FourthFiveDateVisualTransformation,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        if (parsedNextIncrementDate != null && payDate != null && parsedNextIncrementDate <= payDate) {
+                            Text("The next increment date must be after the entered pay date.", color = Color(0xFFC62828), fontSize = 12.sp)
+                        } else if (parsedNextIncrementDate != null && parsedNextIncrementDate > fourthFiveConversionDate()) {
+                            Text("The next increment date cannot be after 01 January 1996.", color = Color(0xFFC62828), fontSize = 12.sp)
+                        }
+                    }
+                }
+
+                Text("Conversion Result", color = FourFiveTextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Audit Trail", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                        RowValue("Existing Basic Pay", calculation.existingBasicPay)
+                        RowValue("DA @ 148%", calculation.dearnessAllowance)
+                        RowValue("1st Interim Relief", calculation.firstInterimRelief)
+                        RowValue("2nd Interim Relief", calculation.secondInterimRelief)
+                        RowValue("Existing Emoluments", calculation.existingEmoluments)
+                        HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                        RowValue("40% Fitment Weightage", calculation.fitmentWeightage)
+                        RowValue("Fitment Total", calculation.fitmentTotal)
+                        Text("Corresponding 5th CPC Scale", color = FourFiveTextSecondary, fontSize = 12.sp)
+                        Text(calculation.scale.revisedScale, color = FourFiveTextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Surface(Modifier.fillMaxWidth().padding(top = 4.dp), color = FourFiveBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
+                            Column(Modifier.padding(14.dp)) {
+                                Text("5th CPC Revised Basic Pay", color = FourFiveTextSecondary, fontSize = 13.sp)
+                                Text(formatFourFiveCurrency(calculation.revisedBasicPay), color = FourFiveBlue, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
+                                Text("Pay on 01 January 1996", color = FourFiveTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                if (incrementSteps.isNotEmpty()) {
+                    FourthToFifthIncrementProgressionCard(calculation, incrementSteps) { index ->
+                        incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) }
+                        showEvents = false
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        val scale = selectedScale ?: return@Button
+                        val pay = currentPay ?: return@Button
+                        val nextPay = calculateFourthCpcNextIncrement(pay, scale) ?: return@Button
+                        val nextDate = currentIncrementDate?.let { addFourthFiveYear(it) } ?: validNextIncrementDate ?: return@Button
+                        if (nextDate <= fourthFiveConversionEndDate()) incrementSteps = incrementSteps + FourthToFifthIncrementStep(nextPay, nextDate)
+                    },
+                    enabled = validStartingPosition && canAddIncrement,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = FourFiveBlue),
+                    shape = RoundedCornerShape(12.dp)
+                ) { Text("4th CPC Next Increment", fontWeight = FontWeight.Bold) }
+
+                if (incrementSteps.isEmpty() && validNextIncrementDate != null) Text("The first added increment will be shown on ${formatFourthFiveDate(validNextIncrementDate)}. Subsequent increments advance by one year.", color = FourFiveTextSecondary, fontSize = 12.sp)
+
+                val calculatedTitle = calculation.scale.revisedScale.removePrefix("Rs. ").substringBefore(" (").trim()
+                val matchingFifthScales = FifthToSixthCpcData.scales.filter { scale -> scale.title.removePrefix("Rs. ").substringBefore(" (").trim() == calculatedTitle }
+                val fifthScale = if (payDate == fourthFiveConversionDate()) matchingFifthScales.firstOrNull { scale ->
+                    val payInBand = currentPay?.minus(scale.gradePay)
+                    payInBand != null && payInBand in scale.payBandMinimum..scale.payBandMaximum
+                } ?: matchingFifthScales.firstOrNull() else null
+
+                if (!showEvents) Button(onClick = { showEvents = true }, enabled = validStartingPosition && currentPay != null, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = FourFiveBlue), shape = RoundedCornerShape(12.dp)) { Text("Add 4th CPC Event", fontWeight = FontWeight.Bold) }
+
+                if (showEvents && selectedScale != null && currentPay != null) {
+                    FourthCpcEventSection(
+                        currentPay = currentPay,
+                        currentScale = selectedScale!!,
+                        currentDate = payDate ?: fourthCpcStartDate()
+                    )
+                }
+
+    
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("Next Increment Date", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
