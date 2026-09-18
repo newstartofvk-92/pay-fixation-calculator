@@ -60,7 +60,7 @@ fun FourthToFifthCpcScreen(
     val canAddIncrement = validStartingPosition && currentPay != null &&
         (currentIncrementDate == null || currentIncrementDate < fourthFiveConversionEndDate()) &&
         (currentIncrementDate != null || validNextIncrementDate != null) &&
-        calculateFourthToFifthNextIncrement(currentPay, selectedScale!!) != null
+        calculateFourthCpcNextIncrement(currentPay, selectedScale!!) != null
 
     Column(Modifier.fillMaxSize().background(FourFiveBackground)) {
         Surface(Modifier.fillMaxWidth(), color = FourFiveHeaderBlue, shadowElevation = 3.dp) {
@@ -238,7 +238,7 @@ private fun FourthToFifthIncrementProgressionCard(calculation: FourthToFifthResu
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("4th CPC Increment Progression", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-            Text("Starting 4th CPC pay: ${formatFourFiveCurrency(basicPay ?: calculation.existingBasicPay)}", color = FourFiveTextSecondary, fontSize = 13.sp)
+            Text("Starting 4th CPC pay: ${formatFourFiveCurrency(calculation.existingBasicPay)}", color = FourFiveTextSecondary, fontSize = 13.sp)
             steps.forEachIndexed { index, step ->
                 Surface(Modifier.fillMaxWidth(), color = FourFiveBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
                     Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
