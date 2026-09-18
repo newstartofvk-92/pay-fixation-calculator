@@ -53,10 +53,10 @@ fun FourthToFifthCpcScreen(
         runCatching { calculateFourthToFifthCpc(basicPay, selectedScale!!) }.getOrNull()
     } else null
     val dateError = nextIncrementDateText.isNotBlank() && parsedNextIncrementDate == null
-    val validNextIncrementDate = parsedNextIncrementDate?.takeIf { it >= fourthFiveConversionDate() }
+    val validNextIncrementDate = parsedNextIncrementDate?.takeIf { payDate != null && it > payDate && it <= fourthFiveConversionDate() }
     val latestIncrement = incrementSteps.lastOrNull()
     val currentPay = latestIncrement?.pay ?: basicPay
-    val currentIncrementDate = latestIncrement?.date ?: payDate
+    val currentIncrementDate = latestIncrement?.date
     val canAddIncrement = validStartingPosition && currentPay != null &&
         (currentIncrementDate == null || currentIncrementDate < fourthFiveConversionEndDate()) &&
         (currentIncrementDate != null || validNextIncrementDate != null) &&
@@ -210,13 +210,13 @@ fun FourthToFifthCpcScreen(
                     payInBand != null && payInBand in scale.payBandMinimum..scale.payBandMaximum
                 } ?: matchingFifthScales.firstOrNull() else null
 
-                if (!showEvents) Button(onClick = { showEvents = true }, enabled = fifthScale != null && currentPay != null, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = FourFiveBlue), shape = RoundedCornerShape(12.dp)) { Text("Add 4th CPC Event", fontWeight = FontWeight.Bold) }
+                if (!showEvents) Button(onClick = { showEvents = true }, enabled = validStartingPosition && currentPay != null, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = FourFiveBlue), shape = RoundedCornerShape(12.dp)) { Text("Add 4th CPC Event", fontWeight = FontWeight.Bold) }
 
-                if (showEvents && fifthScale != null && currentPay != null) {
+                if (showEvents && selectedScale != null && currentPay != null) {
                     FourthCpcEventSection(
                         currentPay = currentPay,
                         currentScale = selectedScale!!,
-                        currentDate = currentIncrementDate ?: (payDate ?: fourthCpcStartDate())
+                        currentDate = payDate ?: fourthCpcStartDate()
                     )
                 }
 
@@ -238,14 +238,14 @@ private fun FourthToFifthIncrementProgressionCard(calculation: FourthToFifthResu
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("4th CPC Increment Progression", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-            Text("Pay fixed on 01 January 1996: ${formatFourFiveCurrency(calculation.revisedBasicPay)}", color = FourFiveTextSecondary, fontSize = 13.sp)
+            Text("Starting 4th CPC pay: ${formatFourFiveCurrency(basicPay ?: calculation.existingBasicPay)}", color = FourFiveTextSecondary, fontSize = 13.sp)
             steps.forEachIndexed { index, step ->
                 Surface(Modifier.fillMaxWidth(), color = FourFiveBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
                     Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Column(Modifier.weight(1f)) {
                             Text("Increment ${index + 1}", color = FourFiveTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                             Text("Date: ${formatFourthFiveDate(step.date)}", color = FourFiveTextPrimary, fontSize = 13.sp)
-                            Text("5th CPC Basic Pay: ${formatFourFiveCurrency(step.pay)}", color = FourFiveBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                            Text("4th CPC Basic Pay: ${formatFourFiveCurrency(step.pay)}", color = FourFiveBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                         }
                         TextButton(onClick = { onDelete(index) }) { Text("Delete", fontWeight = FontWeight.Bold) }
                     }
