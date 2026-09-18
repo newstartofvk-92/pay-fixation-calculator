@@ -186,6 +186,18 @@ fun FourthToFifthCpcScreen(
                     }
                 }
 
+                if (eventPay != null && eventScale != null && eventDate != null) {
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Current 4th CPC Position", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                            RowValue("Basic Pay", eventPay!!)
+                            Text("Scale: ${eventScale!!.grade}: ${eventScale!!.existingScale}", color = FourFiveTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("Effective Date: ${formatFourthFiveDate(eventDate!!)}", color = FourFiveTextSecondary, fontSize = 13.sp)
+                            Text("The next increment will now be calculated from this event position.", color = FourFiveTextSecondary, fontSize = 12.sp)
+                        }
+                    }
+                }
+
                 if (!showEvents) {
                     Button(
                         onClick = { showEvents = true },
