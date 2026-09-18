@@ -258,36 +258,79 @@ fun FourthToFifthCpcScreen(
                 }
 
                 conversionResult?.let { calculation ->
-                    Text("Conversion Result", color = FourFiveTextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
-                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
-                            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text("Audit Trail", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                                RowValue("Existing Basic Pay", calculation.existingBasicPay)
-                                RowValue("DA @ 148%", calculation.dearnessAllowance)
-                                RowValue("1st Interim Relief", calculation.firstInterimRelief)
-                                RowValue("2nd Interim Relief", calculation.secondInterimRelief)
-                                RowValue("Existing Emoluments", calculation.existingEmoluments)
-                                HorizontalDivider(Modifier.padding(vertical = 4.dp))
-                                RowValue("40% Fitment Weightage", calculation.fitmentWeightage)
-                                RowValue("Fitment Total", calculation.fitmentTotal)
-                                Text("Corresponding 5th CPC Scale", color = FourFiveTextSecondary, fontSize = 12.sp)
-                                Text(calculation.scale.revisedScale, color = FourFiveTextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                                Surface(Modifier.fillMaxWidth().padding(top = 4.dp), color = FourFiveBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
-                                    Column(Modifier.padding(14.dp)) {
-                                        Text("5th CPC Revised Basic Pay", color = FourFiveTextSecondary, fontSize = 13.sp)
-                                        Text(formatFourFiveCurrency(calculation.revisedBasicPay), color = FourFiveBlue, fontSize = 23.sp, fontWeight = FontWeight.ExtraBold)
-                                        Text("Pay on 01 January 1996", color = FourFiveTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    }
+                    Text(
+                        "Conversion Result",
+                        color = FourFiveTextPrimary,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Card(
+                        Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(Color.White),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Column(
+                            Modifier.padding(18.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Text(
+                                "Audit Trail",
+                                color = FourFiveBlue,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            RowValue("Existing Basic Pay", calculation.existingBasicPay)
+                            RowValue("DA @ 148%", calculation.dearnessAllowance)
+                            RowValue("1st Interim Relief", calculation.firstInterimRelief)
+                            RowValue("2nd Interim Relief", calculation.secondInterimRelief)
+                            RowValue("Existing Emoluments", calculation.existingEmoluments)
+                            HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                            RowValue("40% Fitment Weightage", calculation.fitmentWeightage)
+                            RowValue("Fitment Total", calculation.fitmentTotal)
+                            Text(
+                                "Corresponding 5th CPC Scale",
+                                color = FourFiveTextSecondary,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                calculation.scale.revisedScale,
+                                color = FourFiveTextPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Surface(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp),
+                                color = FourFiveBlue.copy(alpha = .06f),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(Modifier.padding(14.dp)) {
+                                    Text(
+                                        "5th CPC Revised Basic Pay",
+                                        color = FourFiveTextSecondary,
+                                        fontSize = 13.sp
+                                    )
+                                    Text(
+                                        formatFourFiveCurrency(calculation.revisedBasicPay),
+                                        color = FourFiveBlue,
+                                        fontSize = 23.sp,
+                                        fontWeight = FontWeight.ExtraBold
+                                    )
+                                    Text(
+                                        "Pay on 01 January 1996",
+                                        color = FourFiveTextSecondary,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
                             }
                         }
                     }
 
-                    // Continue the historical journey inside the 5th CPC after
-                    // the 01.01.1996 conversion. The first 5th CPC increment
-                    // follows the next annual increment date from the final
-                    // 4th CPC position used for conversion.
-                    val firstFifthIncrementDate = timelineDate?.let { addFourthFiveYear(it) }
+                    val firstFifthIncrementDate =
+                        timelineDate?.let { addFourthFiveYear(it) }
+
                     FifthCpcHistoricalIncrementSection(
                         initialPay = calculation.revisedBasicPay,
                         revisedScale = calculation.scale.revisedScale,
