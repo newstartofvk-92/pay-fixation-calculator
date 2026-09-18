@@ -85,7 +85,10 @@ fun FourthToFifthCpcScreen(
                             Text("▼")
                         }
                         DropdownMenu(expanded = scaleMenu, onDismissRequest = { scaleMenu = false }) {
-                            FourthToFifthCpcData.scales.forEach { scale ->
+                            FourthToFifthCpcData.scales.forEachIndexed { index, scale ->
+                                if (index > 0 && FourthToFifthCpcData.scales[index - 1].grade.substringBefore(" (") != scale.grade.substringBefore(" (")) {
+                                    HorizontalDivider()
+                                }
                                 DropdownMenuItem(
                                     text = { Text("${scale.grade}: ${scale.existingScale}") },
                                     onClick = {
