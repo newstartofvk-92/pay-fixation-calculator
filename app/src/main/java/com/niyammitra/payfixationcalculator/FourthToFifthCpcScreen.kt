@@ -186,6 +186,16 @@ fun FourthToFifthCpcScreen(
                     }
                 }
 
+                if (!showEvents) {
+                    Button(
+                        onClick = { showEvents = true },
+                        enabled = currentPay != null,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = FourFiveBlue),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Add 4th CPC Event", fontWeight = FontWeight.Bold) }
+                }
+
                 Button(
                     onClick = {
                         val scale = currentScale ?: return@Button
@@ -237,16 +247,6 @@ fun FourthToFifthCpcScreen(
                     }
                 }
 
-                if (!showEvents) {
-                    Button(
-                        onClick = { showEvents = true },
-                        enabled = currentPay != null,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = FourFiveBlue),
-                        shape = RoundedCornerShape(12.dp)
-                    ) { Text("Add 4th CPC Event", fontWeight = FontWeight.Bold) }
-                }
-
                 if (showEvents && currentScale != null && currentPay != null) {
                     FourthCpcEventSection(
                         currentPay = currentPay,
@@ -256,6 +256,8 @@ fun FourthToFifthCpcScreen(
                             eventScale = newScale
                             eventPay = newPay
                             eventDate = newDate
+                            incrementSteps = incrementSteps.filter { it.date < newDate }
+                            nextIncrementDateText = ""
                             showEvents = false
                         }
                     )
