@@ -55,9 +55,9 @@ fun FourthToFifthCpcScreen(
     val dateError = nextIncrementDateText.isNotBlank() && parsedNextIncrementDate == null
     val validNextIncrementDate = parsedNextIncrementDate?.takeIf { it >= fourthFiveConversionDate() }
     val latestIncrement = incrementSteps.lastOrNull()
-    val currentPay = latestIncrement?.pay ?: result?.revisedBasicPay
-    val currentIncrementDate = latestIncrement?.date
-    val canAddIncrement = result != null && currentPay != null &&
+    val currentPay = latestIncrement?.pay ?: basicPay
+    val currentIncrementDate = latestIncrement?.date ?: payDate
+    val canAddIncrement = validStartingPosition && currentPay != null &&
         (currentIncrementDate == null || currentIncrementDate < fourthFiveConversionEndDate()) &&
         (currentIncrementDate != null || validNextIncrementDate != null) &&
         calculateFourthToFifthNextIncrement(currentPay, selectedScale!!) != null
@@ -205,17 +205,17 @@ fun FourthToFifthCpcScreen(
 
                 val calculatedTitle = calculation.scale.revisedScale.removePrefix("Rs. ").substringBefore(" (").trim()
                 val matchingFifthScales = FifthToSixthCpcData.scales.filter { scale -> scale.title.removePrefix("Rs. ").substringBefore(" (").trim() == calculatedTitle }
-                val fifthScale = matchingFifthScales.firstOrNull { scale ->
+                val fifthScale = if (payDate == fourthFiveConversionDate()) matchingFifthScales.firstOrNull { scale ->
                     val payInBand = currentPay?.minus(scale.gradePay)
                     payInBand != null && payInBand in scale.payBandMinimum..scale.payBandMaximum
-                } ?: matchingFifthScales.firstOrNull()
+                } ?: matchingFifthScales.firstOrNull() else null
 
                 if (!showEvents) Button(onClick = { showEvents = true }, enabled = fifthScale != null && currentPay != null, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = FourFiveBlue), shape = RoundedCornerShape(12.dp)) { Text("Add 4th CPC Event", fontWeight = FontWeight.Bold) }
 
                 if (showEvents && fifthScale != null && currentPay != null) {
                     FourthCpcEventSection(
                         currentPay = currentPay,
-                        currentScale = selectedScale ?: return@let,
+                        currentScale = selectedScale!!,
                         currentDate = currentIncrementDate ?: (payDate ?: fourthCpcStartDate())
                     )
                 }
