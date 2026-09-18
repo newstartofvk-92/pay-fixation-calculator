@@ -11,7 +11,12 @@ import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FourthCpcEventSection(\n    currentPay: Int,\n    currentScale: FourthCpcScale,\n    currentDate: Long,\n    onEventApplied: (FourthCpcScale, Int, Long) -> Unit\n) {
+fun FourthCpcEventSection(
+    currentPay: Int,
+    currentScale: FourthCpcScale,
+    currentDate: Long,
+    onEventApplied: (FourthCpcScale, Int, Long) -> Unit
+) {
     var eventDate by remember { mutableStateOf<Long?>(null) }
     var target by remember { mutableStateOf<FourthCpcScale?>(null) }
     var eventType by remember { mutableStateOf("Promotion") }
@@ -37,7 +42,9 @@ fun FourthCpcEventSection(\n    currentPay: Int,\n    currentScale: FourthCpcSca
         Button(onClick = {
             val t = target ?: return@Button
             val oneIncrement = calculateFourthCpcNextIncrement(currentPay, currentScale) ?: currentPay
-            val fixedPay = t.existingStages.firstOrNull { it >= oneIncrement } ?: t.existingStages.lastOrNull() ?: oneIncrement\n            result = fixedPay\n            eventDate?.let { onEventApplied(t, fixedPay, it) }
+            val fixedPay = t.existingStages.firstOrNull { it >= oneIncrement } ?: t.existingStages.lastOrNull() ?: oneIncrement
+            result = fixedPay
+            eventDate?.let { onEventApplied(t, fixedPay, it) }
         }, enabled = eventDate != null && eventDate!! >= currentDate && eventDate!! <= fourthEventConversionDate() && target != null, modifier = Modifier.fillMaxWidth()) {
             Text("Apply 4th CPC Event")
         }
