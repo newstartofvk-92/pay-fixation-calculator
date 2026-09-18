@@ -46,6 +46,7 @@ fun FourthToFifthCpcScreen(
     var eventScale by remember { mutableStateOf<FourthCpcScale?>(null) }
     var eventPay by remember { mutableStateOf<Int?>(null) }
     var eventDate by remember { mutableStateOf<Long?>(null) }
+    var conversionActivated by remember { mutableStateOf(false) }
 
     val basicPay = basicPayText.toIntOrNull()
     val payDate = parseFourthFiveDate(formatFourthFiveDateInput(payDateText))
@@ -66,7 +67,7 @@ fun FourthToFifthCpcScreen(
     val conversionReached = conversionPay != null && conversionScale != null &&
         ((currentIncrementDate != null && currentIncrementDate >= fourthFiveConversionDate()) ||
             (currentIncrementDate == null && payDate == fourthFiveConversionDate()))
-    val conversionResult = if (conversionReached && conversionPay != null && conversionScale != null) {
+    val conversionResult = if (conversionActivated && conversionReached && conversionPay != null && conversionScale != null) {
         runCatching { calculateFourthToFifthCpc(conversionPay, conversionScale) }.getOrNull()
     } else null
     val canAddIncrement = validStartingPosition && currentPay != null &&
@@ -112,6 +113,7 @@ fun FourthToFifthCpcScreen(
                                         eventPay = null
                                         eventDate = null
                                         showEvents = false
+                                        conversionActivated = false
                                         scaleMenu = false
                                     }
                                 )
@@ -128,6 +130,7 @@ fun FourthToFifthCpcScreen(
                             eventPay = null
                             eventDate = null
                             showEvents = false
+                            conversionActivated = false
                         },
                         label = { Text("Basic Pay") },
                         placeholder = { Text("e.g. 870") },
@@ -137,7 +140,7 @@ fun FourthToFifthCpcScreen(
                     )
                     OutlinedTextField(
                         value = payDateText,
-                        onValueChange = { newValue -> payDateText = newValue.filter(Char::isDigit).take(8); incrementSteps = emptyList(); eventScale = null; eventPay = null; eventDate = null; showEvents = false },
+                        onValueChange = { newValue -> payDateText = newValue.filter(Char::isDigit).take(8); incrementSteps = emptyList(); eventScale = null; eventPay = null; eventDate = null; showEvents = false; conversionActivated = false },
                         label = { Text("Pay Date (dd/MM/yyyy)") },
                         placeholder = { Text("e.g. 01/07/1988") },
                         supportingText = { Text("Enter a date from 01 January 1986 through 01 January 1996.") },
@@ -237,6 +240,21 @@ fun FourthToFifthCpcScreen(
 
                 if (incrementSteps.isEmpty() && validNextIncrementDate != null) {
                     Text("The first added increment will be shown on ${formatFourthFiveDate(validNextIncrementDate)}. Subsequent increments advance by one year.", color = FourFiveTextSecondary, fontSize = 12.sp)
+                }
+
+                if (conversionReached && !conversionActivated) {
+                    Button(
+                        onClick = { conversionActivated = true },
+                        enabled = conversionPay != null && conversionScale != null,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = FourFiveBlue),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text("Convert to 5th CPC", fontWeight = FontWeight.Bold) }
+                    Text(
+                        "The 4th CPC timeline has reached 01 January 1996. Tap above to calculate the 5th CPC revised basic pay.",
+                        color = FourFiveTextSecondary,
+                        fontSize = 12.sp
+                    )
                 }
 
                 if (conversionResult != null) {
