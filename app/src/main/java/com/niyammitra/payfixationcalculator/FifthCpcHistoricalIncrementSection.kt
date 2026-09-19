@@ -14,6 +14,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 data class FifthCpcHistoricalIncrementStep(val pay: Int, val date: Long)
+data class FifthCpcHistoricalEventStep(val type: String, val scale: String, val pay: Int, val date: Long)
 
 private val FifthHistoricalBlue = Color(0xFF1769AA)
 private val FifthHistoricalText = Color(0xFF172B4D)
@@ -36,6 +37,7 @@ fun FifthCpcHistoricalIncrementSection(
     var eventPay by remember { mutableStateOf<Int?>(null) }
     var eventDate by remember { mutableStateOf<Long?>(null) }
     var showEventSection by remember { mutableStateOf(false) }
+    var eventHistory by remember(initialPay, revisedScale, conversionDate, firstIncrementDate) { mutableStateOf<List<FifthCpcHistoricalEventStep>>(emptyList()) }
 
     val initialScale = remember(revisedScale) {
         findFifthScaleForHistoricalJourney(revisedScale)
@@ -104,6 +106,24 @@ fun FifthCpcHistoricalIncrementSection(
             }
         }
 
+        if (eventHistory.isNotEmpty()) {
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("5th CPC Event History", color = FifthHistoricalBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                    eventHistory.forEachIndexed { index, event ->
+                        Surface(Modifier.fillMaxWidth(), color = FifthHistoricalBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
+                            Column(Modifier.padding(14.dp)) {
+                                Text("Event " + (index + 1) + ": " + event.type, color = FifthHistoricalSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Text("Date: " + formatFifthHistoricalDate(event.date), color = FifthHistoricalText, fontSize = 13.sp)
+                                Text("Scale: " + event.scale, color = FifthHistoricalText, fontSize = 13.sp)
+                                Text("Fixed Basic Pay: " + formatFifthHistoricalCurrency(event.pay), color = FifthHistoricalBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if (!showEventSection) {
             Button(
                 onClick = { showEventSection = true },
@@ -142,6 +162,12 @@ fun FifthCpcHistoricalIncrementSection(
                         currentScale = currentScale,
                         currentDate = currentDate,
                         onEventApplied = { newScale, newPay, newDate ->
+                            eventHistory = eventHistory + FifthCpcHistoricalEventStep(
+                                type = "Applied Event",
+                                scale = newScale.title,
+                                pay = newPay,
+                                date = newDate
+                            )
                             eventScale = newScale
                             eventPay = newPay
                             eventDate = newDate
