@@ -20,6 +20,7 @@ fun FifthCpcEventSection(
     var eventDate by remember { mutableStateOf<Long?>(null) }
     var targetScale by remember { mutableStateOf<FifthCpcScale?>(null) }
     var eventType by remember { mutableStateOf("Promotion") }
+    var placementMethod by remember { mutableStateOf("Next Higher After Increment") }
     var menuExpanded by remember { mutableStateOf(false) }
     var pickerOpen by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<Int?>(null) }
@@ -33,8 +34,9 @@ fun FifthCpcEventSection(
     }
 
     val feederIncrementedPay = currentStages.firstOrNull { it > currentPay } ?: currentPay
+    val placementBasePay = if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") currentPay else feederIncrementedPay
     val fixedPay = if (target != null && targetStages.isNotEmpty()) {
-        targetStages.firstOrNull { it >= feederIncrementedPay } ?: targetStages.last()
+        targetStages.firstOrNull { it >= placementBasePay } ?: targetStages.last()
     } else null
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -54,18 +56,33 @@ fun FifthCpcEventSection(
             Spacer(Modifier.width(12.dp))
             RadioButton(eventType == "ACP", { eventType = "ACP" })
             Text("ACP", modifier = Modifier.padding(top = 12.dp))
+            Spacer(Modifier.width(8.dp))
+            RadioButton(eventType == "Scale Upgradation", { eventType = "Scale Upgradation" })
+            Text("Scale Upgradation", modifier = Modifier.padding(top = 12.dp))
+        }
+
+        if (eventType == "Scale Upgradation") {
+            Text("Placement Method", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Row(modifier = Modifier.fillMaxWidth()) {
+                RadioButton(placementMethod == "Next Higher After Increment", { placementMethod = "Next Higher After Increment" })
+                Text("Next higher after increment", modifier = Modifier.padding(top = 12.dp))
+            }
+            Row(modifier = Modifier.fillMaxWidth()) {
+                RadioButton(placementMethod == "Next Higher Without Increment", { placementMethod = "Next Higher Without Increment" })
+                Text("Next higher without increment", modifier = Modifier.padding(top = 12.dp))
+            }
         }
 
         Box {
             OutlinedButton(onClick = { menuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                Text(targetScale?.let { "\${it.payBand}: \${it.title}" } ?: "Select higher 5th CPC scale")
+                Text(targetScale?.let { it.payBand + ": " + it.title } ?: "Select higher 5th CPC scale")
             }
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 FifthToSixthCpcData.scales
                     .filter { it.title != currentScale.title }
                     .forEach { scale ->
                         DropdownMenuItem(
-                            text = { Text("\${scale.payBand}: \${scale.title}") },
+                            text = { Text(scale.payBand + ": " + scale.title) },
                             onClick = {
                                 targetScale = scale
                                 menuExpanded = false
@@ -81,7 +98,7 @@ fun FifthCpcEventSection(
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text("\${eventType} fixation", fontWeight = FontWeight.Bold)
                     Text("Pay before event: ₹\${currentPay}")
-                    Text("One feeder-scale increment: ₹\${feederIncrementedPay}")
+                    Text(if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") "Placement without feeder-scale increment" else "One feeder-scale increment: ₹\${feederIncrementedPay}")
                     Text("Pay fixed in higher scale: ₹\${fixedPay}")
                     Text("Effective date: " + (eventDate?.let(::formatFifthEventDate) ?: "Not selected"))
                 }
