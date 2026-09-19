@@ -96,10 +96,10 @@ fun FifthCpcEventSection(
         if (target != null && fixedPay != null) {
             Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors()) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("\${eventType} fixation", fontWeight = FontWeight.Bold)
-                    Text("Pay before event: ₹\${currentPay}")
-                    Text(if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") "Placement without feeder-scale increment" else "One feeder-scale increment: ₹\${feederIncrementedPay}")
-                    Text("Pay fixed in higher scale: ₹\${fixedPay}")
+                    Text(eventType + " fixation", fontWeight = FontWeight.Bold)
+                    Text("Pay before event: ₹" + currentPay)
+                    Text(if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") "Placement without feeder-scale increment" else "One feeder-scale increment: ₹" + feederIncrementedPay)
+                    Text("Pay fixed in higher scale: ₹" + fixedPay)
                     Text("Effective date: " + (eventDate?.let(::formatFifthEventDate) ?: "Not selected"))
                 }
             }
@@ -123,7 +123,7 @@ fun FifthCpcEventSection(
             Text("Apply 5th CPC Event", fontWeight = FontWeight.Bold)
         }
 
-        result?.let { Text("\${eventType} fixed pay: ₹\${it}", fontWeight = FontWeight.Bold) }
+        result?.let { Text(eventType + " fixed pay: ₹" + it, fontWeight = FontWeight.Bold) }
     }
 
     if (pickerOpen) {
