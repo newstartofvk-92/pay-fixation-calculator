@@ -78,6 +78,32 @@ fun FifthCpcHistoricalIncrementSection(
             }
         }
 
+        if (incrementSteps.isNotEmpty()) {
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("5th CPC Increment Progression", color = FifthHistoricalBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                    incrementSteps.forEachIndexed { index, step ->
+                        Surface(
+                            Modifier.fillMaxWidth(),
+                            color = FifthHistoricalBlue.copy(alpha = .06f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(Modifier.fillMaxWidth().padding(14.dp)) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("Increment " + (index + 1), color = FifthHistoricalSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("Date: " + formatFifthHistoricalDate(step.date), color = FifthHistoricalText, fontSize = 13.sp)
+                                    Text("5th CPC Basic Pay: " + formatFifthHistoricalCurrency(step.pay), color = FifthHistoricalBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                                }
+                                TextButton(onClick = {
+                                    incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) }
+                                }) { Text("Delete", fontWeight = FontWeight.Bold) }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if (!showEventSection) {
             Button(
                 onClick = { showEventSection = true },
@@ -103,32 +129,6 @@ fun FifthCpcHistoricalIncrementSection(
                     showEventSection = false
                 }
             )
-        }
-
-        if (incrementSteps.isNotEmpty()) {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
-                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("5th CPC Increment Progression", color = FifthHistoricalBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                    incrementSteps.forEachIndexed { index, step ->
-                        Surface(
-                            Modifier.fillMaxWidth(),
-                            color = FifthHistoricalBlue.copy(alpha = .06f),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Row(Modifier.fillMaxWidth().padding(14.dp)) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("Increment " + (index + 1), color = FifthHistoricalSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    Text("Date: " + formatFifthHistoricalDate(step.date), color = FifthHistoricalText, fontSize = 13.sp)
-                                    Text("5th CPC Basic Pay: " + formatFifthHistoricalCurrency(step.pay), color = FifthHistoricalBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-                                }
-                                TextButton(onClick = {
-                                    incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) }
-                                }) { Text("Delete", fontWeight = FontWeight.Bold) }
-                            }
-                        }
-                    }
-                }
-            }
         }
 
         Button(
