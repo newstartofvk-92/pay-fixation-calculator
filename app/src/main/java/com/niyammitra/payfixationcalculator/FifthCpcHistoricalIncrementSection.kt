@@ -16,6 +16,15 @@ import java.util.*
 data class FifthCpcHistoricalIncrementStep(val pay: Int, val date: Long)
 data class FifthCpcHistoricalEventStep(val type: String, val scale: String, val pay: Int, val date: Long)
 
+private data class FifthCpcTimelineItem(
+    val date: Long,
+    val kind: String,
+    val pay: Int,
+    val scale: String? = null,
+    val incrementIndex: Int? = null,
+    val eventType: String? = null
+)
+
 private val FifthHistoricalBlue = Color(0xFF1769AA)
 private val FifthHistoricalText = Color(0xFF172B4D)
 private val FifthHistoricalSecondary = Color(0xFF5B6B7A)
@@ -91,11 +100,48 @@ fun FifthCpcHistoricalIncrementSection(
             }
         }
 
-        if (incrementSteps.isNotEmpty()) {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+        if (incrementSteps.isNotEmpty() || eventHistory.isNotEmpty()) {
+            val timelineItems = buildList {
+                incrementSteps.forEachIndexed { index, step ->
+                    add(
+                        FifthCpcTimelineItem(
+                            date = step.date,
+                            kind = "increment",
+                            pay = step.pay,
+                            incrementIndex = index
+                        )
+                    )
+                }
+                eventHistory.forEach { event ->
+                    add(
+                        FifthCpcTimelineItem(
+                            date = event.date,
+                            kind = "event",
+                            pay = event.pay,
+                            scale = event.scale,
+                            eventType = event.type
+                        )
+                    )
+                }
+            }.sortedWith(
+                compareBy<FifthCpcTimelineItem> { it.date }
+                    .thenBy { if (it.kind == "event") 0 else 1 }
+            )
+
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(Color.White),
+                shape = RoundedCornerShape(18.dp)
+            ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("5th CPC Increment Progression", color = FifthHistoricalBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                    incrementSteps.forEachIndexed { index, step ->
+                    Text(
+                        "5th CPC Pay Progression",
+                        color = FifthHistoricalBlue,
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+
+                    timelineItems.forEach { item ->
                         Surface(
                             Modifier.fillMaxWidth(),
                             color = FifthHistoricalBlue.copy(alpha = .06f),
@@ -103,31 +149,63 @@ fun FifthCpcHistoricalIncrementSection(
                         ) {
                             Row(Modifier.fillMaxWidth().padding(14.dp)) {
                                 Column(Modifier.weight(1f)) {
-                                    Text("Increment " + (index + 1), color = FifthHistoricalSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    Text("Date: " + formatFifthHistoricalDate(step.date), color = FifthHistoricalText, fontSize = 13.sp)
-                                    Text("5th CPC Basic Pay: " + formatFifthHistoricalCurrency(step.pay), color = FifthHistoricalBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                                    if (item.kind == "event") {
+                                        Text(
+                                            item.eventType + " Event",
+                                            color = FifthHistoricalSecondary,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            "Date: " + formatFifthHistoricalDate(item.date),
+                                            color = FifthHistoricalText,
+                                            fontSize = 13.sp
+                                        )
+                                        item.scale?.let {
+                                            Text(
+                                                "Scale: " + it,
+                                                color = FifthHistoricalText,
+                                                fontSize = 13.sp
+                                            )
+                                        }
+                                        Text(
+                                            "Fixed Basic Pay: " + formatFifthHistoricalCurrency(item.pay),
+                                            color = FifthHistoricalBlue,
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    } else {
+                                        Text(
+                                            "Increment " + ((item.incrementIndex ?: 0) + 1),
+                                            color = FifthHistoricalSecondary,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        Text(
+                                            "Date: " + formatFifthHistoricalDate(item.date),
+                                            color = FifthHistoricalText,
+                                            fontSize = 13.sp
+                                        )
+                                        Text(
+                                            "5th CPC Basic Pay: " + formatFifthHistoricalCurrency(item.pay),
+                                            color = FifthHistoricalBlue,
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.ExtraBold
+                                        )
+                                    }
                                 }
-                                TextButton(onClick = {
-                                    incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) }
-                                }) { Text("Delete", fontWeight = FontWeight.Bold) }
-                            }
-                        }
-                    }
-                }
-            }
-        }
 
-        if (eventHistory.isNotEmpty()) {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
-                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("5th CPC Event History", color = FifthHistoricalBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                    eventHistory.forEachIndexed { index, event ->
-                        Surface(Modifier.fillMaxWidth(), color = FifthHistoricalBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
-                            Column(Modifier.padding(14.dp)) {
-                                Text("Event " + (index + 1) + ": " + event.type, color = FifthHistoricalSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                Text("Date: " + formatFifthHistoricalDate(event.date), color = FifthHistoricalText, fontSize = 13.sp)
-                                Text("Scale: " + event.scale, color = FifthHistoricalText, fontSize = 13.sp)
-                                Text("Fixed Basic Pay: " + formatFifthHistoricalCurrency(event.pay), color = FifthHistoricalBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                                if (item.kind == "increment") {
+                                    TextButton(onClick = {
+                                        item.incrementIndex?.let { index ->
+                                            incrementSteps = incrementSteps.toMutableList().also {
+                                                if (index in it.indices) it.removeAt(index)
+                                            }
+                                        }
+                                    }) {
+                                        Text("Delete", fontWeight = FontWeight.Bold)
+                                    }
+                                }
                             }
                         }
                     }
