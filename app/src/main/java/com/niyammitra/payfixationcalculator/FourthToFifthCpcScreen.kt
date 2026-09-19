@@ -245,7 +245,7 @@ fun FourthToFifthCpcScreen(
                     Text("The first added increment will be shown on ${formatFourthFiveDate(validNextIncrementDate)}. Subsequent increments advance by one year.", color = FourFiveTextSecondary, fontSize = 12.sp)
                 }
 
-                if (conversionReached && !conversionActivated) {
+                if (conversionReached && !conversionActivated && conversionResult == null) {
                     Button(
                         onClick = { conversionActivated = true },
                         enabled = conversionPay != null && conversionScale != null,
