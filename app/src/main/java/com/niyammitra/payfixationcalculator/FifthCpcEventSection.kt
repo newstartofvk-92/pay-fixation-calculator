@@ -15,7 +15,7 @@ fun FifthCpcEventSection(
     currentPay: Int,
     currentScale: FifthCpcScale,
     currentDate: Long,
-    onEventApplied: (FifthCpcScale, Int, Long) -> Unit
+    onEventApplied: (String, FifthCpcScale, Int, Long) -> Unit
 ) {
     var eventDate by remember { mutableStateOf<Long?>(null) }
     var targetScale by remember { mutableStateOf<FifthCpcScale?>(null) }
@@ -111,7 +111,7 @@ fun FifthCpcEventSection(
                 val scale = target ?: return@Button
                 val pay = fixedPay ?: return@Button
                 result = pay
-                onEventApplied(scale, pay, date)
+                onEventApplied(eventType, scale, pay, date)
             },
             enabled = eventDate != null &&
                 eventDate!! >= currentDate &&
