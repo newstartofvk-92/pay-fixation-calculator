@@ -15,7 +15,7 @@ fun FifthCpcEventSection(
     currentPay: Int,
     currentScale: FifthCpcScale,
     currentDate: Long,
-    onEventApplied: (String, FifthCpcScale, Int, Long) -> Unit
+    onEventApplied: (String, FifthCpcScale, Int, Long, Long) -> Unit
 ) {
     var eventDate by remember { mutableStateOf<Long?>(null) }
     var targetScale by remember { mutableStateOf<FifthCpcScale?>(null) }
@@ -52,7 +52,7 @@ fun FifthCpcEventSection(
             Text(eventDate?.let(::formatFifthEventDate) ?: "Select Event Date")
         }
 
-        if (eventType == "Promotion" || eventType == "ACP") {
+        if (true) {
             Text("Pay Fixation Implementation", fontWeight = FontWeight.Bold, fontSize = 14.sp)
             Row(modifier = Modifier.fillMaxWidth()) {
                 RadioButton(implementationOption == "From Event Date", { implementationOption = "From Event Date" })
@@ -128,7 +128,7 @@ fun FifthCpcEventSection(
                 val pay = fixedPay ?: return@Button
                 result = pay
                 val effectiveDate = implementationDate ?: return@Button
-                onEventApplied(eventType, scale, pay, effectiveDate)
+                onEventApplied(eventType, scale, pay, date, effectiveDate)
             },
             enabled = eventDate != null &&
                 eventDate!! >= currentDate &&
