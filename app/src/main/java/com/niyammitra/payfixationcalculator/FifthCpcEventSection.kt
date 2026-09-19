@@ -21,6 +21,7 @@ fun FifthCpcEventSection(
     var targetScale by remember { mutableStateOf<FifthCpcScale?>(null) }
     var eventType by remember { mutableStateOf("Promotion") }
     var placementMethod by remember { mutableStateOf("Next Higher After Increment") }
+    var implementationOption by remember { mutableStateOf("From Event Date") }
     var menuExpanded by remember { mutableStateOf(false) }
     var pickerOpen by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<Int?>(null) }
@@ -34,6 +35,7 @@ fun FifthCpcEventSection(
     }
 
     val feederIncrementedPay = currentStages.firstOrNull { it > currentPay } ?: currentPay
+    val implementationDate = if (implementationOption == "From DNI") calculateEventDni(currentDate) else eventDate
     val placementBasePay = if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") currentPay else feederIncrementedPay
     val fixedPay = if (target != null && targetStages.isNotEmpty()) {
         targetStages.firstOrNull { it >= placementBasePay } ?: targetStages.last()
@@ -48,6 +50,19 @@ fun FifthCpcEventSection(
 
         OutlinedButton(onClick = { pickerOpen = true }, modifier = Modifier.fillMaxWidth()) {
             Text(eventDate?.let(::formatFifthEventDate) ?: "Select Event Date")
+        }
+
+        if (eventType == "Promotion" || eventType == "ACP") {
+            Text("Pay Fixation Implementation", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Row(modifier = Modifier.fillMaxWidth()) {
+                RadioButton(implementationOption == "From Event Date", { implementationOption = "From Event Date" })
+                Text("From Event Date", modifier = Modifier.padding(top = 12.dp))
+            }
+            Row(modifier = Modifier.fillMaxWidth()) {
+                RadioButton(implementationOption == "From DNI", { implementationOption = "From DNI" })
+                Text("From DNI", modifier = Modifier.padding(top = 12.dp))
+            }
+            Text("DNI: " + formatFifthEventDate(calculateEventDni(currentDate)), fontSize = 12.sp)
         }
 
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -100,7 +115,8 @@ fun FifthCpcEventSection(
                     Text("Pay before event: ₹" + currentPay)
                     Text(if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") "Placement without feeder-scale increment" else "One feeder-scale increment: ₹" + feederIncrementedPay)
                     Text("Pay fixed in higher scale: ₹" + fixedPay)
-                    Text("Effective date: " + (eventDate?.let(::formatFifthEventDate) ?: "Not selected"))
+                    Text("Event date: " + (eventDate?.let(::formatFifthEventDate) ?: "Not selected"))
+                    Text("Fixation implemented from: " + (implementationDate?.let(::formatFifthEventDate) ?: "Not selected"))
                 }
             }
         }
@@ -111,7 +127,8 @@ fun FifthCpcEventSection(
                 val scale = target ?: return@Button
                 val pay = fixedPay ?: return@Button
                 result = pay
-                onEventApplied(eventType, scale, pay, date)
+                val effectiveDate = implementationDate ?: return@Button
+                onEventApplied(eventType, scale, pay, effectiveDate)
             },
             enabled = eventDate != null &&
                 eventDate!! >= currentDate &&
@@ -168,6 +185,16 @@ private fun parseFifthCpcScaleStagesForEvent(scale: String): List<Int> {
     }
     return stages.distinct().sorted()
 }
+
+private fun calculateEventDni(currentDate: Long): Long =
+    Calendar.getInstance().apply {
+        timeInMillis = currentDate
+        add(Calendar.YEAR, 1)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 
 private fun fifthCpcEventEndDate(): Long =
     Calendar.getInstance().apply {
