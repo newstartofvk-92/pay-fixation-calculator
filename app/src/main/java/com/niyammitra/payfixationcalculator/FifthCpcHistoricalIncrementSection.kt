@@ -14,7 +14,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 data class FifthCpcHistoricalIncrementStep(val pay: Int, val date: Long)
-data class FifthCpcHistoricalEventStep(val type: String, val scale: String, val pay: Int, val date: Long)
+data class FifthCpcHistoricalEventStep(val type: String, val scale: String, val pay: Int, val eventDate: Long, val implementationDate: Long)
 
 private data class FifthCpcTimelineItem(
     val date: Long,
@@ -115,7 +115,7 @@ fun FifthCpcHistoricalIncrementSection(
                 eventHistory.forEach { event ->
                     add(
                         FifthCpcTimelineItem(
-                            date = event.date,
+                            date = event.implementationDate,
                             kind = "event",
                             pay = event.pay,
                             scale = event.scale,
@@ -250,16 +250,17 @@ fun FifthCpcHistoricalIncrementSection(
                         currentPay = currentPay,
                         currentScale = currentScale,
                         currentDate = currentDate,
-                        onEventApplied = { appliedEventType, newScale, newPay, newDate ->
+                        onEventApplied = { appliedEventType, newScale, newPay, appliedEventDate, implementationDate ->
                             eventHistory = eventHistory + FifthCpcHistoricalEventStep(
                                 type = appliedEventType,
                                 scale = newScale.title,
                                 pay = newPay,
-                                date = newDate
+                                eventDate = appliedEventDate,
+                                implementationDate = implementationDate
                             )
                             eventScale = newScale
                             eventPay = newPay
-                            eventDate = newDate
+                            eventDate = implementationDate
                             showEventSection = false
                         }
                     )
