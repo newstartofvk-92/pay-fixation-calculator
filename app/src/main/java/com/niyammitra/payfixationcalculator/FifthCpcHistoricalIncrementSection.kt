@@ -43,15 +43,22 @@ fun FifthCpcHistoricalIncrementSection(
         findFifthScaleForHistoricalJourney(revisedScale)
     }
     val latest = incrementSteps.lastOrNull()
-    val currentScale = eventScale ?: initialScale
-    val currentPay = eventPay ?: latest?.pay ?: initialPay
-    val currentDate = eventDate ?: latest?.date ?: conversionDate
+    val eventIsCurrent = eventDate != null && (latest == null || eventDate!! >= latest.date)
+    val currentScale = if (eventIsCurrent) eventScale else initialScale
+    val currentPay = when {
+        eventIsCurrent && eventPay != null -> eventPay!!
+        latest != null -> latest.pay
+        else -> initialPay
+    }
+    val currentDate = when {
+        eventIsCurrent && eventDate != null -> eventDate!!
+        latest != null -> latest.date
+        else -> conversionDate
+    }
     val stages = remember(currentScale) {
         currentScale?.let { parseFifthCpcScaleStages(it.title) }.orEmpty()
     }
-    val nextDate = eventDate?.let { addFifthHistoricalYear(it) }
-        ?: latest?.let { addFifthHistoricalYear(it.date) }
-        ?: firstIncrementDate
+    val nextDate = addFifthHistoricalYear(currentDate)
     val nextPay = stages.firstOrNull { it > currentPay }
     val endDate = fifthCpcEndDate()
     val canAdd = nextPay != null && nextDate != null && nextDate <= endDate
