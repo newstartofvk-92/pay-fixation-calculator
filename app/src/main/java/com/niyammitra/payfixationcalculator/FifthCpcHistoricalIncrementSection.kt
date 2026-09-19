@@ -47,8 +47,8 @@ fun FifthCpcHistoricalIncrementSection(
     val stages = remember(currentScale) {
         currentScale?.let { parseFifthCpcScaleStages(it.title) }.orEmpty()
     }
-    val nextDate = latest?.let { addFifthHistoricalYear(it.date) }
-        ?: eventDate?.let { addFifthHistoricalYear(it) }
+    val nextDate = eventDate?.let { addFifthHistoricalYear(it) }
+        ?: latest?.let { addFifthHistoricalYear(it.date) }
         ?: firstIncrementDate
     val nextPay = stages.firstOrNull { it > currentPay }
     val endDate = fifthCpcEndDate()
@@ -117,18 +117,39 @@ fun FifthCpcHistoricalIncrementSection(
         }
 
         if (showEventSection && currentScale != null) {
-            FifthCpcEventSection(
-                currentPay = currentPay,
-                currentScale = currentScale,
-                currentDate = currentDate,
-                onEventApplied = { newScale, newPay, newDate ->
-                    eventScale = newScale
-                    eventPay = newPay
-                    eventDate = newDate
-                    incrementSteps = emptyList()
-                    showEventSection = false
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(Color.White),
+                shape = RoundedCornerShape(18.dp)
+            ) {
+                Column(Modifier.padding(14.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "5th CPC Event",
+                            color = FifthHistoricalBlue,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        TextButton(onClick = { showEventSection = false }) {
+                            Text("Collapse", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    FifthCpcEventSection(
+                        currentPay = currentPay,
+                        currentScale = currentScale,
+                        currentDate = currentDate,
+                        onEventApplied = { newScale, newPay, newDate ->
+                            eventScale = newScale
+                            eventPay = newPay
+                            eventDate = newDate
+                            showEventSection = false
+                        }
+                    )
                 }
-            )
+            }
         }
 
         Button(
