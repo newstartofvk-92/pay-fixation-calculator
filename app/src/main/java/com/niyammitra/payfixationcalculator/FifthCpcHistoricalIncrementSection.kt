@@ -161,9 +161,9 @@ fun FifthCpcHistoricalIncrementSection(
                         currentPay = currentPay,
                         currentScale = currentScale,
                         currentDate = currentDate,
-                        onEventApplied = { newScale, newPay, newDate ->
+                        onEventApplied = { appliedEventType, newScale, newPay, newDate ->
                             eventHistory = eventHistory + FifthCpcHistoricalEventStep(
-                                type = "Applied Event",
+                                type = appliedEventType,
                                 scale = newScale.title,
                                 pay = newPay,
                                 date = newDate
