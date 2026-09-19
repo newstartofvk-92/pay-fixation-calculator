@@ -58,7 +58,7 @@ fun FifthCpcHistoricalIncrementSection(
     val stages = remember(currentScale) {
         currentScale?.let { parseFifthCpcScaleStages(it.title) }.orEmpty()
     }
-    val nextDate = addFifthHistoricalYear(currentDate)
+    val nextDate = if (eventIsCurrent) addFifthEventIncrementYear(currentDate) else addFifthHistoricalYear(currentDate)
     val nextPay = stages.firstOrNull { it > currentPay }
     val endDate = fifthCpcEndDate()
     val canAdd = nextPay != null && nextDate != null && nextDate <= endDate
@@ -262,6 +262,17 @@ private fun addFifthHistoricalYear(date: Long): Long =
     Calendar.getInstance().apply {
         timeInMillis = date
         add(Calendar.YEAR, 1)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+
+private fun addFifthEventIncrementYear(date: Long): Long =
+    Calendar.getInstance().apply {
+        timeInMillis = date
+        add(Calendar.YEAR, 1)
+        set(Calendar.DAY_OF_MONTH, 1)
         set(Calendar.HOUR_OF_DAY, 0)
         set(Calendar.MINUTE, 0)
         set(Calendar.SECOND, 0)
