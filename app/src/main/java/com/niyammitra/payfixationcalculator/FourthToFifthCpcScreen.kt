@@ -47,6 +47,7 @@ fun FourthToFifthCpcScreen(
     var eventPay by remember { mutableStateOf<Int?>(null) }
     var eventDate by remember { mutableStateOf<Long?>(null) }
     var conversionActivated by remember { mutableStateOf(false) }
+    var showConversionPrompt by remember { mutableStateOf(false) }
 
     val basicPay = basicPayText.toIntOrNull()
     val payDate = parseFourthFiveDate(formatFourthFiveDateInput(payDateText))
@@ -230,6 +231,8 @@ fun FourthToFifthCpcScreen(
                             eventPay = nextPay
                             eventDate = nextDate
                             showEvents = false
+                        } else {
+                            showConversionPrompt = true
                         }
                     },
                     enabled = validStartingPosition && canAddIncrement,
@@ -254,6 +257,23 @@ fun FourthToFifthCpcScreen(
                         "The 4th CPC timeline is ready for conversion effective 01 January 1996. Tap above to calculate the 5th CPC revised basic pay.",
                         color = FourFiveTextSecondary,
                         fontSize = 12.sp
+                    )
+                }
+
+                if (showConversionPrompt) {
+                    AlertDialog(
+                        onDismissRequest = { showConversionPrompt = false },
+                        title = { Text("4th CPC period completed") },
+                        text = { Text("The next 4th CPC increment falls after 01 January 1996. Please convert the current pay position to 5th CPC to continue the pay journey.") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                showConversionPrompt = false
+                                conversionActivated = true
+                            }) { Text("Convert to 5th CPC", fontWeight = FontWeight.Bold) }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showConversionPrompt = false }) { Text("Later") }
+                        }
                     )
                 }
 
