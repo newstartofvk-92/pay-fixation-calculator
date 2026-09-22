@@ -34,7 +34,8 @@ fun FifthCpcHistoricalIncrementSection(
     initialPay: Int,
     revisedScale: String,
     firstIncrementDate: Long?,
-    conversionDate: Long
+    conversionDate: Long,
+    onContinueToSeventh: ((String, Int, Int) -> Unit)? = null
 ) {
     var incrementSteps by remember(initialPay, revisedScale, conversionDate, firstIncrementDate) {
         mutableStateOf<List<FifthCpcHistoricalIncrementStep>>(emptyList())
@@ -340,7 +341,7 @@ fun FifthCpcHistoricalIncrementSection(
                     }.getOrNull()
 
                     conversion?.let {
-                        FifthToSixthContinuationSection(conversion = it)
+                        FifthToSixthContinuationSection(conversion = it, onContinueToSeventh = onContinueToSeventh)
                     }
                 }
             }
