@@ -52,7 +52,10 @@ fun FifthCpcHistoricalIncrementSection(
         findFifthScaleForHistoricalJourney(revisedScale)
     }
     val latest = incrementSteps.lastOrNull()
-    // An increment recorded on the same effective date as an event is the\n    // later timeline position. This prevents the old event scale from\n    // overriding the scale/pay established by that increment.\n    val eventIsCurrent = eventDate != null && (latest == null || eventDate!! > latest.date)
+    // An increment recorded on the same effective date as an event is the
+    // later timeline position. This prevents the old event scale from
+    // overriding the scale/pay established by that increment.
+    val eventIsCurrent = eventDate != null && (latest == null || eventDate!! > latest.date)
     val currentScale = if (eventIsCurrent) eventScale else initialScale
     val currentPay = when {
         eventIsCurrent && eventPay != null -> eventPay!!
@@ -89,7 +92,8 @@ fun FifthCpcHistoricalIncrementSection(
                     "Continue the converted 5th CPC pay from 01 January 1996. Each increment moves to the next stage of the applicable 5th CPC scale.",
                     color = FifthHistoricalSecondary, fontSize = 12.sp
                 )
-                Text("Initial 5th CPC Scale: " + revisedScale, color = FifthHistoricalSecondary, fontSize = 13.sp)\n                Text("Active 5th CPC Scale: " + (currentScale?.title ?: "Not available"), color = FifthHistoricalText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("Initial 5th CPC Scale: " + revisedScale, color = FifthHistoricalSecondary, fontSize = 13.sp)
+                Text("Active 5th CPC Scale: " + (currentScale?.title ?: "Not available"), color = FifthHistoricalText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 Text("Current 5th CPC Basic Pay: " + formatFifthHistoricalCurrency(currentPay), color = FifthHistoricalText, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Text("Current effective date: " + formatFifthHistoricalDate(currentDate), color = FifthHistoricalSecondary, fontSize = 12.sp)
                 if (nextDate != null && nextPay != null && nextDate <= endDate) {
