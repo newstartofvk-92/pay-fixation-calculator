@@ -94,7 +94,8 @@ fun SixthCpcEventsSection(
     startingGradePay: Int = calculation.gradePay,
     startingPayBand: String = calculation.scale.payBand,
     onContinueToSeventh: ((String, Int, Int) -> Unit)? = null,
-    onLatestStateChange: ((String, Int, Int, Long) -> Unit)? = null
+    onLatestStateChange: ((String, Int, Int, Long) -> Unit)? = null,
+    onEventsStateChange: ((Boolean) -> Unit)? = null
 ) {
     var events by remember(calculation.revisedBasicPay, startingPayInPayBand, startingGradePay, startingPayBand) { mutableStateOf(emptyList<SixthCpcEventChain>()) }
     var showForm by remember { mutableStateOf(false) }
@@ -120,6 +121,9 @@ fun SixthCpcEventsSection(
 
     LaunchedEffect(latest, payInBand, gradePay, payBand, latestDate) {
         if (latest != null && latestDate != null) onLatestStateChange?.invoke(payBand, gradePay, payInBand, latestDate)
+    }
+    LaunchedEffect(events.size) {
+        onEventsStateChange?.invoke(events.isNotEmpty())
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
