@@ -298,19 +298,58 @@ private fun EventCard(chain: SixthCpcEventChain, index: Int, onDelete: () -> Uni
                 Text("Pay Band: ${r.newPayBand}", color = EventSecondary, fontSize = 12.sp); Text("Next DNI: ${dateText(r.nextIncrementDate)}", color = EventSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             chain.increments.forEachIndexed { i, inc ->
-                Text(
-                    "Increment " + (i + 1) + " — " + dateText(inc.date),
-                    color = EventPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                RowValue("Pay in Pay Band", inc.payInPayBand)
-                RowValue("Grade Pay", inc.gradePay)
-                RowValue("Basic Pay", inc.payInPayBand + inc.gradePay)
+                Surface(
+                    Modifier.fillMaxWidth(),
+                    color = EventBlue.copy(alpha = .06f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(14.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Increment " + (i + 1),
+                                color = EventSecondary,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "Date: " + dateText(inc.date),
+                                color = EventPrimary,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                "Pay in Pay Band: " + money(inc.payInPayBand) +
+                                    " + GP " + money(inc.gradePay) +
+                                    " = " + money(inc.payInPayBand + inc.gradePay),
+                                color = EventBlue,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                        }
+                    }
+                }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onNextIncrement, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(10.dp)) { Text("Next Increment") }
-                Button(onClick = onAddEvent, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(10.dp)) { Text("Add Another Event") }
+
+            // Before the first event, the card has the two continuation actions.
+            // Once an event has been added, the old Next Increment action must not
+            // remain above Add Another Event. The new event becomes the current
+            // position; its next increment is handled after the event progression.
+            if (chain.increments.isEmpty()) {
+                Button(
+                    onClick = onNextIncrement,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = EventBlue),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Next Increment", fontWeight = FontWeight.Bold)
+                }
+            }
+            Button(
+                onClick = onAddEvent,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = EventBlue),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("Add Another Event", fontWeight = FontWeight.Bold)
             }
         }
     }
