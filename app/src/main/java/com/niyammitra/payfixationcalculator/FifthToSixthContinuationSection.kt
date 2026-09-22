@@ -22,7 +22,7 @@ private val ContinuationSecondary = Color(0xFF5B6B7A)
 data class InlineSixthCpcIncrementStep(val pay: Int, val date: Long)
 
 @Composable
-fun FifthToSixthContinuationSection(conversion: FifthToSixthResult) {
+fun FifthToSixthContinuationSection(conversion: FifthToSixthResult, onContinueToSeventh: ((String, Int, Int) -> Unit)? = null) {
     var incrementSteps by remember(conversion.revisedBasicPay, conversion.scale.title) { mutableStateOf<List<InlineSixthCpcIncrementStep>>(emptyList()) }
     var eventLatestPayBand by remember { mutableStateOf<String?>(null) }
     var eventLatestGradePay by remember { mutableStateOf<Int?>(null) }
@@ -126,7 +126,7 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult) {
             startingPayInPayBand = latestPayInBand,
             startingGradePay = editedGradePay,
             startingPayBand = conversion.scale.payBand,
-            onContinueToSeventh = null,
+            onContinueToSeventh = onContinueToSeventh,
             onLatestStateChange = { band, gp, payInBand, date ->
                 eventLatestPayBand = band
                 eventLatestGradePay = gp
