@@ -34,8 +34,7 @@ fun FifthCpcHistoricalIncrementSection(
     initialPay: Int,
     revisedScale: String,
     firstIncrementDate: Long?,
-    conversionDate: Long,
-    onContinueToSixth: ((FifthCpcScale, Int) -> Unit)? = null
+    conversionDate: Long
 ) {
     var incrementSteps by remember(initialPay, revisedScale, conversionDate, firstIncrementDate) {
         mutableStateOf<List<FifthCpcHistoricalIncrementStep>>(emptyList())
@@ -46,6 +45,7 @@ fun FifthCpcHistoricalIncrementSection(
     var eventPay by remember { mutableStateOf<Int?>(null) }
     var eventDate by remember { mutableStateOf<Long?>(null) }
     var showEventSection by remember { mutableStateOf(false) }
+    var showSixthCpcContinuation by remember { mutableStateOf(false) }
     var eventHistory by remember(initialPay, revisedScale, conversionDate, firstIncrementDate) { mutableStateOf<List<FifthCpcHistoricalEventStep>>(emptyList()) }
 
     val initialScale = remember(revisedScale) {
@@ -289,15 +289,49 @@ fun FifthCpcHistoricalIncrementSection(
             )
         }
 
-        if (onContinueToSixth != null && (currentDate >= endDate || (nextDate != null && nextDate > endDate))) {
+        if (currentDate >= endDate || (nextDate != null && nextDate > endDate)) {
             val mappedScale = currentScale
             if (mappedScale != null) {
-                Button(
-                    onClick = { onContinueToSixth(mappedScale, currentPay) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = FifthHistoricalBlue),
-                    shape = RoundedCornerShape(12.dp)
-                ) { Text("Continue to 6th CPC", fontWeight = FontWeight.Bold) }
+                Card(
+                    Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(Color(0xFFEAF5FC)),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Column(
+                        Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "5th CPC → 6th CPC",
+                            color = FifthHistoricalBlue,
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.ExtraBold
+                        )
+                        Text(
+                            "The 5th CPC journey has reached the 01 January 2006 boundary. Continue with the existing 5th CPC → 6th CPC implementation using the final 5th CPC pay position.",
+                            color = FifthHistoricalSecondary,
+                            fontSize = 12.sp
+                        )
+                        Button(
+                            onClick = { showSixthCpcContinuation = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = FifthHistoricalBlue),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Continue to 6th CPC", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                if (showSixthCpcContinuation) {
+                    val conversion = runCatching {
+                        calculateFifthToSixthCpc(currentPay, mappedScale)
+                    }.getOrNull()
+
+                    conversion?.let {
+                        FifthToSixthContinuationSection(conversion = it)
+                    }
+                }
             }
         }
     }
