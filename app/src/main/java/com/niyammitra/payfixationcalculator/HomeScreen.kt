@@ -66,7 +66,16 @@ fun V2AppScreen() {
 
     if (showCalculator) { BackHandler { showCalculator = false }; PayFixationCalculatorScreen(); return }
     if (showFourthToFifth) {
-        FourthToFifthCpcScreen(onBack = { showFourthToFifth = false })
+        FourthToFifthCpcScreen(
+            onBack = { showFourthToFifth = false },
+            onContinueToSeventh = { payBand, payInPayBand, gradePay ->
+                carriedPayBand = payBand
+                carriedPayInPayBand = payInPayBand
+                carriedGradePay = gradePay
+                showFourthToFifth = false
+                showSixthToSeventh = true
+            }
+        )
         return
     }
     if (showFifthToSixth) {
