@@ -66,7 +66,7 @@ fun V2AppScreen() {
 
     if (showCalculator) { BackHandler { showCalculator = false }; PayFixationCalculatorScreen(); return }
     if (showFourthToFifth) {
-        FourthToFifthCpcScreen(onBack = { showFourthToFifth = false }, onContinueToSixth = { scale, pay -> carriedFifthScaleTitle = scale.title; carriedFifthBasicPay = pay; showFourthToFifth = false; showFifthToSixth = true })
+        FourthToFifthCpcScreen(onBack = { showFourthToFifth = false })
         return
     }
     if (showFifthToSixth) {
