@@ -52,18 +52,23 @@ fun FifthCpcHistoricalIncrementSection(
         findFifthScaleForHistoricalJourney(revisedScale)
     }
     val latest = incrementSteps.lastOrNull()
-    // An increment recorded on the same effective date as an event is the
-    // later timeline position. This prevents the old event scale from
-    // overriding the scale/pay established by that increment.
-    val eventIsCurrent = eventDate != null && (latest == null || eventDate!! > latest.date)
-    val currentScale = if (eventIsCurrent) eventScale else initialScale
+    val eventApplied = eventDate != null && eventScale != null && eventPay != null
+
+    // Once an event changes the employee's scale, that scale remains the
+    // active scale for all subsequent increments. A later increment may
+    // replace the current pay/date position, but it must NOT revert the
+    // employee to the original pre-event scale.
+    val currentScale = if (eventApplied) eventScale else initialScale
+    val latestIsAfterEvent = eventApplied && latest != null && latest.date > eventDate!!
     val currentPay = when {
-        eventIsCurrent && eventPay != null -> eventPay!!
+        latestIsAfterEvent -> latest!!.pay
+        eventApplied -> eventPay!!
         latest != null -> latest.pay
         else -> initialPay
     }
     val currentDate = when {
-        eventIsCurrent && eventDate != null -> eventDate!!
+        latestIsAfterEvent -> latest!!.date
+        eventApplied -> eventDate!!
         latest != null -> latest.date
         else -> conversionDate
     }
@@ -71,11 +76,12 @@ fun FifthCpcHistoricalIncrementSection(
         currentScale?.let { parseFifthCpcScaleStages(it.title) }.orEmpty()
     }
     val nextDate = when {
-        eventIsCurrent -> addFifthEventIncrementYear(currentDate)
+        latestIsAfterEvent -> addFifthHistoricalYear(currentDate)
+        eventApplied -> addFifthEventIncrementYear(currentDate)
         latest != null -> addFifthHistoricalYear(currentDate)
         else -> firstIncrementDate
     }
-    val effectiveScale = if (eventIsCurrent) eventScale else initialScale
+    val effectiveScale = currentScale
     val nextPay = calculateNextFifthCpcStage(currentPay, effectiveScale)
     val endDate = fifthCpcEndDate()
     val canAdd = nextPay != null && nextDate != null && nextDate <= endDate
