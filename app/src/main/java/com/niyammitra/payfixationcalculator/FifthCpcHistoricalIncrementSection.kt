@@ -72,7 +72,8 @@ fun FifthCpcHistoricalIncrementSection(
         latest != null -> addFifthHistoricalYear(currentDate)
         else -> firstIncrementDate
     }
-    val nextPay = calculateNextFifthCpcStage(currentPay, currentScale)
+    val effectiveScale = if (eventIsCurrent) eventScale else initialScale
+    val nextPay = calculateNextFifthCpcStage(currentPay, effectiveScale)
     val endDate = fifthCpcEndDate()
     val canAdd = nextPay != null && nextDate != null && nextDate <= endDate
 
@@ -394,29 +395,29 @@ private fun parseFifthCpcScaleStages(scale: String): List<Int> {
 private fun calculateNextFifthCpcStage(currentPay: Int, scale: FifthCpcScale?): Int? {
     if (scale == null) return null
 
-    val body = scale.title
+    // The scale itself is the authoritative source of the annual increment.
+    // Do not derive the next pay from a pre-generated stage list.
+    val normalizedTitle = scale.title
         .removePrefix("Rs. ")
         .substringBefore(" (")
         .trim()
 
     val values = Regex("\\d+")
-        .findAll(body)
+        .findAll(normalizedTitle)
         .map { it.value.toInt() }
         .toList()
 
     if (values.size < 3) return null
 
-    // A 5th CPC scale is represented as:
-    // start - increment - end - increment - end ...
-    // Find the segment containing the current stage and apply that segment's
-    // prescribed increment. This avoids deriving a false intermediate stage.
+    // 5th CPC notation: start-increment-end[-increment-end...].
+    // For 6500-200-10500 this means every stage advances by exactly 200.
     var index = 0
     while (index + 2 < values.size) {
         val start = values[index]
         val increment = values[index + 1]
         val end = values[index + 2]
 
-        if (increment > 0 && end >= start && currentPay in start..end) {
+        if (increment > 0 && currentPay in start..end) {
             val next = currentPay + increment
             if (next <= end) return next
         }
