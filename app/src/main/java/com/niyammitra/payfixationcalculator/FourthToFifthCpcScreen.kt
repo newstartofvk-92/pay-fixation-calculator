@@ -32,7 +32,8 @@ data class FourthToFifthIncrementStep(val pay: Int, val date: Long)
 
 @Composable
 fun FourthToFifthCpcScreen(
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onContinueToSeventh: ((String, Int, Int) -> Unit)? = null
 ) {
     BackHandler(onBack = onBack)
     var selectedScale by remember { mutableStateOf<FourthCpcScale?>(null) }
