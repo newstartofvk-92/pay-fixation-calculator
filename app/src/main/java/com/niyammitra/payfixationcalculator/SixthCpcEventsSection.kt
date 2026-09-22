@@ -297,7 +297,17 @@ private fun EventCard(chain: SixthCpcEventChain, index: Int, onDelete: () -> Uni
                 RowValue("Old Pay in Pay Band", r.oldPayInPayBand); RowValue("Old Grade Pay", r.oldGradePay); RowValue("Placed Pay in Pay Band", r.newPayInPayBand); RowValue("New Grade Pay", r.newGradePay); RowValue("Revised Basic Pay", r.revisedBasicPay)
                 Text("Pay Band: ${r.newPayBand}", color = EventSecondary, fontSize = 12.sp); Text("Next DNI: ${dateText(r.nextIncrementDate)}", color = EventSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
-            chain.increments.forEachIndexed { i, inc -> RowValue("Increment ${i + 1} — ${dateText(inc.date)}", inc.payInPayBand + inc.gradePay) }
+            chain.increments.forEachIndexed { i, inc ->
+                Text(
+                    "Increment " + (i + 1) + " — " + dateText(inc.date),
+                    color = EventPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                RowValue("Pay in Pay Band", inc.payInPayBand)
+                RowValue("Grade Pay", inc.gradePay)
+                RowValue("Basic Pay", inc.payInPayBand + inc.gradePay)
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onNextIncrement, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(10.dp)) { Text("Next Increment") }
                 Button(onClick = onAddEvent, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(10.dp)) { Text("Add Another Event") }
