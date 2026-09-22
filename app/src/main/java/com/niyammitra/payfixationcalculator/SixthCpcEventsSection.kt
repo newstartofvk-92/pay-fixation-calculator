@@ -138,7 +138,7 @@ fun SixthCpcEventsSection(
                 val nextPb = next - gp
                 val date = currentDate(chain) ?: return@EventCard
                 val nextDate = Calendar.getInstance().apply { timeInMillis = date; add(Calendar.YEAR, 1) }.timeInMillis
-                if (nextDate < july2015Date()) events = events.toMutableList().also { it[index] = chain.copy(increments = chain.increments + SixthCpcEventIncrement(nextPb, gp, nextDate)) }
+                if (nextDate <= july2015Date()) events = events.toMutableList().also { it[index] = chain.copy(increments = chain.increments + SixthCpcEventIncrement(nextPb, gp, nextDate)) }
             }, onAddEvent = { showForm = true })
         }
 
