@@ -29,6 +29,7 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult) {
     var eventLatestPayInBand by remember { mutableStateOf<Int?>(null) }
     var eventLatestDate by remember { mutableStateOf<Long?>(null) }
     var automaticSeventhPayInBand by remember { mutableStateOf<Int?>(null) }
+    var hasSixthCpcEvent by remember { mutableStateOf(false) }
     var gradePayText by remember(conversion.gradePay) { mutableStateOf(conversion.gradePay.toString()) }
 
     val editedGradePay = gradePayText.toIntOrNull()?.takeIf { it > 0 } ?: conversion.gradePay
@@ -96,21 +97,29 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult) {
             }
         }
 
-        Button(
-            onClick = {
-                val currentPayInBand = latest?.let { it.pay - editedGradePay } ?: conversion.payInPayBand
-                val nextPay = calculateSixthCpcNextIncrement(currentPayInBand, editedGradePay, conversion.scale.payBandMaximum) ?: return@Button
-                val nextDate = latest?.let { addInlineSixthYear(it.date) } ?: inlineSixthFirstIncrementDate()
-                if (nextDate <= inlineSixthJuly2015Date()) {
-                    incrementSteps = incrementSteps + InlineSixthCpcIncrementStep(nextPay, nextDate)
-                    if (nextDate == inlineSixthJuly2015Date()) automaticSeventhPayInBand = nextPay - editedGradePay
-                }
-            },
-            enabled = !reaches2015 && gradePayText.toIntOrNull()?.let { it > 0 } == true,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = ContinuationBlue),
-            shape = RoundedCornerShape(12.dp)
-        ) { Text(if (reaches2015) "01 July 2015 Reached — 7th CPC Starts Automatically" else "Next Increment", fontWeight = FontWeight.Bold) }
+        if (!hasSixthCpcEvent) {
+            Button(
+                onClick = {
+                    val currentPayInBand = latest?.let { it.pay - editedGradePay } ?: conversion.payInPayBand
+                    val nextPay = calculateSixthCpcNextIncrement(currentPayInBand, editedGradePay, conversion.scale.payBandMaximum) ?: return@Button
+                    val nextDate = latest?.let { addInlineSixthYear(it.date) } ?: inlineSixthFirstIncrementDate()
+                    if (nextDate <= inlineSixthJuly2015Date()) {
+                        incrementSteps = incrementSteps + InlineSixthCpcIncrementStep(nextPay, nextDate)
+                        if (nextDate == inlineSixthJuly2015Date()) automaticSeventhPayInBand = nextPay - editedGradePay
+                    }
+                },
+                enabled = !reaches2015 && gradePayText.toIntOrNull()?.let { it > 0 } == true,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = ContinuationBlue),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text(
+                    if (reaches2015) "01 July 2015 Reached — 7th CPC Starts Automatically"
+                    else "Next Increment",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
 
         SixthCpcEventsSection(
             calculation = conversion,
@@ -124,7 +133,8 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult) {
                 eventLatestPayInBand = payInBand
                 eventLatestDate = date
                 if (date >= inlineSixthJuly2015Date()) automaticSeventhPayInBand = payInBand
-            }
+            },
+            onEventsStateChange = { hasSixthCpcEvent = it }
         )
 
         if (reaches2016) {
