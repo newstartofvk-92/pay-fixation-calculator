@@ -36,7 +36,31 @@ fun calculateFifthCpcEvent(eventDate: Long,currentPay: Int,currentScale: FifthCp
     return FifthCpcEventResult(eventDate,eventType,fixationOption,currentPay,first,if (fixationOption == FifthCpcFixationOption.FROM_DNI) base else null,newPay,targetScale,nextIncrementDate,listOf("5th CPC event fixation","Next DNI follows the applicable 5th CPC increment date; event-date fixation uses the first day of the event month in the following year."))
 }
 
-fun calculateFifthCpcNextStage(currentPay:Int,scale:FifthCpcScale):Int? = fifthCpcStages(scale.title).firstOrNull { it > currentPay }
+fun calculateFifthCpcNextStage(currentPay: Int, scale: FifthCpcScale): Int? {
+    // The 5th CPC scale notation is authoritative for the annual increment.
+    // Example: 6500-200-10500 means current pay + 200, not the next
+    // numerically generated value from another scale.
+    val values = Regex("\\d+")
+        .findAll(scale.title.substringBefore(" (PB-"))
+        .map { it.value.toInt() }
+        .toList()
+
+    if (values.size < 3) return null
+
+    var index = 0
+    while (index + 2 < values.size) {
+        val start = values[index]
+        val increment = values[index + 1]
+        val end = values[index + 2]
+
+        if (increment > 0 && currentPay in start..end) {
+            val next = currentPay + increment
+            if (next <= end) return next
+        }
+        index += 2
+    }
+    return null
+}
 fun findEqualOrNextHigherFifthCpcStage(currentPay:Int,scale:FifthCpcScale):Int { val s=fifthCpcStages(scale.title); if(s.isEmpty()) return maxOf(scale.payBandMinimum,currentPay); return s.firstOrNull { it>=currentPay } ?: s.last() }
 private fun fifthCpcStages(n:String):List<Int>{ val a=Regex("\\d+").findAll(n.substringBefore(" (PB-" )).map{it.value.toInt()}.toList(); if(a.isEmpty()) return emptyList(); if(a.size==1)return a; val r=mutableListOf<Int>(); var c=a[0]; r+=c; var i=1; while(i+1<a.size){val inc=a[i];val end=a[i+1];if(inc<=0||end<c)break;while(c+inc<=end){c+=inc;r+=c};if(c<end){c=end;r+=c};i+=2};return r.distinct() }
 private fun nextFifthCpcDniOnOrAfter(eventDate:Long,known:Long):Long{var d=known;while(d<eventDate)d=addFifthCpcYear(d);return d}
