@@ -284,12 +284,12 @@ fun FifthCpcHistoricalIncrementSection(
 
         if (nextDate != null && nextDate > endDate) {
             Text(
-                "The 5th CPC increment progression has reached the 01 January 2006 boundary. The next stage is the 5th CPC → 6th CPC fixation.",
+                "The 5th CPC timeline has reached the 01 January 2006 boundary. The next stage is the 5th CPC → 6th CPC fixation.",
                 color = FifthHistoricalSecondary, fontSize = 12.sp
             )
         }
 
-        if (onContinueToSixth != null && currentDate >= endDate) {
+        if (onContinueToSixth != null && (currentDate >= endDate || (nextDate != null && nextDate > endDate))) {
             val mappedScale = currentScale
             if (mappedScale != null) {
                 Button(
