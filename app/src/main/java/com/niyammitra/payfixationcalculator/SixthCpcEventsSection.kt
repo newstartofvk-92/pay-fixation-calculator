@@ -127,7 +127,7 @@ fun SixthCpcEventsSection(
         Text("Add promotion, financial-upgradation or pay-scale events chronologically. The latest result becomes the input for the next event.", color = EventSecondary, fontSize = 12.sp)
 
         events.forEachIndexed { index, chain ->
-            EventCard(chain, index, onDelete = { events = events.take(index) }, onNextIncrement = {
+            EventCard(chain, index, onDelete = { events = events.take(index) }, onIncrementDeleted = { updatedIncrements -> events = events.toMutableList().also { it[index] = chain.copy(increments = updatedIncrements) } }, onNextIncrement = {
                 val pb = currentPayInBand(chain) ?: return@EventCard
                 val gp = currentGradePay(chain) ?: return@EventCard
                 val next = calculateSixthCpcNextIncrement(pb, gp, bandForGradePay(gp).payBandMaximum) ?: return@EventCard
@@ -277,7 +277,7 @@ fun SixthCpcEventsSection(
 }
 
 @Composable
-private fun EventCard(chain: SixthCpcEventChain, index: Int, onDelete: () -> Unit, onNextIncrement: () -> Unit, onAddEvent: () -> Unit) {
+private fun EventCard(chain: SixthCpcEventChain, index: Int, onDelete: () -> Unit, onIncrementDeleted: (List<SixthCpcEventIncrement>) -> Unit, onNextIncrement: () -> Unit, onAddEvent: () -> Unit) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -325,23 +325,27 @@ private fun EventCard(chain: SixthCpcEventChain, index: Int, onDelete: () -> Uni
                                 fontWeight = FontWeight.ExtraBold
                             )
                         }
+                        TextButton(onClick = {
+                            val updated = chain.increments.toMutableList()
+                            if (i in updated.indices) updated.removeAt(i)
+                            onIncrementDeleted(updated)
+                        }) {
+                            Text("Delete", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
 
-            // Before the first event, the card has the two continuation actions.
-            // Once an event has been added, the old Next Increment action must not
-            // remain above Add Another Event. The new event becomes the current
-            // position; its next increment is handled after the event progression.
-            if (chain.increments.isEmpty()) {
-                Button(
-                    onClick = onNextIncrement,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = EventBlue),
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("Next Increment", fontWeight = FontWeight.Bold)
-                }
+            // Next Increment remains available after an event. It is the action
+            // for continuing the current event chain. Add Another Event is kept
+            // separately below it.
+            Button(
+                onClick = onNextIncrement,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = EventBlue),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Text("Next Increment", fontWeight = FontWeight.Bold)
             }
             Button(
                 onClick = onAddEvent,
