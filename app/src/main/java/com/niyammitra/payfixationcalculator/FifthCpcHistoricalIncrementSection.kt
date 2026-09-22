@@ -338,31 +338,57 @@ fun FifthCpcHistoricalIncrementSection(
 }
 
 private fun parseFifthCpcScaleStages(scale: String): List<Int> {
-    val body = scale.removePrefix("Rs. ").substringBefore(" (").trim()
-    val numbers = Regex("\\d+").findAll(body).map { it.value.toInt() }.toList()
-    if (numbers.size < 2) return numbers.distinct()
+    val body = scale
+        .removePrefix("Rs. ")
+        .substringBefore(" (")
+        .trim()
+
+    val values = Regex("\\d+")
+        .findAll(body)
+        .map { it.value.toInt() }
+        .toList()
+
+    if (values.isEmpty()) return emptyList()
+    if (values.size == 1) return listOf(values[0])
+
     val stages = mutableListOf<Int>()
-    var current = numbers[0]
-    stages += current
-    var index = 1
-    while (index + 1 < numbers.size) {
-        val increment = numbers[index]
-        val boundary = numbers[index + 1]
-        if (increment <= 0 || boundary <= current) {
+    var index = 0
+
+    while (index < values.lastIndex) {
+        val start = values[index]
+        val increment = values[index + 1]
+
+        if (increment <= 0) {
+            index += 1
+            continue
+        }
+
+        val end = if (index + 2 <= values.lastIndex) values[index + 2] else null
+
+        if (end == null || end <= start) {
+            stages += start
             index += 2
             continue
         }
-        while (current + increment <= boundary) {
+
+        if (stages.isEmpty() || stages.last() != start) {
+            stages += start
+        }
+
+        var current = start
+        while (current + increment <= end) {
             current += increment
             stages += current
         }
-        if (current < boundary) {
-            current = boundary
-            stages += current
+
+        if (current != end) {
+            stages += end
         }
+
         index += 2
     }
-    return stages.distinct().sorted()
+
+    return stages.distinct()
 }
 
 private fun findFifthScaleForHistoricalJourney(revisedScale: String): FifthCpcScale? {
