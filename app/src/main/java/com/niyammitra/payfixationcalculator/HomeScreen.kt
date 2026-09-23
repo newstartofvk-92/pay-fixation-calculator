@@ -70,33 +70,24 @@ fun V2AppScreen() {
     var showAboutDialog by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf<PayFixationMode?>(null) }
     var showStartDateScreen by remember { mutableStateOf(false) }
-    var showStartingPositionScreen by remember { mutableStateOf(false) }
-    var selectedStartingPosition by remember { mutableStateOf<PayFixationStartingPosition?>(null) }
     var selectedStartDate by remember { mutableStateOf<Long?>(null) }
     var detectedCommission by remember { mutableStateOf<PayCommission?>(null) }
     
     if (showCalculator) { BackHandler { showCalculator = false }; PayFixationCalculatorScreen(); return }
-    if (showStartingPositionScreen && selectedStartDate != null && detectedCommission != null) {
-        PayFixationStartingPositionScreen(
-            commission = detectedCommission!!,
-            startDateMillis = selectedStartDate!!,
-            onBack = { showStartingPositionScreen = false; showStartDateScreen = true },
-            onContinue = { position ->
-                selectedStartingPosition = position
-                showStartingPositionScreen = false
-            }
-        )
-        return
-    }
     if (showStartDateScreen) {
         PayFixationStartDateScreen(
             onBack = { showStartDateScreen = false },
             onContinue = { date, commission ->
                 selectedStartDate = date
                 detectedCommission = commission
-                selectedStartingPosition = null
                 showStartDateScreen = false
-                showStartingPositionScreen = true
+
+                when (commission) {
+                    PayCommission.FOURTH -> showFourthToFifth = true
+                    PayCommission.FIFTH -> showFifthToSixth = true
+                    PayCommission.SIXTH -> showSixthToSeventh = true
+                    PayCommission.SEVENTH -> selectedMode = PayFixationMode.COMPLETE_JOURNEY
+                }
             }
         )
         return
@@ -144,8 +135,7 @@ fun V2AppScreen() {
             onHistory = { history = HistoryStore.getAll(context); showHistory = true },
             onAbout = { showAboutDialog = true },
             selectedStartDate = selectedStartDate,
-            detectedCommission = detectedCommission,
-            selectedStartingPosition = selectedStartingPosition
+            detectedCommission = detectedCommission
         )
 
         PayFixationMode.CPC_CONVERSION_ONLY -> {
@@ -302,8 +292,7 @@ private fun PayFixationModeJourneyEntryScreen(
     onHistory: () -> Unit,
     onAbout: () -> Unit,
     selectedStartDate: Long?,
-    detectedCommission: PayCommission?,
-    selectedStartingPosition: PayFixationStartingPosition?
+    detectedCommission: PayCommission?
 ) {
     Column(
         modifier = Modifier.fillMaxSize().background(HomeNiyamBackground),
@@ -333,15 +322,7 @@ private fun PayFixationModeJourneyEntryScreen(
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Detected starting CPC", color = HomeNiyamTextSecondary, fontSize = 13.sp)
                         Text(detectedCommission.displayName(), color = HomeNiyamBlue, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
-                        Text(
-                            if (selectedStartingPosition == null) "Starting pay details are required next."
-                            else "Starting pay position captured.",
-                            color = HomeNiyamTextSecondary,
-                            fontSize = 13.sp
-                        )
-                        TextButton(onClick = onStartDate) {
-                            Text("Change Starting Date")
-                        }
+                        Text("The existing CPC workflow will be opened next.", color = HomeNiyamTextSecondary, fontSize = 13.sp)
                     }
                 }
             }
