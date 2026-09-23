@@ -69,8 +69,7 @@ fun V2AppScreen() {
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf<PayFixationMode?>(null) }
-    var showConversionComingSoon by remember { mutableStateOf(false) }
-
+    
     if (showCalculator) { BackHandler { showCalculator = false }; PayFixationCalculatorScreen(); return }
     if (showFourthToFifth) {
         FourthToFifthCpcScreen(
@@ -132,14 +131,6 @@ fun V2AppScreen() {
     }
 
     if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })
-    if (showConversionComingSoon) {
-        AlertDialog(
-            onDismissRequest = { showConversionComingSoon = false },
-            title = { Text("CPC Conversion Only") },
-            text = { Text("The conversion-only workflow will be connected to the existing CPC conversion engines in the next phase. No existing calculation logic is changed in this phase.") },
-            confirmButton = { TextButton(onClick = { showConversionComingSoon = false }) { Text("OK") } }
-        )
-    }
 }
 
 @Composable
