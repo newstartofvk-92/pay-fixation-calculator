@@ -86,6 +86,12 @@ fun PayCommission.displayName(): String = when (this) {
     PayCommission.SEVENTH -> "7th CPC"
 }
 
+private fun formatStartDate(dateMillis: Long): String {
+    val formatter = SimpleDateFormat("dd MMMM yyyy", Locale.getDefault())
+    formatter.timeZone = TimeZone.getTimeZone("UTC")
+    return formatter.format(Date(dateMillis))
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PayFixationStartDateScreen(
