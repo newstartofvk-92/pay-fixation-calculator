@@ -44,7 +44,8 @@ fun FifthCpcHistoricalIncrementSection(
         mutableStateOf(findFifthScaleForHistoricalJourney(revisedScale))
     }
     var eventPay by remember { mutableStateOf<Int?>(null) }
-    var eventDate by remember { mutableStateOf<Long?>(null) }\n    var eventDni by remember { mutableStateOf<Long?>(null) }
+    var eventDate by remember { mutableStateOf<Long?>(null) }
+    var eventDni by remember { mutableStateOf<Long?>(null) }
     var showEventSection by remember { mutableStateOf(false) }
     var showSixthCpcContinuation by remember { mutableStateOf(false) }
     var eventHistory by remember(initialPay, revisedScale, conversionDate, firstIncrementDate) { mutableStateOf<List<FifthCpcHistoricalEventStep>>(emptyList()) }
@@ -76,12 +77,13 @@ fun FifthCpcHistoricalIncrementSection(
     val stages = remember(currentScale) {
         currentScale?.let { parseFifthCpcScaleStages(it.title) }.orEmpty()
     }
-    val nextDate = when {
+    val currentDni = when {
         latestIsAfterEvent -> addFifthHistoricalYear(currentDate)
-        eventApplied -> addFifthEventIncrementYear(currentDate)
-        latest != null -> addFifthHistoricalYear(currentDate)
+        eventApplied && eventDni != null -> eventDni!!
+        latest != null -> addFifthHistoricalYear(latest.date)
         else -> firstIncrementDate
     }
+    val nextDate = currentDni
     val effectiveScale = currentScale
     val nextPay = calculateNextFifthCpcStage(currentPay, effectiveScale)
     val endDate = fifthCpcEndDate()
@@ -102,7 +104,8 @@ fun FifthCpcHistoricalIncrementSection(
                 Text("Initial 5th CPC Scale: " + revisedScale, color = FifthHistoricalSecondary, fontSize = 13.sp)
                 Text("Active 5th CPC Scale: " + (currentScale?.title ?: "Not available"), color = FifthHistoricalText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 Text("Current 5th CPC Basic Pay: " + formatFifthHistoricalCurrency(currentPay), color = FifthHistoricalText, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text("Current effective date: " + formatFifthHistoricalDate(currentDate), color = FifthHistoricalSecondary, fontSize = 12.sp)\n                Text("Current DNI / Next Increment: " + (currentDni?.let(::formatFifthHistoricalDate) ?: "Not available"), color = FifthHistoricalSecondary, fontSize = 12.sp)
+                Text("Current effective date: " + formatFifthHistoricalDate(currentDate), color = FifthHistoricalSecondary, fontSize = 12.sp)
+                Text("Current DNI / Next Increment: " + (currentDni?.let(::formatFifthHistoricalDate) ?: "Not available"), color = FifthHistoricalSecondary, fontSize = 12.sp)
                 if (nextDate != null && nextPay != null && nextDate <= endDate) {
                     Text(
                         "Next increment: " + formatFifthHistoricalDate(nextDate) + " → " + formatFifthHistoricalCurrency(nextPay),
@@ -262,17 +265,20 @@ fun FifthCpcHistoricalIncrementSection(
                         currentPay = currentPay,
                         currentScale = currentScale,
                         currentDate = currentDate,
-                        onEventApplied = { appliedEventType, newScale, newPay, appliedEventDate, implementationDate ->
+                        currentDni = currentDni,
+                        onEventApplied = { appliedEventType, newScale, newPay, appliedEventDate, implementationDate, newDni ->
                             eventHistory = eventHistory + FifthCpcHistoricalEventStep(
                                 type = appliedEventType,
                                 scale = newScale.title,
                                 pay = newPay,
                                 eventDate = appliedEventDate,
-                                implementationDate = implementationDate
+                                implementationDate = implementationDate,
+                                dniDate = newDni
                             )
                             eventScale = newScale
                             eventPay = newPay
                             eventDate = implementationDate
+                            eventDni = newDni
                             showEventSection = false
                         }
                     )
@@ -453,17 +459,6 @@ private fun addFifthHistoricalYear(date: Long): Long =
     Calendar.getInstance().apply {
         timeInMillis = date
         add(Calendar.YEAR, 1)
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
-
-private fun addFifthEventIncrementYear(date: Long): Long =
-    Calendar.getInstance().apply {
-        timeInMillis = date
-        add(Calendar.YEAR, 1)
-        set(Calendar.DAY_OF_MONTH, 1)
         set(Calendar.HOUR_OF_DAY, 0)
         set(Calendar.MINUTE, 0)
         set(Calendar.SECOND, 0)
