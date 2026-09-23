@@ -35,7 +35,7 @@ fun FifthCpcEventSection(
     }
 
     val feederIncrementedPay = currentStages.firstOrNull { it > currentPay } ?: currentPay
-    val implementationDate = if (implementationOption == "From DNI") calculateEventDni(currentDate) else eventDate
+    val implementationDate = if (implementationOption == "From DNI") currentDni else eventDate\n    val newDni = implementationDate?.let(::calculateNextFifthCpcDni)
     val placementBasePay = if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") currentPay else feederIncrementedPay
     val fixedPay = if (target != null && targetStages.isNotEmpty()) {
         targetStages.firstOrNull { it >= placementBasePay } ?: targetStages.last()
@@ -62,7 +62,7 @@ fun FifthCpcEventSection(
                 RadioButton(implementationOption == "From DNI", { implementationOption = "From DNI" })
                 Text("From DNI", modifier = Modifier.padding(top = 12.dp))
             }
-            Text("DNI: " + formatFifthEventDate(calculateEventDni(currentDate)), fontSize = 12.sp)
+            Text("Current DNI: " + (currentDni?.let(::formatFifthEventDate) ?: "Not available"), fontSize = 12.sp)\n            Text("New DNI after fixation: " + (newDni?.let(::formatFifthEventDate) ?: "Select event/fixation date"), fontSize = 12.sp)
         }
 
         Row(modifier = Modifier.fillMaxWidth()) {
