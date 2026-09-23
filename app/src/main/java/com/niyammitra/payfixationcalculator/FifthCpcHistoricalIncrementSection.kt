@@ -14,7 +14,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 data class FifthCpcHistoricalIncrementStep(val pay: Int, val date: Long)
-data class FifthCpcHistoricalEventStep(val type: String, val scale: String, val pay: Int, val eventDate: Long, val implementationDate: Long)
+data class FifthCpcHistoricalEventStep(val type: String, val scale: String, val pay: Int, val eventDate: Long, val implementationDate: Long, val dniDate: Long)
 
 private data class FifthCpcTimelineItem(
     val date: Long,
@@ -44,7 +44,7 @@ fun FifthCpcHistoricalIncrementSection(
         mutableStateOf(findFifthScaleForHistoricalJourney(revisedScale))
     }
     var eventPay by remember { mutableStateOf<Int?>(null) }
-    var eventDate by remember { mutableStateOf<Long?>(null) }
+    var eventDate by remember { mutableStateOf<Long?>(null) }\n    var eventDni by remember { mutableStateOf<Long?>(null) }
     var showEventSection by remember { mutableStateOf(false) }
     var showSixthCpcContinuation by remember { mutableStateOf(false) }
     var eventHistory by remember(initialPay, revisedScale, conversionDate, firstIncrementDate) { mutableStateOf<List<FifthCpcHistoricalEventStep>>(emptyList()) }
@@ -102,7 +102,7 @@ fun FifthCpcHistoricalIncrementSection(
                 Text("Initial 5th CPC Scale: " + revisedScale, color = FifthHistoricalSecondary, fontSize = 13.sp)
                 Text("Active 5th CPC Scale: " + (currentScale?.title ?: "Not available"), color = FifthHistoricalText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 Text("Current 5th CPC Basic Pay: " + formatFifthHistoricalCurrency(currentPay), color = FifthHistoricalText, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text("Current effective date: " + formatFifthHistoricalDate(currentDate), color = FifthHistoricalSecondary, fontSize = 12.sp)
+                Text("Current effective date: " + formatFifthHistoricalDate(currentDate), color = FifthHistoricalSecondary, fontSize = 12.sp)\n                Text("Current DNI / Next Increment: " + (currentDni?.let(::formatFifthHistoricalDate) ?: "Not available"), color = FifthHistoricalSecondary, fontSize = 12.sp)
                 if (nextDate != null && nextPay != null && nextDate <= endDate) {
                     Text(
                         "Next increment: " + formatFifthHistoricalDate(nextDate) + " → " + formatFifthHistoricalCurrency(nextPay),
