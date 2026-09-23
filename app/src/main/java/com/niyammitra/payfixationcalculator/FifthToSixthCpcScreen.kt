@@ -54,7 +54,7 @@ fun FifthToSixthCpcScreen(
         basicPay != null &&
         basicPay > 0 &&
         selectedDni != null &&
-        selectedDni!! > startDate &&
+        selectedDni!! >= startDate &&
         selectedDni!! <= endDate
 
     Column(Modifier.fillMaxSize().background(FiveSixBackground)) {
@@ -114,7 +114,7 @@ fun FifthToSixthCpcScreen(
                     }
 
                     if (selectedDni != null && startDate != null && selectedDni!! <= startDate) {
-                        Text("DNI must be after the selected starting date.", color = Color(0xFFC62828), fontSize = 12.sp)
+                        Text("DNI must be on or after the selected starting date.", color = Color(0xFFC62828), fontSize = 12.sp)
                     }
                     if (selectedDni != null && selectedDni!! > endDate) {
                         Text("DNI must be on or before 01 January 2006.", color = Color(0xFFC62828), fontSize = 12.sp)
