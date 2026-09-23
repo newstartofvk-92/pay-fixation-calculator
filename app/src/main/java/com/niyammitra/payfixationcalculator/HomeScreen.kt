@@ -69,8 +69,22 @@ fun V2AppScreen() {
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf<PayFixationMode?>(null) }
+    var showStartDateScreen by remember { mutableStateOf(false) }
+    var selectedStartDate by remember { mutableStateOf<Long?>(null) }
+    var detectedCommission by remember { mutableStateOf<PayCommission?>(null) }
     
     if (showCalculator) { BackHandler { showCalculator = false }; PayFixationCalculatorScreen(); return }
+    if (showStartDateScreen) {
+        PayFixationStartDateScreen(
+            onBack = { showStartDateScreen = false },
+            onContinue = { date, commission ->
+                selectedStartDate = date
+                detectedCommission = commission
+                showStartDateScreen = false
+            }
+        )
+        return
+    }
     if (showFourthToFifth) {
         FourthToFifthCpcScreen(
             onBack = { showFourthToFifth = false },
@@ -108,18 +122,13 @@ fun V2AppScreen() {
             onAbout = { showAboutDialog = true }
         )
 
-        PayFixationMode.COMPLETE_JOURNEY -> HomeFixationSelectionScreen(
-            onSelected = { type ->
-                selectedFixationType = type
-                when (type) {
-                    FixationType.FOURTH_TO_FIFTH -> { carriedFifthScaleTitle = null; carriedFifthBasicPay = null; showFourthToFifth = true }
-                    FixationType.FIFTH_TO_SIXTH -> { carriedFifthScaleTitle = null; carriedFifthBasicPay = null; showFifthToSixth = true }
-                    FixationType.SIXTH_TO_SEVENTH -> { carriedPayBand = null; carriedPayInPayBand = null; carriedGradePay = null; showSixthToSeventh = true }
-                    FixationType.SEVENTH_CPC -> showCalculator = true
-                }
-            },
+        PayFixationMode.COMPLETE_JOURNEY -> PayFixationModeJourneyEntryScreen(
+            onStartDate = { showStartDateScreen = true },
+            onLegacySelection = { },
             onHistory = { history = HistoryStore.getAll(context); showHistory = true },
-            onAbout = { showAboutDialog = true }
+            onAbout = { showAboutDialog = true },
+            selectedStartDate = selectedStartDate,
+            detectedCommission = detectedCommission
         )
 
         PayFixationMode.CPC_CONVERSION_ONLY -> {
@@ -264,6 +273,51 @@ private fun ConversionOnlyPlaceholder(onBack: () -> Unit) {
             }
             TextButton(onClick = onBack) {
                 Text("Back")
+            }
+        }
+    }
+}
+
+@Composable
+private fun PayFixationModeJourneyEntryScreen(
+    onStartDate: () -> Unit,
+    onLegacySelection: () -> Unit,
+    onHistory: () -> Unit,
+    onAbout: () -> Unit,
+    selectedStartDate: Long?,
+    detectedCommission: PayCommission?
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().background(HomeNiyamBackground),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        HomeHeader(onHistory = onHistory, onAbout = onAbout)
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text("Complete Pay Fixation Journey", color = HomeNiyamTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+            Text("Start with the date of your choice. The applicable CPC will be detected automatically.", color = HomeNiyamTextSecondary, fontSize = 14.sp)
+
+            PayFixationModeCard(
+                title = "Start from a Date",
+                description = "Select the starting date first. You will not have to choose the CPC manually.",
+                badge = "DATE",
+                onClick = onStartDate
+            )
+
+            if (selectedStartDate != null && detectedCommission != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                ) {
+                    Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Detected starting CPC", color = HomeNiyamTextSecondary, fontSize = 13.sp)
+                        Text(detectedCommission.displayName(), color = HomeNiyamBlue, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("Starting pay details will be collected next.", color = HomeNiyamTextSecondary, fontSize = 13.sp)
+                    }
+                }
             }
         }
     }
