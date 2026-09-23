@@ -106,7 +106,7 @@ fun V2AppScreen() {
         return
     }
     if (showFifthToSixth) {
-        FifthToSixthCpcScreen(onBack = { showFifthToSixth = false }, onContinueToSeventh = { payBand, payInPayBand, gradePay -> carriedPayBand = payBand; carriedPayInPayBand = payInPayBand; carriedGradePay = gradePay; showFifthToSixth = false; showSixthToSeventh = true }, initialScaleTitle = carriedFifthScaleTitle, initialBasicPay = carriedFifthBasicPay)
+        FifthToSixthCpcScreen(onBack = { showFifthToSixth = false }, onContinueToSeventh = { payBand, payInPayBand, gradePay -> carriedPayBand = payBand; carriedPayInPayBand = payInPayBand; carriedGradePay = gradePay; showFifthToSixth = false; showSixthToSeventh = true }, initialScaleTitle = carriedFifthScaleTitle, initialBasicPay = carriedFifthBasicPay, initialStartDate = selectedStartDate)
         return
     }
     if (showSixthToSeventh) {
