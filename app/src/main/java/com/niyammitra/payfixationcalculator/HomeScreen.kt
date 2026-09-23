@@ -70,17 +70,33 @@ fun V2AppScreen() {
     var showAboutDialog by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf<PayFixationMode?>(null) }
     var showStartDateScreen by remember { mutableStateOf(false) }
+    var showStartingPositionScreen by remember { mutableStateOf(false) }
+    var selectedStartingPosition by remember { mutableStateOf<PayFixationStartingPosition?>(null) }
     var selectedStartDate by remember { mutableStateOf<Long?>(null) }
     var detectedCommission by remember { mutableStateOf<PayCommission?>(null) }
     
     if (showCalculator) { BackHandler { showCalculator = false }; PayFixationCalculatorScreen(); return }
+    if (showStartingPositionScreen && selectedStartDate != null && detectedCommission != null) {
+        PayFixationStartingPositionScreen(
+            commission = detectedCommission!!,
+            startDateMillis = selectedStartDate!!,
+            onBack = { showStartingPositionScreen = false; showStartDateScreen = true },
+            onContinue = { position ->
+                selectedStartingPosition = position
+                showStartingPositionScreen = false
+            }
+        )
+        return
+    }
     if (showStartDateScreen) {
         PayFixationStartDateScreen(
             onBack = { showStartDateScreen = false },
             onContinue = { date, commission ->
                 selectedStartDate = date
                 detectedCommission = commission
+                selectedStartingPosition = null
                 showStartDateScreen = false
+                showStartingPositionScreen = true
             }
         )
         return
@@ -315,7 +331,15 @@ private fun PayFixationModeJourneyEntryScreen(
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Detected starting CPC", color = HomeNiyamTextSecondary, fontSize = 13.sp)
                         Text(detectedCommission.displayName(), color = HomeNiyamBlue, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
-                        Text("Starting pay details will be collected next.", color = HomeNiyamTextSecondary, fontSize = 13.sp)
+                        Text(
+                            if (selectedStartingPosition == null) "Starting pay details are required next."
+                            else "Starting pay position captured.",
+                            color = HomeNiyamTextSecondary,
+                            fontSize = 13.sp
+                        )
+                        TextButton(onClick = onStartDate) {
+                            Text("Change Starting Date")
+                        }
                     }
                 }
             }
