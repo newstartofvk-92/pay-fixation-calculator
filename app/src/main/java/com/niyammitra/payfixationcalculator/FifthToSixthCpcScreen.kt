@@ -163,23 +163,3 @@ private fun fifthCpcEndDateForScreen(): Long =
 private fun formatFifthSixScreenDate(value: Long): String =
     SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))
 
-@Composable
-private fun SixthCpcIncrementProgressionCard(calculation: FifthToSixthResult, steps: List<SixthCpcIncrementStep>, onDelete: (Int) -> Unit) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Increment Progression — ${calculation.scale.payBand}", color = FiveSixBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-            Text("Pay fixed on 01 January 2006: ${formatFiveSixCurrency(calculation.revisedBasicPay)}", color = FiveSixTextSecondary, fontSize = 13.sp)
-            steps.forEachIndexed { index, step ->
-                val payInBand = step.pay - calculation.gradePay
-                Surface(Modifier.fillMaxWidth(), color = FiveSixBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) { Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) { Column(Modifier.weight(1f)) { Text("Increment ${index + 1}", color = FiveSixTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold); Text("Date: ${formatSixthCpcDate(step.date)}", color = FiveSixTextPrimary, fontSize = 13.sp); Text("Pay in Pay Band: ${formatFiveSixCurrency(payInBand)}", color = FiveSixBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold); Text("Grade Pay: ${formatFiveSixCurrency(calculation.gradePay)}", color = FiveSixTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold) }; TextButton(onClick = { onDelete(index) }) { Text("Delete", fontWeight = FontWeight.Bold) } } }
-            }
-        }
-    }
-}
-
-private fun sixthCpcFirstIncrementDate(): Long = Calendar.getInstance().apply { clear(); set(2006, Calendar.JULY, 1, 0, 0, 0) }.timeInMillis
-private fun sixthCpcJuly2015Date(): Long = Calendar.getInstance().apply { clear(); set(2015, Calendar.JULY, 1, 0, 0, 0) }.timeInMillis
-private fun addSixthCpcYears(date: Long, years: Int): Long = Calendar.getInstance().apply { timeInMillis = date; add(Calendar.YEAR, years) }.timeInMillis
-private fun formatSixthCpcDate(value: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))
-@Composable private fun FiveSixRow(label: String, value: Int) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Text(label, color = FiveSixTextSecondary, fontSize = 13.sp, modifier = Modifier.weight(1f)); Text(formatFiveSixCurrency(value), color = FiveSixTextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp) } }
-private fun formatFiveSixCurrency(value: Int): String = NumberFormat.getCurrencyInstance(Locale.Builder().setLanguage("en").setRegion("IN").build()).format(value)
