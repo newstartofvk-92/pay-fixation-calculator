@@ -37,7 +37,7 @@ fun FifthCpcEventSection(
 
     val feederIncrementedPay = currentStages.firstOrNull { it > currentPay } ?: currentPay
     val implementationDate = if (implementationOption == "From DNI") currentDni else eventDate
-    val newDni = implementationDate?.let(::calculateNextFifthCpcDni)
+    val newDni = when (implementationOption) {\n        "From Event Date" -> eventDate?.let(::calculateEventBasedFifthCpcDni)\n        "From DNI" -> implementationDate?.let(::calculateNextFifthCpcDni)\n        else -> null\n    }
     val placementBasePay = if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") currentPay else feederIncrementedPay
     val fixedPay = if (target != null && targetStages.isNotEmpty()) {
         targetStages.firstOrNull { it >= placementBasePay } ?: targetStages.last()
