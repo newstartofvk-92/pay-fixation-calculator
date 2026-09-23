@@ -45,6 +45,11 @@ private val HomeNiyamBackground = Color(0xFFF7FAFC)
 private val HomeNiyamTextPrimary = Color(0xFF172B4D)
 private val HomeNiyamTextSecondary = Color(0xFF5B6B7A)
 
+private enum class PayFixationMode {
+    COMPLETE_JOURNEY,
+    CPC_CONVERSION_ONLY
+}
+
 @Composable
 fun V2AppScreen() {
     val context = LocalContext.current
@@ -63,6 +68,8 @@ fun V2AppScreen() {
     var selectedHistory by remember { mutableStateOf<CalculationHistory?>(null) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
+    var selectedMode by remember { mutableStateOf<PayFixationMode?>(null) }
+    var showConversionComingSoon by remember { mutableStateOf(false) }
 
     if (showCalculator) { BackHandler { showCalculator = false }; PayFixationCalculatorScreen(); return }
     if (showFourthToFifth) {
@@ -94,16 +101,181 @@ fun V2AppScreen() {
         if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })
         return
     }
-    HomeFixationSelectionScreen(onSelected = { type ->
-        selectedFixationType = type
-        when (type) {
-            FixationType.FOURTH_TO_FIFTH -> { carriedFifthScaleTitle = null; carriedFifthBasicPay = null; showFourthToFifth = true }
-            FixationType.FIFTH_TO_SIXTH -> { carriedFifthScaleTitle = null; carriedFifthBasicPay = null; showFifthToSixth = true }
-            FixationType.SIXTH_TO_SEVENTH -> { carriedPayBand = null; carriedPayInPayBand = null; carriedGradePay = null; showSixthToSeventh = true }
-            FixationType.SEVENTH_CPC -> showCalculator = true
+
+    when (selectedMode) {
+        null -> PayFixationModeSelectionScreen(
+            onSelected = { selectedMode = it },
+            onHistory = { history = HistoryStore.getAll(context); showHistory = true },
+            onAbout = { showAboutDialog = true }
+        )
+
+        PayFixationMode.COMPLETE_JOURNEY -> HomeFixationSelectionScreen(
+            onSelected = { type ->
+                selectedFixationType = type
+                when (type) {
+                    FixationType.FOURTH_TO_FIFTH -> { carriedFifthScaleTitle = null; carriedFifthBasicPay = null; showFourthToFifth = true }
+                    FixationType.FIFTH_TO_SIXTH -> { carriedFifthScaleTitle = null; carriedFifthBasicPay = null; showFifthToSixth = true }
+                    FixationType.SIXTH_TO_SEVENTH -> { carriedPayBand = null; carriedPayInPayBand = null; carriedGradePay = null; showSixthToSeventh = true }
+                    FixationType.SEVENTH_CPC -> showCalculator = true
+                }
+            },
+            onHistory = { history = HistoryStore.getAll(context); showHistory = true },
+            onAbout = { showAboutDialog = true }
+        )
+
+        PayFixationMode.CPC_CONVERSION_ONLY -> {
+            BackHandler { selectedMode = null }
+            ConversionOnlyPlaceholder(
+                onBack = { selectedMode = null }
+            )
         }
-    }, onHistory = { history = HistoryStore.getAll(context); showHistory = true }, onAbout = { showAboutDialog = true })
+    }
+
     if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })
+    if (showConversionComingSoon) {
+        AlertDialog(
+            onDismissRequest = { showConversionComingSoon = false },
+            title = { Text("CPC Conversion Only") },
+            text = { Text("The conversion-only workflow will be connected to the existing CPC conversion engines in the next phase. No existing calculation logic is changed in this phase.") },
+            confirmButton = { TextButton(onClick = { showConversionComingSoon = false }) { Text("OK") } }
+        )
+    }
+}
+
+@Composable
+private fun PayFixationModeSelectionScreen(
+    onSelected: (PayFixationMode) -> Unit,
+    onHistory: () -> Unit,
+    onAbout: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().background(HomeNiyamBackground),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        HomeHeader(onHistory = onHistory, onAbout = onAbout)
+
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                "Pay Fixation Calculator",
+                color = HomeNiyamTextPrimary,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                "Choose how you want to calculate or convert pay.",
+                color = HomeNiyamTextSecondary,
+                fontSize = 14.sp
+            )
+
+            PayFixationModeCard(
+                title = "Complete Pay Fixation Journey",
+                description = "Start from a historical date and carry the pay through the applicable CPCs, events, increments and later pay fixation.",
+                badge = "JOURNEY",
+                onClick = { onSelected(PayFixationMode.COMPLETE_JOURNEY) }
+            )
+
+            PayFixationModeCard(
+                title = "CPC Conversion Only",
+                description = "Convert an existing pay position from one CPC to another without running the complete historical journey.",
+                badge = "CONVERSION",
+                onClick = { onSelected(PayFixationMode.CPC_CONVERSION_ONLY) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun PayFixationModeCard(
+    title: String,
+    description: String,
+    badge: String,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(58.dp).background(
+                    HomeNiyamBlue.copy(alpha = 0.10f),
+                    RoundedCornerShape(15.dp)
+                ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    badge,
+                    color = HomeNiyamBlue,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    title,
+                    color = HomeNiyamTextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    description,
+                    color = HomeNiyamTextSecondary,
+                    fontSize = 13.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConversionOnlyPlaceholder(onBack: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().background(HomeNiyamBackground),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        HomeHeader()
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                "CPC Conversion Only",
+                color = HomeNiyamTextPrimary,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+            Text(
+                "This screen is reserved for the direct CPC conversion workflow. The existing 4th→5th, 5th→6th and 6th→7th conversion engines will be connected here next.",
+                color = HomeNiyamTextSecondary,
+                fontSize = 14.sp
+            )
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(18.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White)
+            ) {
+                Text(
+                    "Existing CPC calculation logic remains unchanged.",
+                    modifier = Modifier.padding(20.dp),
+                    color = HomeNiyamTextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            TextButton(onClick = onBack) {
+                Text("Back")
+            }
+        }
+    }
 }
 
 @Composable
