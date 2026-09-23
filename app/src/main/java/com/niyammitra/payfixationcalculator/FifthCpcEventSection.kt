@@ -15,7 +15,8 @@ fun FifthCpcEventSection(
     currentPay: Int,
     currentScale: FifthCpcScale,
     currentDate: Long,
-    onEventApplied: (String, FifthCpcScale, Int, Long, Long) -> Unit
+    currentDni: Long?,
+    onEventApplied: (String, FifthCpcScale, Int, Long, Long, Long) -> Unit
 ) {
     var eventDate by remember { mutableStateOf<Long?>(null) }
     var targetScale by remember { mutableStateOf<FifthCpcScale?>(null) }
@@ -35,7 +36,8 @@ fun FifthCpcEventSection(
     }
 
     val feederIncrementedPay = currentStages.firstOrNull { it > currentPay } ?: currentPay
-    val implementationDate = if (implementationOption == "From DNI") currentDni else eventDate\n    val newDni = implementationDate?.let(::calculateNextFifthCpcDni)
+    val implementationDate = if (implementationOption == "From DNI") currentDni else eventDate
+    val newDni = implementationDate?.let(::calculateNextFifthCpcDni)
     val placementBasePay = if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") currentPay else feederIncrementedPay
     val fixedPay = if (target != null && targetStages.isNotEmpty()) {
         targetStages.firstOrNull { it >= placementBasePay } ?: targetStages.last()
@@ -62,7 +64,8 @@ fun FifthCpcEventSection(
                 RadioButton(implementationOption == "From DNI", { implementationOption = "From DNI" })
                 Text("From DNI", modifier = Modifier.padding(top = 12.dp))
             }
-            Text("Current DNI: " + (currentDni?.let(::formatFifthEventDate) ?: "Not available"), fontSize = 12.sp)\n            Text("New DNI after fixation: " + (newDni?.let(::formatFifthEventDate) ?: "Select event/fixation date"), fontSize = 12.sp)
+            Text("Current DNI: " + (currentDni?.let(::formatFifthEventDate) ?: "Not available"), fontSize = 12.sp)
+            Text("New DNI after fixation: " + (newDni?.let(::formatFifthEventDate) ?: "Select event/fixation date"), fontSize = 12.sp)
         }
 
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -128,13 +131,17 @@ fun FifthCpcEventSection(
                 val pay = fixedPay ?: return@Button
                 result = pay
                 val effectiveDate = implementationDate ?: return@Button
-                onEventApplied(eventType, scale, pay, date, effectiveDate)
+                val nextDni = newDni ?: return@Button
+                onEventApplied(eventType, scale, pay, date, effectiveDate, nextDni)
             },
             enabled = eventDate != null &&
                 eventDate!! >= currentDate &&
                 eventDate!! <= fifthCpcEventEndDate() &&
                 target != null &&
-                fixedPay != null,
+                fixedPay != null &&
+                implementationDate != null &&
+                newDni != null &&
+                (implementationOption != "From DNI" || currentDni != null),
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Apply 5th CPC Event", fontWeight = FontWeight.Bold)
@@ -186,9 +193,9 @@ private fun parseFifthCpcScaleStagesForEvent(scale: String): List<Int> {
     return stages.distinct().sorted()
 }
 
-private fun calculateEventDni(currentDate: Long): Long =
+private fun calculateNextFifthCpcDni(effectiveDate: Long): Long =
     Calendar.getInstance().apply {
-        timeInMillis = currentDate
+        timeInMillis = effectiveDate
         add(Calendar.YEAR, 1)
         set(Calendar.HOUR_OF_DAY, 0)
         set(Calendar.MINUTE, 0)
