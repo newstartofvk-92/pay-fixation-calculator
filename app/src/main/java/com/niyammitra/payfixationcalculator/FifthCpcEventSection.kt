@@ -46,6 +46,18 @@ fun FifthCpcEventSection(
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("5th CPC Event", fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
         Text(
+            "The event starts from the employee's current 5th CPC historical position. The scale, basic pay and DNI below are carried forward from the preceding increments/event.",
+            fontSize = 12.sp
+        )
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Current 5th CPC Position", fontWeight = FontWeight.Bold)
+                Text("Scale: " + currentScale.title)
+                Text("Basic Pay: ₹" + currentPay)
+                Text("DNI / Next Increment: " + (currentDni?.let(::formatFifthEventDate) ?: "Not available"))
+            }
+        }
+        Text(
             "For a promotion/ACP in the 5th CPC period, one increment is allowed in the feeder scale and pay is then fixed at the equal or next higher stage in the higher scale.",
             fontSize = 12.sp
         )
