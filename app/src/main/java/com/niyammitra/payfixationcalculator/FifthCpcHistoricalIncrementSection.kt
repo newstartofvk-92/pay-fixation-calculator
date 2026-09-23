@@ -35,6 +35,8 @@ fun FifthCpcHistoricalIncrementSection(
     revisedScale: String,
     firstIncrementDate: Long?,
     conversionDate: Long,
+    initialDate: Long = conversionDate,
+    initialDni: Long? = firstIncrementDate,
     onContinueToSeventh: ((String, Int, Int) -> Unit)? = null
 ) {
     var incrementSteps by remember(initialPay, revisedScale, conversionDate, firstIncrementDate) {
@@ -72,7 +74,7 @@ fun FifthCpcHistoricalIncrementSection(
         latestIsAfterEvent -> latest!!.date
         eventApplied -> eventDate!!
         latest != null -> latest.date
-        else -> conversionDate
+        else -> initialDate
     }
     val stages = remember(currentScale) {
         currentScale?.let { parseFifthCpcScaleStages(it.title) }.orEmpty()
@@ -81,7 +83,7 @@ fun FifthCpcHistoricalIncrementSection(
         latestIsAfterEvent -> addFifthHistoricalYear(currentDate)
         eventApplied && eventDni != null -> eventDni!!
         latest != null -> addFifthHistoricalYear(latest.date)
-        else -> firstIncrementDate
+        else -> initialDni
     }
     val nextDate = currentDni
     val effectiveScale = currentScale
