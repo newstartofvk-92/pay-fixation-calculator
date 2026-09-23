@@ -37,7 +37,11 @@ fun FifthCpcEventSection(
 
     val feederIncrementedPay = currentStages.firstOrNull { it > currentPay } ?: currentPay
     val implementationDate = if (implementationOption == "From DNI") currentDni else eventDate
-    val newDni = when (implementationOption) {\n        "From Event Date" -> eventDate?.let(::calculateEventBasedFifthCpcDni)\n        "From DNI" -> implementationDate?.let(::calculateNextFifthCpcDni)\n        else -> null\n    }
+    val newDni = when (implementationOption) {
+        "From Event Date" -> eventDate?.let(::calculateEventBasedFifthCpcDni)
+        "From DNI" -> implementationDate?.let(::calculateNextFifthCpcDni)
+        else -> null
+    }
     val placementBasePay = if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") currentPay else feederIncrementedPay
     val fixedPay = if (target != null && targetStages.isNotEmpty()) {
         targetStages.firstOrNull { it >= placementBasePay } ?: targetStages.last()
@@ -204,6 +208,17 @@ private fun parseFifthCpcScaleStagesForEvent(scale: String): List<Int> {
     }
     return stages.distinct().sorted()
 }
+
+private fun calculateEventBasedFifthCpcDni(eventDate: Long): Long =
+    Calendar.getInstance().apply {
+        timeInMillis = eventDate
+        add(Calendar.YEAR, 1)
+        set(Calendar.DAY_OF_MONTH, 1)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
 
 private fun calculateNextFifthCpcDni(effectiveDate: Long): Long =
     Calendar.getInstance().apply {
