@@ -144,7 +144,8 @@ fun V2AppScreen() {
             onHistory = { history = HistoryStore.getAll(context); showHistory = true },
             onAbout = { showAboutDialog = true },
             selectedStartDate = selectedStartDate,
-            detectedCommission = detectedCommission
+            detectedCommission = detectedCommission,
+            selectedStartingPosition = selectedStartingPosition
         )
 
         PayFixationMode.CPC_CONVERSION_ONLY -> {
@@ -301,7 +302,8 @@ private fun PayFixationModeJourneyEntryScreen(
     onHistory: () -> Unit,
     onAbout: () -> Unit,
     selectedStartDate: Long?,
-    detectedCommission: PayCommission?
+    detectedCommission: PayCommission?,
+    selectedStartingPosition: PayFixationStartingPosition?
 ) {
     Column(
         modifier = Modifier.fillMaxSize().background(HomeNiyamBackground),
