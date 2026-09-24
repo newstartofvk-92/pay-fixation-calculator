@@ -110,7 +110,7 @@ fun V2AppScreen() {
         return
     }
     if (showSixthToSeventh) {
-        SixthToSeventhCpcScreen(onBack = { showSixthToSeventh = false }, initialPayBand = carriedPayBand, initialGradePay = carriedGradePay, initialPayInPayBand = carriedPayInPayBand)
+        SixthToSeventhCpcScreen(onBack = { showSixthToSeventh = false }, initialPayBand = carriedPayBand, initialGradePay = carriedGradePay, initialPayInPayBand = carriedPayInPayBand, initialStartDate = selectedStartDate)
         return
     }
     if (showHistory) {
