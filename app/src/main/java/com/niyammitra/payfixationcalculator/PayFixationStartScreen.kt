@@ -73,7 +73,7 @@ fun detectPayCommission(startDateMillis: Long): PayCommission {
 
     return when {
         isOnOrAfter(2016, java.util.Calendar.JANUARY, 1) -> PayCommission.SEVENTH
-        isOnOrAfter(2006, java.util.Calendar.JULY, 1) -> PayCommission.SIXTH
+        isOnOrAfter(2006, java.util.Calendar.JANUARY, 1) -> PayCommission.SIXTH
         isOnOrAfter(1996, java.util.Calendar.JANUARY, 1) -> PayCommission.FIFTH
         else -> PayCommission.FOURTH
     }
