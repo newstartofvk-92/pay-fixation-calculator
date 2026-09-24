@@ -85,7 +85,7 @@ fun V2AppScreen() {
                 when (commission) {
                     PayCommission.FOURTH -> showFourthToFifth = true
                     PayCommission.FIFTH -> showFifthToSixth = true
-                    PayCommission.SIXTH -> showSixthToSeventh = true
+                    PayCommission.SIXTH -> showFifthToSixth = true
                     PayCommission.SEVENTH -> selectedMode = PayFixationMode.COMPLETE_JOURNEY
                 }
             }
