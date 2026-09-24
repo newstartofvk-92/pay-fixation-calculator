@@ -65,7 +65,8 @@ fun SixthToSeventhCpcScreen(
     onBack: () -> Unit,
     initialPayBand: String? = null,
     initialGradePay: Int? = null,
-    initialPayInPayBand: Int? = null
+    initialPayInPayBand: Int? = null,
+    initialStartDate: Long? = null
 ) {
     BackHandler(onBack = onBack)
     val initialBand = initialPayBand?.let { bandPrefix ->
@@ -96,6 +97,9 @@ fun SixthToSeventhCpcScreen(
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    initialStartDate?.let {
+                        Text("Starting Date: ${formatSixSevenDate(it)}", color = SixSevenTextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
                     Text("6th CPC Pay Details", color = SixSevenBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                     Text("Enter the Pay in Pay Band and Grade Pay drawn immediately before coming over to the 7th CPC revised pay structure.", color = SixSevenTextSecondary, fontSize = 13.sp)
                     Box {
