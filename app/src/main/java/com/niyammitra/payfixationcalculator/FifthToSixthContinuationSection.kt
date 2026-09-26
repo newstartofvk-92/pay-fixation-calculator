@@ -122,7 +122,6 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult, onContinueTo
         }
 
         SixthCpcEventsSection(
-            calculation = conversion,
             startingPayInPayBand = latestPayInBand,
             startingGradePay = editedGradePay,
             startingPayBand = conversion.scale.payBand,

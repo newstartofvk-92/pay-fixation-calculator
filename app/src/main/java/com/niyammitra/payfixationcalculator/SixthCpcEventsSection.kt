@@ -84,20 +84,25 @@ private fun currentGradePay(chain: SixthCpcEventChain) = chain.increments.lastOr
     ?: chain.result?.newGradePay ?: chain.scaleUpgrade?.newGradePay
 private fun currentPayBand(chain: SixthCpcEventChain) = chain.result?.newPayBand ?: chain.scaleUpgrade?.newPayBand
 private fun currentDate(chain: SixthCpcEventChain) = chain.increments.lastOrNull()?.date
-    ?: chain.result?.nextIncrementDate ?: chain.scaleUpgrade?.nextIncrementDate
+    ?: chain.result?.eventDate ?: chain.scaleUpgrade?.eventDate
+
+private fun nextIncrementDate(chain: SixthCpcEventChain) = chain.increments.lastOrNull()?.let {
+    Calendar.getInstance().apply { timeInMillis = it.date; add(Calendar.YEAR, 1) }.timeInMillis
+} ?: chain.result?.nextIncrementDate ?: chain.scaleUpgrade?.nextIncrementDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SixthCpcEventsSection(
-    calculation: FifthToSixthResult,
-    startingPayInPayBand: Int = calculation.payInPayBand,
-    startingGradePay: Int = calculation.gradePay,
-    startingPayBand: String = calculation.scale.payBand,
+    startingPayInPayBand: Int,
+    startingGradePay: Int,
+    startingPayBand: String,
+    startingPositionDate: Long? = null,
+    latestAllowedEventDate: Long? = null,
     onContinueToSeventh: ((String, Int, Int) -> Unit)? = null,
     onLatestStateChange: ((String, Int, Int, Long) -> Unit)? = null,
     onEventsStateChange: ((Boolean) -> Unit)? = null
 ) {
-    var events by remember(calculation.revisedBasicPay, startingPayInPayBand, startingGradePay, startingPayBand) { mutableStateOf(emptyList<SixthCpcEventChain>()) }
+    var events by remember(startingPayInPayBand, startingGradePay, startingPayBand, startingPositionDate, latestAllowedEventDate) { mutableStateOf(emptyList<SixthCpcEventChain>()) }
     var showForm by remember { mutableStateOf(false) }
     var eventDate by remember { mutableStateOf<Long?>(null) }
     var eventKind by remember { mutableStateOf(SixthCpcEventKind.FINANCIAL_UPGRADATION) }
@@ -115,12 +120,18 @@ fun SixthCpcEventsSection(
     val gradePay = latest?.let(::currentGradePay) ?: startingGradePay
     val payBand = latest?.let(::currentPayBand) ?: startingPayBand
     val basicPay = payInBand + gradePay
+    val currentPositionDate = latest?.let(::currentDate) ?: startingPositionDate
+    val eventDateInRange = eventDate?.let { date ->
+        (currentPositionDate == null || date >= currentPositionDate) &&
+            (latestAllowedEventDate == null || date <= latestAllowedEventDate)
+    } == true
     val isInterim = eventDate?.let(::isInterimSixthCpcEventDate) == true
     val financialScheme = eventDate?.let(::financialUpgradationForSixthCpcEvent)
     val latestDate = latest?.let(::currentDate)
 
-    LaunchedEffect(latest, payInBand, gradePay, payBand, latestDate) {
-        if (latest != null && latestDate != null) onLatestStateChange?.invoke(payBand, gradePay, payInBand, latestDate)
+    LaunchedEffect(latest, payInBand, gradePay, payBand, latestDate, currentPositionDate) {
+        val stateDate = latestDate ?: currentPositionDate
+        if (stateDate != null) onLatestStateChange?.invoke(payBand, gradePay, payInBand, stateDate)
     }
     LaunchedEffect(events.size) {
         onEventsStateChange?.invoke(events.isNotEmpty())
@@ -136,8 +147,7 @@ fun SixthCpcEventsSection(
                 val gp = currentGradePay(chain) ?: return@EventCard
                 val next = calculateSixthCpcNextIncrement(pb, gp, bandForGradePay(gp).payBandMaximum) ?: return@EventCard
                 val nextPb = next - gp
-                val date = currentDate(chain) ?: return@EventCard
-                val nextDate = Calendar.getInstance().apply { timeInMillis = date; add(Calendar.YEAR, 1) }.timeInMillis
+                val nextDate = nextIncrementDate(chain) ?: return@EventCard
                 if (nextDate <= july2015Date()) events = events.toMutableList().also { it[index] = chain.copy(increments = chain.increments + SixthCpcEventIncrement(nextPb, gp, nextDate)) }
             }, onAddEvent = { showForm = true })
         }
@@ -153,6 +163,12 @@ fun SixthCpcEventsSection(
                     Text("New 6th CPC Event", color = EventBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                     Text("Current position: $payBand | Pay in Pay Band ${money(payInBand)} | GP ${money(gradePay)} | Basic ${money(basicPay)}", color = EventSecondary, fontSize = 12.sp)
                     OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(eventDate?.let(::dateText) ?: "Select Event Date") }
+                    if (eventDate != null && !eventDateInRange) {
+                        Text(
+                            "Event date must be on or after the current 6th CPC position and on or before ${latestAllowedEventDate?.let(::dateText) ?: "the end of the 6th CPC period"}.",
+                            color = Color(0xFFC62828), fontSize = 12.sp
+                        )
+                    }
 
                     EventRadio("Promotion", eventKind == SixthCpcEventKind.PROMOTION) { eventKind = SixthCpcEventKind.PROMOTION; targetGp = null }
                     EventRadio("Financial Upgradation (ACP / MACP)", eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION) { eventKind = SixthCpcEventKind.FINANCIAL_UPGRADATION; targetGp = null }
@@ -214,7 +230,7 @@ fun SixthCpcEventsSection(
                     }
 
                     val canSave = when {
-                        eventDate == null -> false
+                        eventDate == null || !eventDateInRange -> false
                         eventKind == SixthCpcEventKind.PAY_SCALE_UPGRADATION -> true
                         else -> targetGp != null
                     }
