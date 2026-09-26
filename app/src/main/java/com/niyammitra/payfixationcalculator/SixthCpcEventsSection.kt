@@ -100,7 +100,8 @@ fun SixthCpcEventsSection(
     latestAllowedEventDate: Long? = null,
     onContinueToSeventh: ((String, Int, Int) -> Unit)? = null,
     onLatestStateChange: ((String, Int, Int, Long) -> Unit)? = null,
-    onEventsStateChange: ((Boolean) -> Unit)? = null
+    onEventsStateChange: ((Boolean) -> Unit)? = null,
+    onJourneyLinesChange: ((List<String>) -> Unit)? = null
 ) {
     var events by remember(startingPayInPayBand, startingGradePay, startingPayBand, startingPositionDate, latestAllowedEventDate) { mutableStateOf(emptyList<SixthCpcEventChain>()) }
     var showForm by remember { mutableStateOf(false) }
@@ -135,6 +136,32 @@ fun SixthCpcEventsSection(
     }
     LaunchedEffect(events.size) {
         onEventsStateChange?.invoke(events.isNotEmpty())
+    }
+    LaunchedEffect(events) {
+        onJourneyLinesChange?.invoke(buildList {
+            events.forEachIndexed { index, chain ->
+                val label = when (chain.kind) {
+                    SixthCpcEventKind.PROMOTION -> "Promotion"
+                    SixthCpcEventKind.FINANCIAL_UPGRADATION -> "Financial Upgradation"
+                    SixthCpcEventKind.PAY_SCALE_UPGRADATION -> "Pay Scale Upgradation / Revision"
+                }
+                add("## 6th CPC Event ${index + 1}: $label")
+                chain.result?.let { r ->
+                    add("Event date: ${dateText(r.eventDate)}; fixation option: ${r.fixationOption}")
+                    r.financialUpgradation?.let { add("Scheme: $it") }
+                    add("Old pay: pay in pay band ${money(r.oldPayInPayBand)} + grade pay ${money(r.oldGradePay)}")
+                    add("Fixation increment: ${money(r.increment)}; new pay in pay band ${money(r.newPayInPayBand)} + grade pay ${money(r.newGradePay)} = basic pay ${money(r.revisedBasicPay)}")
+                    add("Next DNI: ${dateText(r.nextIncrementDate)}")
+                }
+                chain.scaleUpgrade?.let { r ->
+                    add("Event date: ${dateText(r.eventDate)}; route: ${r.historicalRoute ?: "ordinary scale placement"}")
+                    r.sourcePreRevisedBasicPay?.let { add("Source 5th CPC basic pay: ${money(it)}") }
+                    add("Pay in pay band ${money(r.oldPayInPayBand)} + grade pay ${money(r.oldGradePay)} changed to pay in pay band ${money(r.newPayInPayBand)} + grade pay ${money(r.newGradePay)} = basic pay ${money(r.revisedBasicPay)}")
+                    add("Next DNI: ${dateText(r.nextIncrementDate)}")
+                }
+                chain.increments.forEachIndexed { i, inc -> add("Event-chain increment ${i + 1} — ${dateText(inc.date)}: pay in pay band ${money(inc.payInPayBand)} + grade pay ${money(inc.gradePay)} = ${money(inc.payInPayBand + inc.gradePay)}") }
+            }
+        })
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {

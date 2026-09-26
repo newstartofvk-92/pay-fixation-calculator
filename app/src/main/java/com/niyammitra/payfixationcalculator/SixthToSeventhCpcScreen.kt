@@ -88,6 +88,7 @@ fun SixthToSeventhCpcScreen(
     var sixthIncrementSteps by remember(selectedPayBand, selectedGradePay, payInPayBandText, startDate) { mutableStateOf<List<SixthCpcHistoricalIncrement>>(emptyList()) }
     var eventCurrentPosition by remember(selectedPayBand, selectedGradePay, payInPayBandText, startDate, sixthIncrementSteps) { mutableStateOf<SixthCpcCurrentPosition?>(null) }
     var hasSixthCpcEvents by remember { mutableStateOf(false) }
+    var sixthEventReport by remember { mutableStateOf(emptyList<String>()) }
     var incrementSteps by remember(selectedPayBand, selectedGradePay, payInPayBandText, startDate, eventCurrentPosition) { mutableStateOf<List<SeventhCpcIncrementStep>>(emptyList()) }
 
     val payInPayBand = payInPayBandText.toIntOrNull()
@@ -208,7 +209,8 @@ fun SixthToSeventhCpcScreen(
                                 nextAction = null
                             }
                         },
-                        onEventsStateChange = { hasSixthCpcEvents = it }
+                        onEventsStateChange = { hasSixthCpcEvents = it },
+                        onJourneyLinesChange = { sixthEventReport = it }
                     )
                 }
                 if (journeyReady) {
@@ -243,6 +245,32 @@ fun SixthToSeventhCpcScreen(
                 }
 
                 if (incrementSteps.isNotEmpty()) IncrementProgressionCard(calculation.level, calculation.revisedBasicPay, incrementSteps, onDelete = { index -> incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) } })
+
+                ExportPayJourneyPdf(
+                    lines = buildList {
+                        add("## Journey Period")
+                        add("6th CPC starting date: ${startDate?.let(::formatSixSevenDate) ?: "Not specified"}")
+                        add("6th CPC position carried into this journey: ${basePayBand ?: "—"}; pay in pay band ${formatSixSevenCurrency(basePayInPayBand ?: 0)}; grade pay ${formatSixSevenCurrency(baseGradePay ?: 0)}")
+                        add("Starting basic pay: ${formatSixSevenCurrency((basePayInPayBand ?: 0) + (baseGradePay ?: 0))}")
+                        add("## 6th CPC Annual Increments")
+                        if (sixthIncrementSteps.isEmpty()) add("No separate annual increments recorded before events.")
+                        sixthIncrementSteps.forEachIndexed { index, step ->
+                            add("Increment ${index + 1} — ${formatSixSevenDate(step.date)}: pay in pay band ${formatSixSevenCurrency(step.payInPayBand)} + grade pay ${formatSixSevenCurrency(step.gradePay)} = ${formatSixSevenCurrency(step.payInPayBand + step.gradePay)}")
+                        }
+                        if (sixthEventReport.isEmpty()) add("No promotion, financial upgradation, or pay-scale events recorded.") else addAll(sixthEventReport)
+                        add("## Final 6th CPC Position")
+                        add("Position date: ${journeyDate?.let(::formatSixSevenDate) ?: "—"}; ${journeyPayBandTitle ?: "—"}; pay in pay band ${formatSixSevenCurrency(journeyPayInPayBand ?: 0)} + grade pay ${formatSixSevenCurrency(journeyGradePay ?: 0)} = basic pay ${formatSixSevenCurrency((journeyPayInPayBand ?: 0) + (journeyGradePay ?: 0))}")
+                        add("## 7th CPC Conversion — 01 January 2016")
+                        add("Existing pay: ${formatSixSevenCurrency(calculation.existingPay)}; fitment factor ${calculation.fitmentFactor}; multiplied pay ${String.format(Locale.US, "%.2f", calculation.multipliedPay)}; rounded pay ${formatSixSevenCurrency(calculation.roundedPay)}")
+                        add("Pay matrix Level ${calculation.level}; revised basic pay ${formatSixSevenCurrency(calculation.revisedBasicPay)}; DNI 01 July 2016")
+                        add("## 7th CPC Increment Progression")
+                        if (incrementSteps.isEmpty()) add("No 7th CPC increments recorded.")
+                        incrementSteps.forEachIndexed { index, step -> add("Increment ${index + 1} — ${formatSixSevenDate(step.date)}: ${formatSixSevenCurrency(step.pay)}") }
+                        add("## Calculation Rule Basis")
+                        calculation.ruleBasis.forEachIndexed { index, rule -> add("${index + 1}. $rule") }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(onClick = {
