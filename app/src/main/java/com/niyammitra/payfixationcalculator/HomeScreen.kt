@@ -140,9 +140,7 @@ fun V2AppScreen() {
 
         PayFixationMode.CPC_CONVERSION_ONLY -> {
             BackHandler { selectedMode = null }
-            ConversionOnlyPlaceholder(
-                onBack = { selectedMode = null }
-            )
+            CpcConversionOnlyScreen(onBack = { selectedMode = null })
         }
     }
 
@@ -239,47 +237,6 @@ private fun PayFixationModeCard(
                     color = HomeNiyamTextSecondary,
                     fontSize = 13.sp
                 )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ConversionOnlyPlaceholder(onBack: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().background(HomeNiyamBackground),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        HomeHeader()
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Text(
-                "CPC Conversion Only",
-                color = HomeNiyamTextPrimary,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
-            Text(
-                "This screen is reserved for the direct CPC conversion workflow. The existing 4th→5th, 5th→6th and 6th→7th conversion engines will be connected here next.",
-                color = HomeNiyamTextSecondary,
-                fontSize = 14.sp
-            )
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
-                Text(
-                    "Existing CPC calculation logic remains unchanged.",
-                    modifier = Modifier.padding(20.dp),
-                    color = HomeNiyamTextPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            TextButton(onClick = onBack) {
-                Text("Back")
             }
         }
     }
