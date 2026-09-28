@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,10 +44,16 @@ private val ContinuityTextSecondary = Color(0xFF5B6B7A)
 
 enum class ContinuityPromotionBasis { EVENT_DATE, DNI }
 
-data class ContinuityIncrementStep(val pay: Int, val date: Long)
+data class ContinuityIncrementStep(val pay: Int, val date: Long, val sequence: Int = 0)
 
 @Composable
-fun SeventhCpcContinuitySection(payBand: String, gradePay: Int, payInPayBand: Int) {
+fun SeventhCpcContinuitySection(
+    payBand: String,
+    gradePay: Int,
+    payInPayBand: Int,
+    restoredSnapshot: SeventhCpcJourneySnapshot? = null,
+    onHistorySnapshot: ((SeventhCpcJourneySnapshot) -> Unit)? = null
+) {
     val normalizedPayBand = payBand.substringBefore(":").trim()
     val seventhBand = remember(normalizedPayBand, gradePay) {
         SixthToSeventhCpcData.payBands.firstOrNull { band ->
@@ -68,9 +75,18 @@ fun SeventhCpcContinuitySection(payBand: String, gradePay: Int, payInPayBand: In
         return
     }
 
-    var incrementSteps by remember(calculation.revisedBasicPay) { mutableStateOf<List<ContinuityIncrementStep>>(emptyList()) }
+    var incrementSteps by remember(calculation.revisedBasicPay, restoredSnapshot) { mutableStateOf(restoredSnapshot?.increments.orEmpty().map { ContinuityIncrementStep(it.pay, it.dateMillis, it.sequence) }) }
+    var promotionSnapshot by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.promotions?.firstOrNull()) }
     val latest7thPay = incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay
     val knownDni = incrementSteps.lastOrNull()?.let { addSeventhYears(it.date, 1) } ?: julyFirst2016ForContinuity()
+    SideEffect {
+        onHistorySnapshot?.invoke(SeventhCpcJourneySnapshot(
+            calculation.level, calculation.revisedBasicPay,
+            Calendar.getInstance().apply { clear(); set(2016, Calendar.JANUARY, 1) }.timeInMillis,
+            incrementSteps.mapIndexed { index, step -> CpcIncrementSnapshot(index + 1, step.pay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
+            listOfNotNull(promotionSnapshot), startingDniMillis = knownDni
+        ))
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("7th CPC — Automatic Continuation", color = ContinuityTextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
@@ -125,38 +141,66 @@ fun SeventhCpcContinuitySection(payBand: String, gradePay: Int, payInPayBand: In
             val currentPay = incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay
             val nextDate = incrementSteps.lastOrNull()?.let { addSeventhYears(it.date, 1) } ?: julyFirst2016ForContinuity()
             getSixthToSeventhNextCellShared(calculation.level, currentPay)?.let { nextPay ->
-                incrementSteps = incrementSteps + ContinuityIncrementStep(nextPay, nextDate)
+                incrementSteps = incrementSteps + ContinuityIncrementStep(nextPay, nextDate, maxOf(incrementSteps.maxOfOrNull { it.sequence } ?: 0, promotionSnapshot?.maxApplicationSequence() ?: 0) + 1)
             }
         }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = ContinuityBlue), shape = RoundedCornerShape(12.dp)) {
             Text("Next Increment", fontWeight = FontWeight.Bold)
         }
 
-        SeventhCpcPromotionMacpContinuation(currentLevel = calculation.level, currentPay = latest7thPay, knownDni = knownDni)
+        SeventhCpcPromotionMacpContinuation(
+            currentLevel = calculation.level, currentPay = latest7thPay, knownDni = knownDni,
+            restoredSnapshot = promotionSnapshot,
+            onHistorySnapshot = { accepted -> promotionSnapshot = accepted?.copy(sequence = accepted.sequence.takeIf { it > 0 } ?: (incrementSteps.maxOfOrNull { step -> step.sequence } ?: incrementSteps.size) + 1) }
+        )
     }
 }
 
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
-private fun SeventhCpcPromotionMacpContinuation(currentLevel: String, currentPay: Int, knownDni: Long) {
-    var promotedLevel by remember { mutableStateOf<String?>(null) }
-    var promotionDate by remember { mutableStateOf<Long?>(null) }
+private fun SeventhCpcPromotionMacpContinuation(
+    currentLevel: String,
+    currentPay: Int,
+    knownDni: Long,
+    restoredSnapshot: SeventhCpcPromotionSnapshot? = null,
+    onHistorySnapshot: ((SeventhCpcPromotionSnapshot?) -> Unit)? = null
+) {
+    var promotedLevel by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.promotedLevel) }
+    var eventKind by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.eventKind?.takeIf { it == CpcJourneyEventKind.PROMOTION || it == CpcJourneyEventKind.MACP } ?: CpcJourneyEventKind.PROMOTION) }
+    var promotionDate by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.promotionDateMillis) }
     var showDatePicker by remember { mutableStateOf(false) }
     var promotedMenu by remember { mutableStateOf(false) }
-    var basis by remember { mutableStateOf(ContinuityPromotionBasis.EVENT_DATE) }
-    var eventApplied by remember { mutableStateOf(false) }
-    var appliedPay by remember { mutableStateOf<Int?>(null) }
-    var appliedLevel by remember { mutableStateOf<String?>(null) }
-    var appliedDni by remember { mutableStateOf<Long?>(null) }
-    var postSteps by remember { mutableStateOf<List<ContinuityIncrementStep>>(emptyList()) }
+    var basis by remember(restoredSnapshot) { mutableStateOf(if (restoredSnapshot?.fixationBasis == CpcFixationBasis.DNI) ContinuityPromotionBasis.DNI else ContinuityPromotionBasis.EVENT_DATE) }
+    var eventApplied by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.resultingPay != null) }
+    var appliedPay by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.resultingPay) }
+    var appliedLevel by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.promotedLevel) }
+    var appliedDni by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.resultingDniMillis) }
+    var postSteps by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.postIncrements.orEmpty().map { ContinuityIncrementStep(it.pay, it.dateMillis) }) }
 
     val fixation = if (promotedLevel != null && promotionDate != null) {
         calculatePayFixation(currentLevel, currentPay, promotedLevel!!, promotionDate, knownDni, EmployeeCategory.ORDINARY)
     } else null
     val finalPay = fixation?.let { if (basis == ContinuityPromotionBasis.EVENT_DATE) it.option1.finalFixedPay else it.option2.finalFixedPay }
     val firstPostIncrementDate = fixation?.let { if (basis == ContinuityPromotionBasis.EVENT_DATE) it.option1.nextDni else it.option2.nextDni }
+    SideEffect {
+        onHistorySnapshot?.invoke(if (eventApplied && promotedLevel != null && promotionDate != null && finalPay != null) {
+            SeventhCpcPromotionSnapshot(
+                currentLevel, currentPay, knownDni, promotedLevel, promotionDate,
+                if (basis == ContinuityPromotionBasis.DNI) CpcFixationBasis.DNI else CpcFixationBasis.EVENT_DATE,
+                postSteps.mapIndexed { index, step -> CpcIncrementSnapshot(index + 1, step.pay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
+                resultingPay = finalPay, resultingDniMillis = firstPostIncrementDate,
+                eventKind = eventKind, sequence = restoredSnapshot?.sequence ?: 0
+            )
+        } else null)
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Promotion / MACP", color = ContinuityTextPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
+        Row(Modifier.fillMaxWidth()) {
+            RadioButton(selected = eventKind == CpcJourneyEventKind.PROMOTION, onClick = { eventKind = CpcJourneyEventKind.PROMOTION; eventApplied = false })
+            Text("Promotion", Modifier.padding(top = 12.dp), color = ContinuityTextPrimary, fontSize = 13.sp)
+            RadioButton(selected = eventKind == CpcJourneyEventKind.MACP, onClick = { eventKind = CpcJourneyEventKind.MACP; eventApplied = false })
+            Text("MACP / Financial Upgradation", Modifier.padding(top = 12.dp), color = ContinuityTextPrimary, fontSize = 13.sp)
+        }
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Pay carried forward from the latest 7th CPC stage", color = ContinuityBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
@@ -258,7 +302,7 @@ private fun SeventhCpcPromotionMacpContinuation(currentLevel: String, currentPay
                     Button(
                         onClick = {
                             val date = postNextDate ?: return@Button
-                            postNextPay?.let { nextPay -> postSteps = postSteps + ContinuityIncrementStep(nextPay, date) }
+                            postNextPay?.let { nextPay -> postSteps = postSteps + ContinuityIncrementStep(nextPay, date, maxOf(postSteps.maxOfOrNull { it.sequence } ?: 0, restoredSnapshot?.sequence ?: 0) + 1) }
                         },
                         enabled = postNextPay != null && postNextDate != null,
                         modifier = Modifier.fillMaxWidth(),

@@ -40,13 +40,14 @@ data class SixthCpcScaleUpgradeResult(
     val fixationIncrement: Int? = null
 )
 
-data class SixthCpcEventIncrement(val payInPayBand: Int, val gradePay: Int, val date: Long)
+data class SixthCpcEventIncrement(val payInPayBand: Int, val gradePay: Int, val date: Long, val sequence: Int = 0)
 
 data class SixthCpcEventChain(
     val kind: SixthCpcEventKind,
     val result: SixthCpcEventResult? = null,
     val scaleUpgrade: SixthCpcScaleUpgradeResult? = null,
-    val increments: List<SixthCpcEventIncrement> = emptyList()
+    val increments: List<SixthCpcEventIncrement> = emptyList(),
+    val sequence: Int = 0
 )
 
 private val EventBlue = Color(0xFF1769AA)
@@ -98,12 +99,15 @@ fun SixthCpcEventsSection(
     startingPayBand: String,
     startingPositionDate: Long? = null,
     latestAllowedEventDate: Long? = null,
+    initialEventChains: List<SixthCpcEventChain> = emptyList(),
+    initialSequence: Int = 0,
     onContinueToSeventh: ((String, Int, Int) -> Unit)? = null,
     onLatestStateChange: ((String, Int, Int, Long) -> Unit)? = null,
     onEventsStateChange: ((Boolean) -> Unit)? = null,
-    onJourneyLinesChange: ((List<String>) -> Unit)? = null
+    onJourneyLinesChange: ((List<String>) -> Unit)? = null,
+    onAcceptedEventChainsChange: ((List<SixthCpcEventChain>) -> Unit)? = null
 ) {
-    var events by remember(startingPayInPayBand, startingGradePay, startingPayBand, startingPositionDate, latestAllowedEventDate) { mutableStateOf(emptyList<SixthCpcEventChain>()) }
+    var events by remember(startingPayInPayBand, startingGradePay, startingPayBand, startingPositionDate, latestAllowedEventDate, initialEventChains) { mutableStateOf(initialEventChains) }
     var showForm by remember { mutableStateOf(false) }
     var eventDate by remember { mutableStateOf<Long?>(null) }
     var eventKind by remember { mutableStateOf(SixthCpcEventKind.FINANCIAL_UPGRADATION) }
@@ -136,6 +140,9 @@ fun SixthCpcEventsSection(
     }
     LaunchedEffect(events.size) {
         onEventsStateChange?.invoke(events.isNotEmpty())
+    }
+    LaunchedEffect(events) {
+        onAcceptedEventChainsChange?.invoke(events)
     }
     LaunchedEffect(events) {
         onJourneyLinesChange?.invoke(buildList {
@@ -175,7 +182,7 @@ fun SixthCpcEventsSection(
                 val next = calculateSixthCpcNextIncrement(pb, gp, bandForGradePay(gp).payBandMaximum) ?: return@EventCard
                 val nextPb = next - gp
                 val nextDate = nextIncrementDate(chain) ?: return@EventCard
-                if (nextDate <= july2015Date()) events = events.toMutableList().also { it[index] = chain.copy(increments = chain.increments + SixthCpcEventIncrement(nextPb, gp, nextDate)) }
+                if (nextDate <= july2015Date()) events = events.toMutableList().also { it[index] = chain.copy(increments = chain.increments + SixthCpcEventIncrement(nextPb, gp, nextDate, chain.sequence + chain.increments.size + 1)) }
             }, onAddEvent = { showForm = true })
         }
 
@@ -294,7 +301,7 @@ fun SixthCpcEventsSection(
                                 scaleUpgrade = SixthCpcScaleUpgradeResult(
                                     date, oldPb, oldGp, payBand, newPb, newGp, newBand,
                                     newPb + newGp, nextJuly(date), historicalRoute, oldPb, fixationIncrement
-                                )
+                                ), sequence = maxOf(initialSequence, events.maxOfOrNull { it.sequence } ?: 0) + 1
                             )
                         } else {
                             val gp = targetGp ?: return@Button
@@ -304,7 +311,7 @@ fun SixthCpcEventsSection(
                                 fixationOption,
                                 if (eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION) financialScheme else null
                             )
-                            events = events + SixthCpcEventChain(eventKind, result = result)
+                            events = events + SixthCpcEventChain(eventKind, result = result, sequence = maxOf(initialSequence, events.maxOfOrNull { it.sequence } ?: 0) + 1)
                         }
                         showForm = false
                         targetBand = null

@@ -28,25 +28,40 @@ private val FourFiveBackground = Color(0xFFF7FAFC)
 private val FourFiveTextPrimary = Color(0xFF172B4D)
 private val FourFiveTextSecondary = Color(0xFF5B6B7A)
 
-data class FourthToFifthIncrementStep(val pay: Int, val date: Long)
+data class FourthToFifthIncrementStep(val pay: Int, val date: Long, val sequence: Int = 0)
+data class FourthStartingDateEditReset(
+    val increments: List<FourthToFifthIncrementStep>,
+    val events: List<FourthCpcEventSnapshot>,
+    val fifthSnapshot: FifthCpcJourneySnapshot?
+)
+fun resetFourthJourneyAfterStartingDateEdit() = FourthStartingDateEditReset(emptyList(), emptyList(), null)
 
 @Composable
 fun FourthToFifthCpcScreen(
     onBack: () -> Unit,
-    onContinueToSeventh: ((String, Int, Int) -> Unit)? = null
+    onContinueToSeventh: ((String, Int, Int) -> Unit)? = null,
+    restoredSnapshot: FourthCpcJourneySnapshot? = null,
+    restoredFifthSnapshot: FifthCpcJourneySnapshot? = null,
+    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
 ) {
     BackHandler(onBack = onBack)
-    var selectedScale by remember { mutableStateOf<FourthCpcScale?>(null) }
-    var basicPayText by remember { mutableStateOf("") }
-    var payDateText by remember { mutableStateOf("") }
-    var nextIncrementDateText by remember { mutableStateOf("") }
+    val restoredScale = remember(restoredSnapshot?.scaleId) { FourthToFifthCpcData.scales.firstOrNull { it.existingScale == restoredSnapshot?.scaleId } }
+    val restoredLastEvent = restoredSnapshot?.events?.maxByOrNull { it.eventDateMillis }
+    val restoredLastIncrement = restoredSnapshot?.increments?.maxByOrNull { it.dateMillis }
+    val restoredIncrementIsLater = restoredLastIncrement != null && (restoredLastEvent == null || restoredLastIncrement.dateMillis > restoredLastEvent.eventDateMillis)
+    var selectedScale by remember(restoredSnapshot) { mutableStateOf(restoredScale) }
+    var basicPayText by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.startingBasicPay?.toString() ?: "") }
+    var payDateText by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.payDateMillis?.let { SimpleDateFormat("ddMMyyyy", Locale.US).format(Date(it)) } ?: "") }
+    var nextIncrementDateText by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.nextIncrementDateMillis?.let { SimpleDateFormat("ddMMyyyy", Locale.US).format(Date(it)) } ?: "") }
     var scaleMenu by remember { mutableStateOf(false) }
-    var incrementSteps by remember(selectedScale, basicPayText) { mutableStateOf<List<FourthToFifthIncrementStep>>(emptyList()) }
+    var incrementSteps by remember(selectedScale, basicPayText, restoredSnapshot) { mutableStateOf(restoredSnapshot?.increments.orEmpty().map { FourthToFifthIncrementStep(it.pay, it.dateMillis, it.sequence) }) }
     var showEvents by remember { mutableStateOf(false) }
-    var eventScale by remember { mutableStateOf<FourthCpcScale?>(null) }
-    var eventPay by remember { mutableStateOf<Int?>(null) }
-    var eventDate by remember { mutableStateOf<Long?>(null) }
-    var conversionActivated by remember { mutableStateOf(false) }
+    var eventScale by remember(restoredSnapshot) { mutableStateOf(restoredLastEvent?.targetScaleId?.let { id -> FourthToFifthCpcData.scales.firstOrNull { it.existingScale == id } }) }
+    var eventPay by remember(restoredSnapshot) { mutableStateOf(if (restoredIncrementIsLater) restoredLastIncrement?.pay else restoredLastEvent?.resultingPay) }
+    var eventDate by remember(restoredSnapshot) { mutableStateOf(if (restoredIncrementIsLater) restoredLastIncrement?.dateMillis else restoredLastEvent?.eventDateMillis) }
+    var acceptedEvents by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.events.orEmpty()) }
+    var fifthHistorySnapshot by remember(restoredFifthSnapshot) { mutableStateOf(restoredFifthSnapshot) }
+    var conversionActivated by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.conversionActivated ?: false) }
     var showConversionPrompt by remember { mutableStateOf(false) }
 
     val basicPay = basicPayText.toIntOrNull()
@@ -113,6 +128,8 @@ fun FourthToFifthCpcScreen(
                                         eventScale = null
                                         eventPay = null
                                         eventDate = null
+                                        acceptedEvents = emptyList()
+                                        fifthHistorySnapshot = null
                                         showEvents = false
                                         conversionActivated = false
                                         scaleMenu = false
@@ -130,6 +147,8 @@ fun FourthToFifthCpcScreen(
                             eventScale = null
                             eventPay = null
                             eventDate = null
+                            acceptedEvents = emptyList()
+                            fifthHistorySnapshot = null
                             showEvents = false
                             conversionActivated = false
                         },
@@ -141,7 +160,15 @@ fun FourthToFifthCpcScreen(
                     )
                     OutlinedTextField(
                         value = payDateText,
-                        onValueChange = { newValue -> payDateText = newValue.filter(Char::isDigit).take(8); incrementSteps = emptyList(); eventScale = null; eventPay = null; eventDate = null; showEvents = false; conversionActivated = false },
+                        onValueChange = { newValue ->
+                            val reset = resetFourthJourneyAfterStartingDateEdit()
+                            payDateText = newValue.filter(Char::isDigit).take(8)
+                            incrementSteps = reset.increments
+                            acceptedEvents = reset.events
+                            eventScale = null; eventPay = null; eventDate = null
+                            fifthHistorySnapshot = reset.fifthSnapshot
+                            showEvents = false; conversionActivated = false
+                        },
                         label = { Text("Pay Date (dd/MM/yyyy)") },
                         placeholder = { Text("e.g. 01/07/1988") },
                         supportingText = { Text("Enter a date from 01 January 1986 through 01 January 1996.") },
@@ -227,7 +254,7 @@ fun FourthToFifthCpcScreen(
                         val nextPay = calculateFourthCpcNextIncrement(pay, scale) ?: return@Button
                         val nextDate = currentIncrementDate?.let { addFourthFiveYear(it) } ?: validNextIncrementDate ?: return@Button
                         if (nextDate <= fourthFiveConversionEndDate()) {
-                            incrementSteps = incrementSteps + FourthToFifthIncrementStep(nextPay, nextDate)
+                            incrementSteps = incrementSteps + FourthToFifthIncrementStep(nextPay, nextDate, (incrementSteps.maxOfOrNull { it.sequence } ?: 0).coerceAtLeast(acceptedEvents.maxOfOrNull { it.sequence } ?: 0) + 1)
                             eventPay = nextPay
                             eventDate = nextDate
                             showEvents = false
@@ -355,7 +382,9 @@ fun FourthToFifthCpcScreen(
                         initialPay = calculation.revisedBasicPay,
                         revisedScale = calculation.scale.revisedScale,
                         firstIncrementDate = firstFifthIncrementDate,
-                        conversionDate = fourthFiveConversionDate()
+                        conversionDate = fourthFiveConversionDate(),
+                        onHistorySnapshot = { fifthHistorySnapshot = it },
+                        restoredSnapshot = restoredFifthSnapshot
                     )
                 }
 
@@ -371,6 +400,10 @@ fun FourthToFifthCpcScreen(
                             incrementSteps = incrementSteps.filter { it.date < newDate }
                             nextIncrementDateText = ""
                             showEvents = false
+                        },
+                        onEventAppliedDetailed = { newScale, newPay, newDate, kind ->
+                            acceptedEvents = acceptedEvents + FourthCpcEventSnapshot(acceptedEvents.size + 1, newDate, kind, newScale.existingScale, newPay,
+                                (incrementSteps.maxOfOrNull { it.sequence } ?: 0).coerceAtLeast(acceptedEvents.maxOfOrNull { it.sequence } ?: 0) + 1)
                         }
                     )
                 }
@@ -382,6 +415,23 @@ fun FourthToFifthCpcScreen(
 
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(16.dp)) {
                 Text("This calculator implements the standard Rule 7 replacement-scale calculation. Special pay, NPA, personal pay, bunching, stagnation increments and post-01.01.1996 fixation require case-specific verification.", Modifier.padding(16.dp), color = FourFiveTextPrimary, fontSize = 12.sp)
+            }
+            if (validStartingPosition && selectedScale != null && basicPay != null && payDate != null) {
+                SaveCompleteJourneyButton(CompleteJourneySnapshot(
+                    startingCpc = CpcHistoryStage.FOURTH,
+                    startingDateMillis = payDate,
+                    fourth = FourthCpcJourneySnapshot(
+                        scaleId = selectedScale!!.existingScale,
+                        scaleTitle = selectedScale!!.grade,
+                        startingBasicPay = basicPay,
+                        payDateMillis = payDate,
+                        nextIncrementDateMillis = parsedNextIncrementDate,
+                        increments = incrementSteps.mapIndexed { index, step -> CpcIncrementSnapshot(index + 1, step.pay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
+                        events = acceptedEvents,
+                        conversionActivated = conversionActivated
+                    ),
+                    fifth = fifthHistorySnapshot
+                ), sequenceIntegrity = sequenceIntegrity)
             }
             Spacer(Modifier.height(20.dp))
         }

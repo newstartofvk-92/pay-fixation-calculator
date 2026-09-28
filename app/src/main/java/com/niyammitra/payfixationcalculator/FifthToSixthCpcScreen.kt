@@ -31,7 +31,10 @@ fun FifthToSixthCpcScreen(
     onContinueToSeventh: ((String, Int, Int) -> Unit)? = null,
     initialScaleTitle: String? = null,
     initialBasicPay: Int? = null,
-    initialStartDate: Long? = null
+    initialStartDate: Long? = null,
+    initialDni: Long? = null,
+    restoredSnapshot: FifthCpcJourneySnapshot? = null,
+    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
 ) {
     BackHandler(onBack = onBack)
 
@@ -42,7 +45,8 @@ fun FifthToSixthCpcScreen(
     }
     var scaleMenu by remember { mutableStateOf(false) }
     var basicPayText by remember(initialBasicPay) { mutableStateOf(initialBasicPay?.toString() ?: "") }
-    var selectedDni by remember { mutableStateOf<Long?>(null) }
+    var selectedDni by remember(initialDni) { mutableStateOf(initialDni) }
+    var historySnapshot by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot) }
     var showDniPicker by remember { mutableStateOf(false) }
 
     val basicPay = basicPayText.toIntOrNull()
@@ -130,7 +134,16 @@ fun FifthToSixthCpcScreen(
                     conversionDate = startDate,
                     initialDate = startDate,
                     initialDni = selectedDni,
-                    onContinueToSeventh = onContinueToSeventh
+                    onContinueToSeventh = onContinueToSeventh,
+                    onHistorySnapshot = { historySnapshot = it },
+                    restoredSnapshot = restoredSnapshot
+                )
+                SaveCompleteJourneyButton(
+                    CompleteJourneySnapshot(
+                        startingCpc = CpcHistoryStage.FIFTH,
+                        startingDateMillis = startDate,
+                        fifth = historySnapshot ?: FifthCpcJourneySnapshot(startDate, selectedScale!!.title, basicPay, selectedDni)
+                    ), sequenceIntegrity = sequenceIntegrity
                 )
             } else {
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {

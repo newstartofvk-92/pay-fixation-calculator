@@ -13,8 +13,12 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
-data class FifthCpcHistoricalIncrementStep(val pay: Int, val date: Long)
-data class FifthCpcHistoricalEventStep(val type: String, val scale: String, val pay: Int, val eventDate: Long, val implementationDate: Long, val dniDate: Long)
+data class FifthCpcHistoricalIncrementStep(val pay: Int, val date: Long, val sequence: Int = 0)
+data class FifthCpcHistoricalEventStep(
+    val type: String, val scale: String, val pay: Int, val eventDate: Long,
+    val implementationDate: Long, val dniDate: Long,
+    val placementMethod: String = "", val implementationOption: String = "", val sequence: Int = 0
+)
 
 private data class FifthCpcTimelineItem(
     val date: Long,
@@ -37,20 +41,30 @@ fun FifthCpcHistoricalIncrementSection(
     conversionDate: Long,
     initialDate: Long = conversionDate,
     initialDni: Long? = firstIncrementDate,
-    onContinueToSeventh: ((String, Int, Int) -> Unit)? = null
+    onContinueToSeventh: ((String, Int, Int) -> Unit)? = null,
+    onHistorySnapshot: ((FifthCpcJourneySnapshot) -> Unit)? = null,
+    restoredSnapshot: FifthCpcJourneySnapshot? = null
 ) {
-    var incrementSteps by remember(initialPay, revisedScale, conversionDate, firstIncrementDate) {
-        mutableStateOf<List<FifthCpcHistoricalIncrementStep>>(emptyList())
+    var incrementSteps by remember(initialPay, revisedScale, conversionDate, firstIncrementDate, restoredSnapshot) {
+        mutableStateOf(restoredSnapshot?.increments.orEmpty().map { FifthCpcHistoricalIncrementStep(it.pay, it.dateMillis, it.sequence) })
     }
-    var eventScale by remember(revisedScale) {
-        mutableStateOf(findFifthScaleForHistoricalJourney(revisedScale))
+    var eventScale by remember(revisedScale, restoredSnapshot) {
+        mutableStateOf(restoredSnapshot?.events?.lastOrNull()?.targetScaleId?.let(::findFifthScaleForHistoricalJourney) ?: findFifthScaleForHistoricalJourney(revisedScale))
     }
-    var eventPay by remember { mutableStateOf<Int?>(null) }
-    var eventDate by remember { mutableStateOf<Long?>(null) }
-    var eventDni by remember { mutableStateOf<Long?>(null) }
+    var eventPay by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.events?.lastOrNull()?.resultingPay) }
+    var eventDate by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.events?.lastOrNull()?.implementationDateMillis) }
+    var eventDni by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.events?.lastOrNull()?.resultingDniMillis) }
     var showEventSection by remember { mutableStateOf(false) }
-    var showSixthCpcContinuation by remember { mutableStateOf(false) }
-    var eventHistory by remember(initialPay, revisedScale, conversionDate, firstIncrementDate) { mutableStateOf<List<FifthCpcHistoricalEventStep>>(emptyList()) }
+    var showSixthCpcContinuation by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.sixthContinuation != null) }
+    var eventHistory by remember(initialPay, revisedScale, conversionDate, firstIncrementDate, restoredSnapshot) {
+        mutableStateOf(restoredSnapshot?.events.orEmpty().map { FifthCpcHistoricalEventStep(
+            type = it.eventType.name, scale = it.targetScaleId, pay = it.resultingPay,
+            eventDate = it.eventDateMillis, implementationDate = it.implementationDateMillis,
+            dniDate = it.resultingDniMillis, placementMethod = it.placementMethod,
+            implementationOption = it.implementationOption, sequence = it.sequence
+        ) })
+    }
+    var sixthHistorySnapshot by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.sixthContinuation) }
 
     val initialScale = remember(revisedScale) {
         findFifthScaleForHistoricalJourney(revisedScale)
@@ -84,6 +98,29 @@ fun FifthCpcHistoricalIncrementSection(
         eventApplied && eventDni != null -> eventDni!!
         latest != null -> addFifthHistoricalYear(latest.date)
         else -> initialDni
+    }
+    SideEffect {
+        onHistorySnapshot?.invoke(FifthCpcJourneySnapshot(
+            startingDateMillis = initialDate,
+            scaleId = initialScale?.title ?: revisedScale,
+            startingBasicPay = initialPay,
+            startingDniMillis = initialDni,
+            increments = incrementSteps.mapIndexed { index, step -> CpcIncrementSnapshot(index + 1, step.pay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
+            events = eventHistory.mapIndexed { index, event ->
+                val kind = when (event.type.lowercase().replace('_', ' ')) {
+                    "acp" -> CpcJourneyEventKind.ACP
+                    "macp" -> CpcJourneyEventKind.MACP
+                    "financial upgradation" -> CpcJourneyEventKind.FINANCIAL_UPGRADATION
+                    "scale upgradation", "pay-scale upgradation", "pay scale upgradation" -> CpcJourneyEventKind.PAY_SCALE_UPGRADATION
+                    else -> CpcJourneyEventKind.PROMOTION
+                }
+                FifthCpcEventSnapshot(index + 1, kind, event.eventDate, event.implementationDate,
+                    event.scale, event.pay, event.dniDate,
+                    if (event.implementationOption.equals("From DNI", true)) CpcFixationBasis.DNI else CpcFixationBasis.EVENT_DATE,
+                    event.placementMethod, event.implementationOption, event.sequence.takeIf { it > 0 } ?: index + 1)
+            },
+            sixthContinuation = sixthHistorySnapshot
+        ))
     }
     val nextDate = currentDni
     val effectiveScale = currentScale
@@ -275,13 +312,17 @@ fun FifthCpcHistoricalIncrementSection(
                                 pay = newPay,
                                 eventDate = appliedEventDate,
                                 implementationDate = implementationDate,
-                                dniDate = newDni
+                                dniDate = newDni,
+                                sequence = maxOf(incrementSteps.maxOfOrNull { it.sequence } ?: 0, eventHistory.maxOfOrNull { it.sequence } ?: 0) + 1
                             )
                             eventScale = newScale
                             eventPay = newPay
                             eventDate = implementationDate
                             eventDni = newDni
                             showEventSection = false
+                        },
+                        onEventAppliedDetailed = { appliedType, newScale, newPay, eventDate, implementationDate, newDni, placement, option ->
+                            eventHistory = eventHistory.dropLast(1) + eventHistory.last().copy(placementMethod = placement, implementationOption = option)
                         }
                     )
                 }
@@ -292,7 +333,7 @@ fun FifthCpcHistoricalIncrementSection(
             onClick = {
                 val pay = nextPay ?: return@Button
                 val date = nextDate ?: return@Button
-                incrementSteps = incrementSteps + FifthCpcHistoricalIncrementStep(pay, date)
+                incrementSteps = incrementSteps + FifthCpcHistoricalIncrementStep(pay, date, maxOf(incrementSteps.maxOfOrNull { it.sequence } ?: 0, eventHistory.maxOfOrNull { it.sequence } ?: 0) + 1)
             },
             enabled = canAdd,
             modifier = Modifier.fillMaxWidth(),
@@ -349,7 +390,12 @@ fun FifthCpcHistoricalIncrementSection(
                     }.getOrNull()
 
                     conversion?.let {
-                        FifthToSixthContinuationSection(conversion = it, onContinueToSeventh = onContinueToSeventh)
+                        FifthToSixthContinuationSection(
+                            conversion = it,
+                            onContinueToSeventh = onContinueToSeventh,
+                            restoredSnapshot = restoredSnapshot?.sixthContinuation,
+                            onHistorySnapshot = { sixthHistorySnapshot = it }
+                        )
                     }
                 }
             }

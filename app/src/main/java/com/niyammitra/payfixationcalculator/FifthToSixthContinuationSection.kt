@@ -19,11 +19,20 @@ private val ContinuationBlue = Color(0xFF1769AA)
 private val ContinuationText = Color(0xFF172B4D)
 private val ContinuationSecondary = Color(0xFF5B6B7A)
 
-data class InlineSixthCpcIncrementStep(val pay: Int, val date: Long)
+data class InlineSixthCpcIncrementStep(val pay: Int, val date: Long, val sequence: Int = 0)
 
 @Composable
-fun FifthToSixthContinuationSection(conversion: FifthToSixthResult, onContinueToSeventh: ((String, Int, Int) -> Unit)? = null) {
-    var incrementSteps by remember(conversion.revisedBasicPay, conversion.scale.title) { mutableStateOf<List<InlineSixthCpcIncrementStep>>(emptyList()) }
+fun FifthToSixthContinuationSection(
+    conversion: FifthToSixthResult,
+    onContinueToSeventh: ((String, Int, Int) -> Unit)? = null,
+    onHistorySnapshot: ((SixthCpcJourneySnapshot) -> Unit)? = null,
+    restoredSnapshot: SixthCpcJourneySnapshot? = null
+) {
+    var incrementSteps by remember(conversion.revisedBasicPay, conversion.scale.title, restoredSnapshot) {
+        mutableStateOf(restoredSnapshot?.increments.orEmpty().map { InlineSixthCpcIncrementStep(it.payInPayBand + it.gradePay, it.dateMillis, it.sequence) })
+    }
+    var acceptedEventChains by remember(conversion.revisedBasicPay, conversion.scale.title, restoredSnapshot) { mutableStateOf(restoredSnapshot?.eventChains.orEmpty()) }
+    var seventhHistorySnapshot by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.seventhContinuation) }
     var eventLatestPayBand by remember { mutableStateOf<String?>(null) }
     var eventLatestGradePay by remember { mutableStateOf<Int?>(null) }
     var eventLatestPayInBand by remember { mutableStateOf<Int?>(null) }
@@ -40,7 +49,18 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult, onContinueTo
     val continuityPayBand = eventLatestPayBand ?: conversion.scale.payBand
     val continuityGradePay = eventLatestGradePay ?: editedGradePay
     val continuityPayInBand = eventLatestPayInBand ?: automaticSeventhPayInBand ?: latestPayInBand
-    val reaches2016 = automaticSeventhPayInBand != null || eventLatestDate?.let { it >= inlineSixthJuly2015Date() } == true || reaches2015
+    val reaches2016 = restoredSnapshot?.seventhContinuation != null || automaticSeventhPayInBand != null || eventLatestDate?.let { it >= inlineSixthJuly2015Date() } == true || reaches2015
+    SideEffect {
+        onHistorySnapshot?.invoke(SixthCpcJourneySnapshot(
+            startingDateMillis = inlineSixthConversionDate(),
+            payBandId = conversion.scale.payBand,
+            gradePay = editedGradePay,
+            startingPayInPayBand = conversion.payInPayBand,
+            increments = incrementSteps.mapIndexed { index, step -> SixthCpcIncrementSnapshot(index + 1, step.pay - editedGradePay, editedGradePay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
+            eventChains = acceptedEventChains,
+            seventhContinuation = seventhHistorySnapshot
+        ))
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
@@ -104,7 +124,7 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult, onContinueTo
                     val nextPay = calculateSixthCpcNextIncrement(currentPayInBand, editedGradePay, conversion.scale.payBandMaximum) ?: return@Button
                     val nextDate = latest?.let { addInlineSixthYear(it.date) } ?: inlineSixthFirstIncrementDate()
                     if (nextDate <= inlineSixthJuly2015Date()) {
-                        incrementSteps = incrementSteps + InlineSixthCpcIncrementStep(nextPay, nextDate)
+                        incrementSteps = incrementSteps + InlineSixthCpcIncrementStep(nextPay, nextDate, (incrementSteps.maxOfOrNull { it.sequence } ?: 0) + 1)
                         if (nextDate == inlineSixthJuly2015Date()) automaticSeventhPayInBand = nextPay - editedGradePay
                     }
                 },
@@ -125,6 +145,8 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult, onContinueTo
             startingPayInPayBand = latestPayInBand,
             startingGradePay = editedGradePay,
             startingPayBand = conversion.scale.payBand,
+            initialEventChains = restoredSnapshot?.eventChains.orEmpty(),
+            initialSequence = incrementSteps.maxOfOrNull { it.sequence } ?: incrementSteps.size,
             onContinueToSeventh = onContinueToSeventh,
             onLatestStateChange = { band, gp, payInBand, date ->
                 eventLatestPayBand = band
@@ -133,20 +155,24 @@ fun FifthToSixthContinuationSection(conversion: FifthToSixthResult, onContinueTo
                 eventLatestDate = date
                 if (date >= inlineSixthJuly2015Date()) automaticSeventhPayInBand = payInBand
             },
-            onEventsStateChange = { hasSixthCpcEvent = it }
+            onEventsStateChange = { hasSixthCpcEvent = it },
+            onAcceptedEventChainsChange = { acceptedEventChains = it }
         )
 
         if (reaches2016) {
             SeventhCpcContinuitySection(
                 payBand = continuityPayBand,
                 gradePay = continuityGradePay,
-                payInPayBand = continuityPayInBand
+                payInPayBand = continuityPayInBand,
+                restoredSnapshot = restoredSnapshot?.seventhContinuation,
+                onHistorySnapshot = { seventhHistorySnapshot = it }
             )
         }
     }
 }
 
 private fun inlineSixthFirstIncrementDate(): Long = Calendar.getInstance().apply { clear(); set(2006, Calendar.JULY, 1, 0, 0, 0) }.timeInMillis
+private fun inlineSixthConversionDate(): Long = Calendar.getInstance().apply { clear(); set(2006, Calendar.JANUARY, 1, 0, 0, 0) }.timeInMillis
 private fun inlineSixthJuly2015Date(): Long = Calendar.getInstance().apply { clear(); set(2015, Calendar.JULY, 1, 0, 0, 0) }.timeInMillis
 private fun addInlineSixthYear(date: Long): Long = Calendar.getInstance().apply { timeInMillis = date; add(Calendar.YEAR, 1) }.timeInMillis
 private fun formatInlineDate(value: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))

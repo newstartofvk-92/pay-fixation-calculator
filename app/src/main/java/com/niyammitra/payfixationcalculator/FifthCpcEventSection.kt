@@ -16,7 +16,8 @@ fun FifthCpcEventSection(
     currentScale: FifthCpcScale,
     currentDate: Long,
     currentDni: Long?,
-    onEventApplied: (String, FifthCpcScale, Int, Long, Long, Long) -> Unit
+    onEventApplied: (String, FifthCpcScale, Int, Long, Long, Long) -> Unit,
+    onEventAppliedDetailed: ((String, FifthCpcScale, Int, Long, Long, Long, String, String) -> Unit)? = null
 ) {
     var eventDate by remember { mutableStateOf<Long?>(null) }
     var targetScale by remember { mutableStateOf<FifthCpcScale?>(null) }
@@ -149,6 +150,7 @@ fun FifthCpcEventSection(
                 val effectiveDate = implementationDate ?: return@Button
                 val nextDni = newDni ?: return@Button
                 onEventApplied(eventType, scale, pay, date, effectiveDate, nextDni)
+                onEventAppliedDetailed?.invoke(eventType, scale, pay, date, effectiveDate, nextDni, placementMethod, implementationOption)
             },
             enabled = eventDate != null &&
                 eventDate!! >= currentDate &&

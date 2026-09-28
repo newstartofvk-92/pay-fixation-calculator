@@ -54,24 +54,43 @@ private enum class StandaloneCpcConversion(val title: String) {
 }
 
 @Composable
-fun CpcConversionOnlyScreen(onBack: () -> Unit) {
+fun CpcConversionOnlyScreen(
+    onBack: () -> Unit,
+    initialSnapshot: StandaloneCpcConversionSnapshot? = null,
+    initialRecordId: String? = null,
+    onSaveRecord: ((StandaloneCpcConversionSnapshot, String?) -> Unit)? = null
+) {
     BackHandler(onBack = onBack)
-    var conversion by remember { mutableStateOf<StandaloneCpcConversion?>(null) }
+    val initialFourth = (initialSnapshot as? StandaloneCpcConversionSnapshot.FourthToFifth)?.let { saved ->
+        FourthToFifthCpcData.scales.firstOrNull { it.existingScale == saved.scaleId }
+    }
+    val initialFifth = (initialSnapshot as? StandaloneCpcConversionSnapshot.FifthToSixth)?.let { saved ->
+        FifthToSixthCpcData.scales.firstOrNull { it.title == saved.scaleId }
+    }
+    val initialSixth = (initialSnapshot as? StandaloneCpcConversionSnapshot.SixthToSeventh)?.let { saved ->
+        SixthToSeventhCpcData.payBands.firstOrNull { it.title.substringBefore(":").trim() == saved.payBandId }
+    }
+    var conversion by remember(initialSnapshot) { mutableStateOf(when (initialSnapshot?.kind) {
+        StandaloneConversionKind.FOURTH_TO_FIFTH -> StandaloneCpcConversion.FOURTH_TO_FIFTH
+        StandaloneConversionKind.FIFTH_TO_SIXTH -> StandaloneCpcConversion.FIFTH_TO_SIXTH
+        StandaloneConversionKind.SIXTH_TO_SEVENTH -> StandaloneCpcConversion.SIXTH_TO_SEVENTH
+        null -> null
+    }) }
     var conversionMenu by remember { mutableStateOf(false) }
-    var fourthScale by remember { mutableStateOf<FourthCpcScale?>(null) }
+    var fourthScale by remember(initialSnapshot) { mutableStateOf(initialFourth) }
     var fourthScaleMenu by remember { mutableStateOf(false) }
-    var fourthPayText by remember { mutableStateOf("") }
-    var fifthScale by remember { mutableStateOf<FifthCpcScale?>(null) }
+    var fourthPayText by remember(initialSnapshot) { mutableStateOf((initialSnapshot as? StandaloneCpcConversionSnapshot.FourthToFifth)?.existingBasicPay?.toString() ?: "") }
+    var fifthScale by remember(initialSnapshot) { mutableStateOf(initialFifth) }
     var fifthScaleMenu by remember { mutableStateOf(false) }
-    var fifthPayText by remember { mutableStateOf("") }
-    var sixthBand by remember { mutableStateOf<SixthCpcPayBand?>(null) }
+    var fifthPayText by remember(initialSnapshot) { mutableStateOf((initialSnapshot as? StandaloneCpcConversionSnapshot.FifthToSixth)?.existingBasicPay?.toString() ?: "") }
+    var sixthBand by remember(initialSnapshot) { mutableStateOf(initialSixth) }
     var sixthBandMenu by remember { mutableStateOf(false) }
-    var sixthGradePay by remember { mutableStateOf<Int?>(null) }
+    var sixthGradePay by remember(initialSnapshot) { mutableStateOf((initialSnapshot as? StandaloneCpcConversionSnapshot.SixthToSeventh)?.gradePay) }
     var sixthGradePayMenu by remember { mutableStateOf(false) }
-    var sixthPayText by remember { mutableStateOf("") }
-    var fourthResult by remember { mutableStateOf<FourthToFifthResult?>(null) }
-    var fifthResult by remember { mutableStateOf<FifthToSixthResult?>(null) }
-    var sixthResult by remember { mutableStateOf<SixthToSeventhResult?>(null) }
+    var sixthPayText by remember(initialSnapshot) { mutableStateOf((initialSnapshot as? StandaloneCpcConversionSnapshot.SixthToSeventh)?.payInPayBand?.toString() ?: "") }
+    var fourthResult by remember(initialSnapshot) { mutableStateOf(if (initialFourth != null) runCatching { calculateFourthToFifthCpc((initialSnapshot as StandaloneCpcConversionSnapshot.FourthToFifth).existingBasicPay, initialFourth) }.getOrNull() else null) }
+    var fifthResult by remember(initialSnapshot) { mutableStateOf(if (initialFifth != null) runCatching { calculateFifthToSixthCpc((initialSnapshot as StandaloneCpcConversionSnapshot.FifthToSixth).existingBasicPay, initialFifth) }.getOrNull() else null) }
+    var sixthResult by remember(initialSnapshot) { mutableStateOf(if (initialSixth != null && initialSnapshot is StandaloneCpcConversionSnapshot.SixthToSeventh) calculateSixthToSeventhCpc(initialSnapshot.payInPayBand, initialSnapshot.gradePay, initialSixth) else null) }
     var conversionError by remember { mutableStateOf<String?>(null) }
 
     fun clearResult() {
@@ -311,6 +330,20 @@ fun CpcConversionOnlyScreen(onBack: () -> Unit) {
                     result.nextIncrementPay?.let { ResultValue("Next Increment Pay", it) }
                     RuleBasis(result.ruleBasis)
                 }
+            }
+            if (onSaveRecord != null && (fourthResult != null || fifthResult != null || sixthResult != null)) {
+                OutlinedButton(
+                    onClick = {
+                        val snapshot = when {
+                            fourthResult != null && fourthScale != null && fourthPay != null -> StandaloneCpcConversionSnapshot.FourthToFifth(fourthScale!!.existingScale, fourthPay)
+                            fifthResult != null && fifthScale != null && fifthPay != null -> StandaloneCpcConversionSnapshot.FifthToSixth(fifthScale!!.title, fifthPay)
+                            sixthResult != null && sixthBand != null && sixthGradePay != null && sixthPay != null -> StandaloneCpcConversionSnapshot.SixthToSeventh(sixthBand!!.title.substringBefore(":").trim(), sixthPay, sixthGradePay!!)
+                            else -> null
+                        }
+                        snapshot?.let { onSaveRecord(it, initialRecordId) }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Save Conversion to CPC History") }
             }
             Spacer(Modifier.height(12.dp))
         }
