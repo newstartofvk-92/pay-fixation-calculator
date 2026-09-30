@@ -17,7 +17,8 @@ data class FifthCpcHistoricalIncrementStep(val pay: Int, val date: Long, val seq
 data class FifthCpcHistoricalEventStep(
     val type: String, val scale: String, val pay: Int, val eventDate: Long,
     val implementationDate: Long, val dniDate: Long,
-    val placementMethod: String = "", val implementationOption: String = "", val sequence: Int = 0
+    val placementMethod: String = "", val implementationOption: String = "", val sequence: Int = 0,
+    val omAppliedBeforeEvent: Boolean = false
 )
 
 private data class FifthCpcTimelineItem(
@@ -41,9 +42,10 @@ fun FifthCpcHistoricalIncrementSection(
     conversionDate: Long,
     initialDate: Long = conversionDate,
     initialDni: Long? = firstIncrementDate,
-    onContinueToSeventh: ((String, Int, Int) -> Unit)? = null,
+    onContinueToSeventh: ((String, Int, Int, Long) -> Unit)? = null,
     onHistorySnapshot: ((FifthCpcJourneySnapshot) -> Unit)? = null,
-    restoredSnapshot: FifthCpcJourneySnapshot? = null
+    restoredSnapshot: FifthCpcJourneySnapshot? = null,
+    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
 ) {
     var incrementSteps by remember(initialPay, revisedScale, conversionDate, firstIncrementDate, restoredSnapshot) {
         mutableStateOf(restoredSnapshot?.increments.orEmpty().map { FifthCpcHistoricalIncrementStep(it.pay, it.dateMillis, it.sequence) })
@@ -61,10 +63,16 @@ fun FifthCpcHistoricalIncrementSection(
             type = it.eventType.name, scale = it.targetScaleId, pay = it.resultingPay,
             eventDate = it.eventDateMillis, implementationDate = it.implementationDateMillis,
             dniDate = it.resultingDniMillis, placementMethod = it.placementMethod,
-            implementationOption = it.implementationOption, sequence = it.sequence
+            implementationOption = it.implementationOption, sequence = it.sequence,
+            omAppliedBeforeEvent = it.omAppliedBeforeEvent
         ) })
     }
     var sixthHistorySnapshot by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.sixthContinuation) }
+    var retainedOmAdjustment by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.omAdjustment) }
+    var normalDniForOm by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.omAdjustment?.normalDniMillis) }
+    var omAppliedBeforeLaterEvent by remember(restoredSnapshot) {
+        mutableStateOf(restoredSnapshot?.events?.any { it.omAppliedBeforeEvent } == true)
+    }
 
     val initialScale = remember(revisedScale) {
         findFifthScaleForHistoricalJourney(revisedScale)
@@ -99,6 +107,17 @@ fun FifthCpcHistoricalIncrementSection(
         latest != null -> addFifthHistoricalYear(latest.date)
         else -> initialDni
     }
+    val endDate = fifthCpcEndDate()
+    val reachesSixthBoundary = currentDate >= endDate || (currentDni != null && currentDni > endDate)
+    val omNormalDni = normalDniForOm ?: currentDni
+    val omEligible = omNormalDni?.let(::isEligibleForFifthCpcOmAdjustment) == true
+    val calculatedOmAdjustment = if (!omAppliedBeforeLaterEvent && reachesSixthBoundary && currentScale != null) omNormalDni?.let { dni ->
+        if (isEligibleForFifthCpcOmAdjustment(dni)) calculateFifthCpcOmAdjustment(dni, currentPay, currentScale) else null
+    } else null
+    val omAdjustment = retainedOmAdjustment ?: calculatedOmAdjustment
+    val currentPositionIncludesOm = omAppliedBeforeLaterEvent && currentDate > (omAdjustment?.incrementDateMillis ?: Long.MAX_VALUE)
+    val finalFifthPay = if (omAdjustment != null && !currentPositionIncludesOm) omAdjustment.adjustedBasicPay else currentPay
+    val sixthCpcInputPay = finalFifthPay
     SideEffect {
         onHistorySnapshot?.invoke(FifthCpcJourneySnapshot(
             startingDateMillis = initialDate,
@@ -117,15 +136,16 @@ fun FifthCpcHistoricalIncrementSection(
                 FifthCpcEventSnapshot(index + 1, kind, event.eventDate, event.implementationDate,
                     event.scale, event.pay, event.dniDate,
                     if (event.implementationOption.equals("From DNI", true)) CpcFixationBasis.DNI else CpcFixationBasis.EVENT_DATE,
-                    event.placementMethod, event.implementationOption, event.sequence.takeIf { it > 0 } ?: index + 1)
+                    event.placementMethod, event.implementationOption, event.sequence.takeIf { it > 0 } ?: index + 1,
+                    event.omAppliedBeforeEvent)
             },
-            sixthContinuation = sixthHistorySnapshot
+            sixthContinuation = sixthHistorySnapshot,
+            omAdjustment = omAdjustment
         ))
     }
     val nextDate = currentDni
     val effectiveScale = currentScale
-    val nextPay = calculateNextFifthCpcStage(currentPay, effectiveScale)
-    val endDate = fifthCpcEndDate()
+    val nextPay = effectiveScale?.let { calculateNextFifthCpcStage(currentPay, it.title) }
     val canAdd = nextPay != null && nextDate != null && nextDate <= endDate
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -305,7 +325,11 @@ fun FifthCpcHistoricalIncrementSection(
                         currentScale = currentScale,
                         currentDate = currentDate,
                         currentDni = currentDni,
+                        omAdjustment = if (omAppliedBeforeLaterEvent) null else omAdjustment,
                         onEventApplied = { appliedEventType, newScale, newPay, appliedEventDate, implementationDate, newDni ->
+                            if (normalDniForOm == null && currentDni?.let(::isEligibleForFifthCpcOmAdjustment) == true) {
+                                normalDniForOm = currentDni
+                            }
                             eventHistory = eventHistory + FifthCpcHistoricalEventStep(
                                 type = appliedEventType,
                                 scale = newScale.title,
@@ -321,8 +345,16 @@ fun FifthCpcHistoricalIncrementSection(
                             eventDni = newDni
                             showEventSection = false
                         },
-                        onEventAppliedDetailed = { appliedType, newScale, newPay, eventDate, implementationDate, newDni, placement, option ->
-                            eventHistory = eventHistory.dropLast(1) + eventHistory.last().copy(placementMethod = placement, implementationOption = option)
+                        onEventAppliedDetailed = { appliedType, newScale, newPay, eventDate, implementationDate, newDni, placement, option, eventOmAdjustment ->
+                            eventOmAdjustment?.let { adjustment ->
+                                retainedOmAdjustment = adjustment
+                                omAppliedBeforeLaterEvent = true
+                            }
+                            eventHistory = eventHistory.dropLast(1) + eventHistory.last().copy(
+                                placementMethod = placement,
+                                implementationOption = option,
+                                omAppliedBeforeEvent = eventOmAdjustment != null
+                            )
                         }
                     )
                 }
@@ -373,6 +405,20 @@ fun FifthCpcHistoricalIncrementSection(
                             color = FifthHistoricalSecondary,
                             fontSize = 12.sp
                         )
+                        if (omAdjustment != null) {
+                            Surface(Modifier.fillMaxWidth(), color = Color(0xFFFFF8E1), shape = RoundedCornerShape(12.dp)) {
+                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("Special Increment under OM dated 19 March 2012", color = FifthHistoricalBlue, fontWeight = FontWeight.Bold)
+                                    Text("Normal DNI: ${formatFifthHistoricalDate(omAdjustment.normalDniMillis)}", color = FifthHistoricalText, fontSize = 12.sp)
+                                    Text("5th CPC Basic Pay before special increment: ${formatFifthHistoricalCurrency(omAdjustment.basicPayBefore)}", color = FifthHistoricalText, fontSize = 12.sp)
+                                    Text("Special increment on 01 January 2006: ${formatFifthHistoricalCurrency(omAdjustment.incrementAmount)}", color = FifthHistoricalText, fontSize = 12.sp)
+                                    Text("Adjusted 5th CPC Basic Pay: ${formatFifthHistoricalCurrency(omAdjustment.adjustedBasicPay)}", color = FifthHistoricalBlue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                    Text("Next increment in revised pay structure: ${formatFifthHistoricalDate(omAdjustment.nextRevisedIncrementDateMillis)}", color = FifthHistoricalText, fontSize = 12.sp)
+                                }
+                            }
+                        } else if (omEligible) {
+                            Text("The OM increment could not be determined from the selected 5th CPC scale and pay stage. 6th CPC fixation is unavailable until the scale/pay position is corrected.", color = Color(0xFFC62828), fontSize = 12.sp)
+                        }
                         Button(
                             onClick = { showSixthCpcContinuation = true },
                             modifier = Modifier.fillMaxWidth(),
@@ -385,8 +431,8 @@ fun FifthCpcHistoricalIncrementSection(
                 }
 
                 if (showSixthCpcContinuation) {
-                    val conversion = runCatching {
-                        calculateFifthToSixthCpc(currentPay, mappedScale)
+                    val conversion = if (omEligible && omAdjustment == null) null else runCatching {
+                        calculateFifthToSixthCpc(sixthCpcInputPay, mappedScale)
                     }.getOrNull()
 
                     conversion?.let {
@@ -394,6 +440,7 @@ fun FifthCpcHistoricalIncrementSection(
                             conversion = it,
                             onContinueToSeventh = onContinueToSeventh,
                             restoredSnapshot = restoredSnapshot?.sixthContinuation,
+                            sequenceIntegrity = sequenceIntegrity,
                             onHistorySnapshot = { sixthHistorySnapshot = it }
                         )
                     }
@@ -457,12 +504,10 @@ private fun parseFifthCpcScaleStages(scale: String): List<Int> {
     return stages.distinct()
 }
 
-private fun calculateNextFifthCpcStage(currentPay: Int, scale: FifthCpcScale?): Int? {
-    if (scale == null) return null
-
+internal fun calculateNextFifthCpcStage(currentPay: Int, scaleTitle: String): Int? {
     // The scale itself is the authoritative source of the annual increment.
     // Do not derive the next pay from a pre-generated stage list.
-    val normalizedTitle = scale.title
+    val normalizedTitle = scaleTitle
         .removePrefix("Rs. ")
         .substringBefore(" (")
         .trim()
