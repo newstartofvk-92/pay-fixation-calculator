@@ -24,9 +24,10 @@ data class InlineSixthCpcIncrementStep(val pay: Int, val date: Long, val sequenc
 @Composable
 fun FifthToSixthContinuationSection(
     conversion: FifthToSixthResult,
-    onContinueToSeventh: ((String, Int, Int) -> Unit)? = null,
+    onContinueToSeventh: ((String, Int, Int, Long) -> Unit)? = null,
     onHistorySnapshot: ((SixthCpcJourneySnapshot) -> Unit)? = null,
-    restoredSnapshot: SixthCpcJourneySnapshot? = null
+    restoredSnapshot: SixthCpcJourneySnapshot? = null,
+    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
 ) {
     var incrementSteps by remember(conversion.revisedBasicPay, conversion.scale.title, restoredSnapshot) {
         mutableStateOf(restoredSnapshot?.increments.orEmpty().map { InlineSixthCpcIncrementStep(it.payInPayBand + it.gradePay, it.dateMillis, it.sequence) })
@@ -147,7 +148,11 @@ fun FifthToSixthContinuationSection(
             startingPayBand = conversion.scale.payBand,
             initialEventChains = restoredSnapshot?.eventChains.orEmpty(),
             initialSequence = incrementSteps.maxOfOrNull { it.sequence } ?: incrementSteps.size,
-            onContinueToSeventh = onContinueToSeventh,
+            onContinueToSeventh = onContinueToSeventh?.let { callback ->
+                { band, gradePay, payInBand ->
+                    callback(band, gradePay, payInBand, eventLatestDate ?: inlineSixthJuly2015Date())
+                }
+            },
             onLatestStateChange = { band, gp, payInBand, date ->
                 eventLatestPayBand = band
                 eventLatestGradePay = gp
@@ -165,6 +170,7 @@ fun FifthToSixthContinuationSection(
                 gradePay = continuityGradePay,
                 payInPayBand = continuityPayInBand,
                 restoredSnapshot = restoredSnapshot?.seventhContinuation,
+                sequenceIntegrity = sequenceIntegrity,
                 onHistorySnapshot = { seventhHistorySnapshot = it }
             )
         }

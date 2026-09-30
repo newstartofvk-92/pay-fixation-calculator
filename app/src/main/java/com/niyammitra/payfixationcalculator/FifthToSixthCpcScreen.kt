@@ -134,7 +134,9 @@ fun FifthToSixthCpcScreen(
                     conversionDate = startDate,
                     initialDate = startDate,
                     initialDni = selectedDni,
-                    onContinueToSeventh = onContinueToSeventh,
+                    onContinueToSeventh = onContinueToSeventh?.let { callback ->
+                        { band, gradePay, payInBand, effectiveDate -> callback(band, gradePay, payInBand) }
+                    },
                     onHistorySnapshot = { historySnapshot = it },
                     restoredSnapshot = restoredSnapshot
                 )

@@ -41,7 +41,7 @@ fun SeventhCpcHistoryJourneyScreen(
         mutableStateOf(snapshot.increments.map { SeventhCpcIncrementStep(it.pay, it.dateMillis, it.sequence) })
     }
     var promotion by remember(snapshot) { mutableStateOf(snapshot.promotions.firstOrNull()) }
-    val current = currentSeventhPosition(snapshot, increments, promotion)
+    val current = currentSeventhPosition(snapshot, increments, listOfNotNull(promotion), sequenceIntegrity)
     val sequence = maxOf(increments.maxOfOrNull { it.sequence } ?: 0, promotion?.sequence ?: 0)
     val date = increments.lastOrNull()?.date?.let { addSeventhHistoryYears(it, 1) }
         ?: promotion?.resultingDniMillis ?: snapshot.startingDniMillis

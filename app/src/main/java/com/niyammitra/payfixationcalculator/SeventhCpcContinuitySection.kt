@@ -52,6 +52,7 @@ fun SeventhCpcContinuitySection(
     gradePay: Int,
     payInPayBand: Int,
     restoredSnapshot: SeventhCpcJourneySnapshot? = null,
+    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL,
     onHistorySnapshot: ((SeventhCpcJourneySnapshot) -> Unit)? = null
 ) {
     val normalizedPayBand = payBand.substringBefore(":").trim()
