@@ -90,26 +90,44 @@ fun SeventhCpcHistoryJourneyScreen(
     }
 }
 
-private data class SeventhHistoryPosition(val level: String, val pay: Int, val dni: Long)
+internal data class SeventhHistoryPosition(val level: String, val pay: Int, val dni: Long)
 
-private fun currentSeventhPosition(
+internal fun currentSeventhPosition(
     snapshot: SeventhCpcJourneySnapshot,
     increments: List<SeventhCpcIncrementStep>,
-    promotion: SeventhCpcPromotionSnapshot?
+    promotions: List<SeventhCpcPromotionSnapshot>,
+    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
 ): SeventhHistoryPosition {
     var result = SeventhHistoryPosition(snapshot.startingLevel, snapshot.startingBasicPay,
         snapshot.startingDniMillis ?: SeventhCpcHistoryStartDni)
     fun finalPromotion(p: SeventhCpcPromotionSnapshot): SeventhHistoryPosition {
         val level = p.promotedLevel ?: p.currentLevel
-        val pay = p.postIncrements.maxByOrNull { it.sequence }?.pay ?: p.resultingPay ?: p.currentPay
-        val dni = p.postIncrements.maxByOrNull { it.sequence }?.let { addSeventhHistoryYears(it.dateMillis, 1) }
+        val lastPostIncrement = if (sequenceIntegrity == CpcSequenceIntegrity.ORIGINAL) p.postIncrements.maxByOrNull { it.sequence }
+            else p.postIncrements.withIndex().maxWithOrNull(compareBy<IndexedValue<CpcIncrementSnapshot>> { it.value.dateMillis }.thenBy { it.index })?.value
+        val pay = lastPostIncrement?.pay ?: p.resultingPay ?: p.currentPay
+        val dni = lastPostIncrement?.let { addSeventhHistoryYears(it.dateMillis, 1) }
             ?: p.resultingDniMillis ?: p.knownDniMillis
         return p.subsequentPromotion?.let(::finalPromotion) ?: SeventhHistoryPosition(level, pay, dni)
     }
-    val latestIncrement = increments.maxByOrNull { it.sequence }
-    val promotionPosition = promotion?.let(::finalPromotion)
+    val latestIncrement = if (sequenceIntegrity == CpcSequenceIntegrity.ORIGINAL) increments.maxByOrNull { it.sequence }
+        else increments.withIndex().maxWithOrNull(compareBy<IndexedValue<SeventhCpcIncrementStep>> { it.value.date }.thenBy { it.index })?.value
+    fun promotionDate(p: SeventhCpcPromotionSnapshot): Long? = p.subsequentPromotion?.let(::promotionDate)
+        ?: p.postIncrements.withIndex().maxWithOrNull(compareBy<IndexedValue<CpcIncrementSnapshot>> { it.value.dateMillis }.thenBy { it.index })?.value?.dateMillis
+        ?: p.promotionDateMillis
+    val latestPromotion = if (sequenceIntegrity == CpcSequenceIntegrity.ORIGINAL) {
+        promotions.withIndex().maxWithOrNull(compareBy<IndexedValue<SeventhCpcPromotionSnapshot>> { it.value.maxApplicationSequence() }
+            .thenBy { promotionDate(it.value) ?: Long.MIN_VALUE }.thenBy { it.index })
+    } else {
+        promotions.withIndex().maxWithOrNull(compareBy<IndexedValue<SeventhCpcPromotionSnapshot>> { promotionDate(it.value) ?: Long.MIN_VALUE }
+            .thenBy { it.index })
+    }
+    val promotionPosition = latestPromotion?.value?.let(::finalPromotion)
+    val promotionComesLast = latestPromotion != null && when (sequenceIntegrity) {
+        CpcSequenceIntegrity.ORIGINAL -> latestIncrement == null || latestPromotion.value.maxApplicationSequence() > latestIncrement.sequence
+        CpcSequenceIntegrity.INFERRED -> latestIncrement == null || (promotionDate(latestPromotion.value) ?: Long.MIN_VALUE) >= latestIncrement.date
+    }
     when {
-        promotionPosition != null && (latestIncrement == null || promotion!!.maxApplicationSequence() > latestIncrement.sequence) -> result = promotionPosition
+        promotionPosition != null && promotionComesLast -> result = promotionPosition
         latestIncrement != null -> result = SeventhHistoryPosition(promotionPosition?.level ?: result.level, latestIncrement.pay, addSeventhHistoryYears(latestIncrement.date, 1))
         promotionPosition != null -> result = promotionPosition
     }
