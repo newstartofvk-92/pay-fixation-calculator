@@ -46,20 +46,16 @@ fun FourthToFifthCpcScreen(
 ) {
     BackHandler(onBack = onBack)
     val restoredScale = remember(restoredSnapshot?.scaleId) { FourthToFifthCpcData.scales.firstOrNull { it.existingScale == restoredSnapshot?.scaleId } }
-    val restoredLastEvent = restoredSnapshot?.events?.maxByOrNull { it.eventDateMillis }
-    val restoredLastIncrement = restoredSnapshot?.increments?.maxByOrNull { it.dateMillis }
-    val restoredIncrementIsLater = restoredLastIncrement != null && (restoredLastEvent == null || restoredLastIncrement.dateMillis > restoredLastEvent.eventDateMillis)
     var selectedScale by remember(restoredSnapshot) { mutableStateOf(restoredScale) }
     var basicPayText by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.startingBasicPay?.toString() ?: "") }
     var payDateText by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.payDateMillis?.let { SimpleDateFormat("ddMMyyyy", Locale.US).format(Date(it)) } ?: "") }
     var nextIncrementDateText by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.nextIncrementDateMillis?.let { SimpleDateFormat("ddMMyyyy", Locale.US).format(Date(it)) } ?: "") }
     var scaleMenu by remember { mutableStateOf(false) }
     var incrementSteps by remember(selectedScale, basicPayText, restoredSnapshot) { mutableStateOf(restoredSnapshot?.increments.orEmpty().map { FourthToFifthIncrementStep(it.pay, it.dateMillis, it.sequence) }) }
-    var showEvents by remember { mutableStateOf(false) }
-    var eventScale by remember(restoredSnapshot) { mutableStateOf(restoredLastEvent?.targetScaleId?.let { id -> FourthToFifthCpcData.scales.firstOrNull { it.existingScale == id } }) }
-    var eventPay by remember(restoredSnapshot) { mutableStateOf(if (restoredIncrementIsLater) restoredLastIncrement?.pay else restoredLastEvent?.resultingPay) }
-    var eventDate by remember(restoredSnapshot) { mutableStateOf(if (restoredIncrementIsLater) restoredLastIncrement?.dateMillis else restoredLastEvent?.eventDateMillis) }
-    var acceptedEvents by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.events.orEmpty()) }
+    var eventFlow by remember(restoredSnapshot) {
+        mutableStateOf(FourthCpcEventUiState(acceptedEvents = restoredSnapshot?.events.orEmpty()))
+    }
+    val acceptedEvents = eventFlow.acceptedEvents
     var fifthHistorySnapshot by remember(restoredFifthSnapshot) { mutableStateOf(restoredFifthSnapshot) }
     var conversionActivated by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.conversionActivated ?: false) }
     var showConversionPrompt by remember { mutableStateOf(false) }
@@ -74,10 +70,12 @@ fun FourthToFifthCpcScreen(
     } else null
     val dateError = nextIncrementDateText.isNotBlank() && parsedNextIncrementDate == null
     val validNextIncrementDate = parsedNextIncrementDate?.takeIf { payDate != null && it > payDate && it <= fourthFiveConversionDate() }
-    val latestIncrement = incrementSteps.lastOrNull()
-    val currentPay = eventPay ?: latestIncrement?.pay ?: basicPay
-    val currentIncrementDate = eventDate ?: latestIncrement?.date
-    val currentScale = eventScale ?: selectedScale
+    val replayedTimeline = if (validStartingPosition && selectedScale != null && basicPay != null) {
+        recalculateFourthCpcTimeline(basicPay, selectedScale!!, incrementSteps, acceptedEvents, sequenceIntegrity)
+    } else null
+    val currentPay = replayedTimeline?.pay ?: basicPay
+    val currentIncrementDate = replayedTimeline?.lastEffectiveDate
+    val currentScale = replayedTimeline?.scale ?: selectedScale
     val conversionPay = currentPay
     val conversionScale = currentScale
     val timelineDate = currentIncrementDate ?: payDate
@@ -125,12 +123,8 @@ fun FourthToFifthCpcScreen(
                                         basicPayText = ""
                                         nextIncrementDateText = ""
                                         incrementSteps = emptyList()
-                                        eventScale = null
-                                        eventPay = null
-                                        eventDate = null
-                                        acceptedEvents = emptyList()
+                                        eventFlow = FourthCpcEventUiState()
                                         fifthHistorySnapshot = null
-                                        showEvents = false
                                         conversionActivated = false
                                         scaleMenu = false
                                     }
@@ -144,12 +138,8 @@ fun FourthToFifthCpcScreen(
                         onValueChange = { newValue ->
                             basicPayText = newValue.filter(Char::isDigit)
                             incrementSteps = emptyList()
-                            eventScale = null
-                            eventPay = null
-                            eventDate = null
-                            acceptedEvents = emptyList()
+                            eventFlow = FourthCpcEventUiState()
                             fifthHistorySnapshot = null
-                            showEvents = false
                             conversionActivated = false
                         },
                         label = { Text("Basic Pay") },
@@ -164,10 +154,9 @@ fun FourthToFifthCpcScreen(
                             val reset = resetFourthJourneyAfterStartingDateEdit()
                             payDateText = newValue.filter(Char::isDigit).take(8)
                             incrementSteps = reset.increments
-                            acceptedEvents = reset.events
-                            eventScale = null; eventPay = null; eventDate = null
+                            eventFlow = FourthCpcEventUiState(acceptedEvents = reset.events)
                             fifthHistorySnapshot = reset.fifthSnapshot
-                            showEvents = false; conversionActivated = false
+                            conversionActivated = false
                         },
                         label = { Text("Pay Date (dd/MM/yyyy)") },
                         placeholder = { Text("e.g. 01/07/1988") },
@@ -193,7 +182,7 @@ fun FourthToFifthCpcScreen(
                                 value = nextIncrementDateText,
                                 onValueChange = { newValue ->
                                     nextIncrementDateText = newValue.filter(Char::isDigit).take(8)
-                                    showEvents = false
+                                    eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.CancelDraft)
                                 },
                                 label = { Text("Next Increment / DNI Date") },
                                 placeholder = { Text("dd/MM/yyyy") },
@@ -220,31 +209,104 @@ fun FourthToFifthCpcScreen(
                     if (incrementSteps.isNotEmpty()) {
                         FourthToFifthIncrementProgressionCard(calculation, incrementSteps) { index ->
                             incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) }
-                            showEvents = false
+                            eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.CancelDraft)
+                            conversionActivated = false
+                            fifthHistorySnapshot = null
                         }
                     }
                 }
 
-                if (eventPay != null && eventScale != null && eventDate != null) {
+                if (acceptedEvents.isNotEmpty() || incrementSteps.isNotEmpty()) {
                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Current 4th CPC Position", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                            RowValue("Basic Pay", eventPay!!)
-                            Text("Scale: ${eventScale!!.grade}: ${eventScale!!.existingScale}", color = FourFiveTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                            Text("Effective Date: ${formatFourthFiveDate(eventDate!!)}", color = FourFiveTextSecondary, fontSize = 13.sp)
-                            Text("The next increment will now be calculated from this event position.", color = FourFiveTextSecondary, fontSize = 12.sp)
+                            currentPay?.let { RowValue("Basic Pay", it) }
+                            currentScale?.let { Text("Scale: ${it.grade}: ${it.existingScale}", color = FourFiveTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
+                            timelineDate?.let { Text("Effective Date: ${formatFourthFiveDate(it)}", color = FourFiveTextSecondary, fontSize = 13.sp) }
+                            Text("The next increment is calculated from this chronological pay position.", color = FourFiveTextSecondary, fontSize = 12.sp)
                         }
                     }
                 }
 
-                if (!showEvents) {
+                if (!eventFlow.showEventTypes && eventFlow.draftType == null) {
                     Button(
-                        onClick = { showEvents = true },
+                        onClick = { eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.OpenEventTypes) },
                         enabled = currentPay != null,
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = FourFiveBlue),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Add 4th CPC Event", fontWeight = FontWeight.Bold) }
+                }
+
+                if (eventFlow.showEventTypes) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FourthCpcEventType.values().forEach { type ->
+                            OutlinedButton(
+                                onClick = { eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.SelectType(type)) },
+                                modifier = Modifier.weight(1f)
+                            ) { Text(type.name.lowercase().replaceFirstChar { it.uppercase() }) }
+                        }
+                    }
+                    TextButton(onClick = { eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.CancelDraft) }) { Text("Cancel") }
+                }
+
+                if (acceptedEvents.isNotEmpty()) {
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Accepted 4th CPC Events", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                            acceptedEvents.forEachIndexed { index, event ->
+                                val label = if (event.eventType == CpcJourneyEventKind.ACP) "ACP" else "Promotion"
+                                val target = FourthToFifthCpcData.scales.firstOrNull { it.existingScale == event.targetScaleId }
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Text("Event ${index + 1}: $label", fontWeight = FontWeight.Bold, color = FourFiveTextPrimary)
+                                        Text("Date: ${formatFourthFiveDate(event.eventDateMillis)}", color = FourFiveTextSecondary, fontSize = 12.sp)
+                                        Text("${target?.grade ?: event.targetScaleId} · Pay: ${formatFourFiveCurrency(event.resultingPay)}", color = FourFiveTextSecondary, fontSize = 12.sp)
+                                    }
+                                    TextButton(onClick = {
+                                        val reduced = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.Delete(index))
+                                        val timeline = if (basicPay != null && selectedScale != null) {
+                                            recalculateFourthCpcTimeline(basicPay, selectedScale!!, incrementSteps, reduced.acceptedEvents, sequenceIntegrity)
+                                        } else null
+                                        eventFlow = if (timeline != null) reduced.copy(acceptedEvents = timeline.events) else reduced
+                                        if (timeline != null) incrementSteps = timeline.increments
+                                        eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.CancelDraft)
+                                        val continuation = invalidateFourthCpcContinuation(
+                                            FourthCpcContinuationState(conversionActivated, fifthHistorySnapshot)
+                                        )
+                                        conversionActivated = continuation.conversionActivated
+                                        fifthHistorySnapshot = continuation.fifthSnapshot
+                                        showConversionPrompt = false
+                                    }) { Text("Delete Event") }
+                                }
+                                if (index < acceptedEvents.lastIndex) HorizontalDivider()
+                            }
+                        }
+                    }
+                }
+
+                if (eventFlow.draftType != null && currentScale != null && currentPay != null) {
+                    FourthCpcEventSection(
+                        currentPay = currentPay,
+                        currentScale = currentScale,
+                        currentDate = currentIncrementDate ?: payDate ?: fourthCpcStartDate(),
+                        eventType = eventFlow.draftType!!,
+                        onEventApplied = { _, _, newDate ->
+                            incrementSteps = incrementSteps.filter { it.date < newDate }
+                            nextIncrementDateText = ""
+                            val continuation = invalidateFourthCpcContinuation(
+                                FourthCpcContinuationState(conversionActivated, fifthHistorySnapshot)
+                            )
+                            conversionActivated = continuation.conversionActivated
+                            fifthHistorySnapshot = continuation.fifthSnapshot
+                        },
+                        onEventAppliedDetailed = { newScale, newPay, newDate, kind ->
+                            val event = FourthCpcEventSnapshot(acceptedEvents.size + 1, newDate, kind, newScale.existingScale, newPay,
+                                (incrementSteps.maxOfOrNull { it.sequence } ?: 0).coerceAtLeast(acceptedEvents.maxOfOrNull { it.sequence } ?: 0) + 1)
+                            eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.Accept(event))
+                        },
+                        onCancel = { eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.CancelDraft) }
+                    )
                 }
 
                 Button(
@@ -255,9 +317,9 @@ fun FourthToFifthCpcScreen(
                         val nextDate = currentIncrementDate?.let { addFourthFiveYear(it) } ?: validNextIncrementDate ?: return@Button
                         if (nextDate <= fourthFiveConversionEndDate()) {
                             incrementSteps = incrementSteps + FourthToFifthIncrementStep(nextPay, nextDate, (incrementSteps.maxOfOrNull { it.sequence } ?: 0).coerceAtLeast(acceptedEvents.maxOfOrNull { it.sequence } ?: 0) + 1)
-                            eventPay = nextPay
-                            eventDate = nextDate
-                            showEvents = false
+                            eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.CancelDraft)
+                            conversionActivated = false
+                            fifthHistorySnapshot = null
                         } else {
                             showConversionPrompt = true
                         }
@@ -384,27 +446,7 @@ fun FourthToFifthCpcScreen(
                         firstIncrementDate = firstFifthIncrementDate,
                         conversionDate = fourthFiveConversionDate(),
                         onHistorySnapshot = { fifthHistorySnapshot = it },
-                        restoredSnapshot = restoredFifthSnapshot
-                    )
-                }
-
-                if (showEvents && currentScale != null && currentPay != null) {
-                    FourthCpcEventSection(
-                        currentPay = currentPay,
-                        currentScale = currentScale,
-                        currentDate = currentIncrementDate ?: payDate ?: fourthCpcStartDate(),
-                        onEventApplied = { newScale, newPay, newDate ->
-                            eventScale = newScale
-                            eventPay = newPay
-                            eventDate = newDate
-                            incrementSteps = incrementSteps.filter { it.date < newDate }
-                            nextIncrementDateText = ""
-                            showEvents = false
-                        },
-                        onEventAppliedDetailed = { newScale, newPay, newDate, kind ->
-                            acceptedEvents = acceptedEvents + FourthCpcEventSnapshot(acceptedEvents.size + 1, newDate, kind, newScale.existingScale, newPay,
-                                (incrementSteps.maxOfOrNull { it.sequence } ?: 0).coerceAtLeast(acceptedEvents.maxOfOrNull { it.sequence } ?: 0) + 1)
-                        }
+                        restoredSnapshot = fifthHistorySnapshot
                     )
                 }
 

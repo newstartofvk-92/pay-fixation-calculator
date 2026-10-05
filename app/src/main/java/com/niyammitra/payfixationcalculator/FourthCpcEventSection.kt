@@ -15,23 +15,22 @@ fun FourthCpcEventSection(
     currentPay: Int,
     currentScale: FourthCpcScale,
     currentDate: Long,
+    eventType: FourthCpcEventType,
     onEventApplied: (FourthCpcScale, Int, Long) -> Unit,
-    onEventAppliedDetailed: ((FourthCpcScale, Int, Long, CpcJourneyEventKind) -> Unit)? = null
+    onEventAppliedDetailed: ((FourthCpcScale, Int, Long, CpcJourneyEventKind) -> Unit)? = null,
+    onCancel: () -> Unit
 ) {
     var eventDate by remember { mutableStateOf<Long?>(null) }
     var target by remember { mutableStateOf<FourthCpcScale?>(null) }
-    var eventType by remember { mutableStateOf("Promotion") }
     var menu by remember { mutableStateOf(false) }
     var picker by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<Int?>(null) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("4th CPC Event", fontWeight = FontWeight.ExtraBold)
-        OutlinedButton(onClick = { picker = true }, modifier = Modifier.fillMaxWidth()) { Text(eventDate?.let(::fourthEventDate) ?: "Select Event Date") }
-        Row {
-            RadioButton(eventType == "Promotion", { eventType = "Promotion" }); Text("Promotion")
-            Spacer(Modifier.width(8.dp))
-            RadioButton(eventType == "ACP", { eventType = "ACP" }); Text("ACP")
+        Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            Text("New 4th CPC ${eventType.name.lowercase().replaceFirstChar { it.uppercase() }}", Modifier.weight(1f), fontWeight = FontWeight.ExtraBold)
+            TextButton(onClick = onCancel) { Text("Cancel Draft") }
         }
+        OutlinedButton(onClick = { picker = true }, modifier = Modifier.fillMaxWidth()) { Text(eventDate?.let(::fourthEventDate) ?: "Select Event Date") }
         Box {
             OutlinedButton(onClick = { menu = true }, modifier = Modifier.fillMaxWidth()) { Text(target?.let { it.grade + ": " + it.existingScale } ?: "Select higher 4th CPC scale") }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
@@ -42,22 +41,34 @@ fun FourthCpcEventSection(
         }
         Button(onClick = {
             val t = target ?: return@Button
-            val oneIncrement = calculateFourthCpcNextIncrement(currentPay, currentScale) ?: currentPay
-            val fixedPay = t.existingStages.firstOrNull { it >= oneIncrement } ?: t.existingStages.lastOrNull() ?: oneIncrement
-            result = fixedPay
+            val fixed = calculateFourthCpcEventPosition(currentPay, currentScale, t)
+            result = fixed.pay
             eventDate?.let {
-                onEventApplied(t, fixedPay, it)
-                onEventAppliedDetailed?.invoke(t, fixedPay, it, if (eventType == "ACP") CpcJourneyEventKind.ACP else CpcJourneyEventKind.PROMOTION)
+                onEventApplied(fixed.scale, fixed.pay, it)
+                onEventAppliedDetailed?.invoke(fixed.scale, fixed.pay, it, if (eventType == FourthCpcEventType.ACP) CpcJourneyEventKind.ACP else CpcJourneyEventKind.PROMOTION)
             }
         }, enabled = eventDate != null && eventDate!! >= currentDate && eventDate!! <= fourthEventConversionDate() && target != null, modifier = Modifier.fillMaxWidth()) {
-            Text("Apply 4th CPC Event")
+            Text("Add ${eventType.name.lowercase().replaceFirstChar { it.uppercase() }} Event")
         }
-        result?.let { Text(eventType + " fixed pay: ₹" + it, fontWeight = FontWeight.Bold) }
+        result?.let { Text(eventType.name.lowercase().replaceFirstChar { it.uppercase() } + " fixed pay: ₹" + it, fontWeight = FontWeight.Bold) }
     }
     if (picker) {
         val state = rememberDatePickerState(initialSelectedDateMillis = eventDate ?: currentDate)
         DatePickerDialog(onDismissRequest = { picker = false }, confirmButton = { TextButton(onClick = { eventDate = state.selectedDateMillis; picker = false }) { Text("OK") } }, dismissButton = { TextButton(onClick = { picker = false }) { Text("Cancel") } }) { DatePicker(state) }
     }
+}
+
+/** Shared event-position calculation used by draft acceptance and chronological replay. */
+fun calculateFourthCpcEventPosition(
+    currentPay: Int,
+    currentScale: FourthCpcScale,
+    targetScale: FourthCpcScale
+): FourthCpcEventPosition {
+    val oneIncrement = calculateFourthCpcNextIncrement(currentPay, currentScale) ?: currentPay
+    val fixedPay = targetScale.existingStages.firstOrNull { it >= oneIncrement }
+        ?: targetScale.existingStages.lastOrNull()
+        ?: oneIncrement
+    return FourthCpcEventPosition(targetScale, fixedPay)
 }
 
 private fun fourthEventDate(value: Long): String = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).format(Date(value))
