@@ -58,15 +58,44 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PayFixationCalculatorScreen(onBack: () -> Unit = {}, onHome: () -> Unit = onBack, onOpenCpcHistory: () -> Unit = {}) {
+fun PayFixationCalculatorScreen(
+    onBack: () -> Unit = {},
+    onHome: () -> Unit = onBack,
+    onOpenCpcHistory: () -> Unit = {},
+    completeJourneyStartDateMillis: Long? = null,
+    restoredCompleteJourney: CompleteJourneySnapshot? = null,
+    journeySequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
+) {
     val context = LocalContext.current
+    val completeJourneyMode = completeJourneyStartDateMillis != null
+    val restoredSeventhSnapshot = restoredCompleteJourney?.let {
+        it.seventh ?: it.sixth?.seventhContinuation ?: it.fifth?.sixthContinuation?.seventhContinuation
+    }
+    val restoredJourneyPosition = restoredSeventhSnapshot?.let { snapshot ->
+        currentSeventhPosition(
+            snapshot,
+            snapshot.increments.map { SeventhCpcIncrementStep(it.pay, it.dateMillis, it.sequence) },
+            snapshot.promotions,
+            journeySequenceIntegrity
+        )
+    }
+    var journeyStarted by remember(completeJourneyStartDateMillis, restoredSeventhSnapshot) { mutableStateOf(restoredSeventhSnapshot != null) }
+    var journeyStartingLevel by remember(completeJourneyStartDateMillis, restoredSeventhSnapshot) { mutableStateOf(restoredSeventhSnapshot?.startingLevel) }
+    var journeyStartingPay by remember(completeJourneyStartDateMillis, restoredSeventhSnapshot) { mutableStateOf(restoredSeventhSnapshot?.startingBasicPay) }
+    var journeyStartingDni by remember(completeJourneyStartDateMillis, restoredSeventhSnapshot) { mutableStateOf(restoredSeventhSnapshot?.startingDniMillis) }
+    var journeyIncrements by remember(completeJourneyStartDateMillis, restoredSeventhSnapshot) {
+        mutableStateOf(restoredSeventhSnapshot?.increments.orEmpty().map { SeventhCpcIncrementStep(it.pay, it.dateMillis, it.sequence) })
+    }
+    var journeyPromotions by remember(completeJourneyStartDateMillis, restoredSeventhSnapshot) { mutableStateOf(restoredSeventhSnapshot?.promotions.orEmpty()) }
+    var journeyFixationBasis by remember(restoredSeventhSnapshot) { mutableStateOf(CpcFixationBasis.EVENT_DATE) }
+    var journeyEventKind by remember { mutableStateOf(CpcJourneyEventKind.PROMOTION) }
     var showHistory by remember { mutableStateOf(false) }
     var showHistoryHub by remember { mutableStateOf(false) }
     var history by remember { mutableStateOf(HistoryStore.getAll(context)) }
     var officialName by remember { mutableStateOf("") }
     var employeeCategory by remember { mutableStateOf(EmployeeCategory.ORDINARY) }
-    var currentLevel by remember { mutableStateOf<String?>(null) }
-    var currentPay by remember { mutableStateOf<Int?>(null) }
+    var currentLevel by remember(completeJourneyStartDateMillis, restoredSeventhSnapshot) { mutableStateOf(restoredJourneyPosition?.level) }
+    var currentPay by remember(completeJourneyStartDateMillis, restoredSeventhSnapshot) { mutableStateOf(restoredJourneyPosition?.pay) }
     var promotedLevel by remember { mutableStateOf<String?>(null) }
     var promotionDate by remember { mutableStateOf<Long?>(null) }
     var dniDate by remember { mutableStateOf<Long?>(null) }
@@ -76,6 +105,7 @@ fun PayFixationCalculatorScreen(onBack: () -> Unit = {}, onHome: () -> Unit = on
     var promotedMenu by remember { mutableStateOf(false) }
     var dniMenu by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showStartingDniPicker by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var selectedHistory by remember { mutableStateOf<CalculationHistory?>(null) }
     var showAdFreeDialog by remember { mutableStateOf(false) }
@@ -135,34 +165,62 @@ fun PayFixationCalculatorScreen(onBack: () -> Unit = {}, onHome: () -> Unit = on
     val payStages = currentLevel?.let { matrix.getPayStages(it) } ?: emptyList()
     val dniOptions = remember(promotionDate) { promotionDate?.let { getPayFixationDniOptions(it) } ?: emptyList() }
     LaunchedEffect(promotionDate) { dniDate = dniOptions.firstOrNull() }
+    val journeySnapshot = if (
+        completeJourneyMode && journeyStarted && journeyStartingLevel != null && journeyStartingPay != null && completeJourneyStartDateMillis != null
+    ) {
+        SeventhCpcJourneySnapshot(
+            startingLevel = journeyStartingLevel!!,
+            startingBasicPay = journeyStartingPay!!,
+            conversionDateMillis = completeJourneyStartDateMillis,
+            increments = journeyIncrements.mapIndexed { index, step ->
+                CpcIncrementSnapshot(index + 1, step.pay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1)
+            },
+            promotions = journeyPromotions,
+            startingDniMillis = journeyStartingDni
+        )
+    } else null
+    val journeyPosition = journeySnapshot?.let {
+        currentSeventhPosition(it, journeyIncrements, journeyPromotions, journeySequenceIntegrity)
+    }
+    val journeySequence = maxOf(
+        journeyIncrements.maxOfOrNull { it.sequence } ?: 0,
+        journeyPromotions.maxOfOrNull { it.maxApplicationSequence() } ?: 0
+    )
+    val journeyLatestEventDate = journeySnapshot?.let {
+        latestSeventhJourneyEventDate(it.conversionDateMillis, journeyIncrements, journeyPromotions)
+    }
     val result = if (currentLevel != null && currentPay != null && promotedLevel != null) {
         calculatePayFixation(currentLevel!!, currentPay!!, promotedLevel!!, promotionDate, dniDate, employeeCategory)
     } else null
 
     Column(Modifier.fillMaxSize().background(NiyamBackground)) {
         Surface(modifier = Modifier.fillMaxWidth(), color = NiyamHeaderBlue, shadowElevation = 3.dp) {
-            Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                androidx.compose.material3.TextButton(onClick = onBack) { Text("‹ Back", color = Color.White, fontWeight = FontWeight.Bold) }
-                androidx.compose.material3.TextButton(onClick = onHome) { Text("Home", color = Color.White, fontWeight = FontWeight.Bold) }
-                Box(modifier = Modifier.size(56.dp).background(Color.White, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
-                    Text("NM", color = NiyamHeaderBlue, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Pay Fixation Calculator", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("NiyamMitra", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable {
-                        showHistoryHub = true
-                    }) {
-                        Icon(imageVector = Icons.Default.History, contentDescription = "History", modifier = Modifier.size(24.dp), tint = Color.White)
-                        Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Column(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.TextButton(onClick = onBack, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("‹ Back", color = Color.White, fontWeight = FontWeight.Bold) }
+                        androidx.compose.material3.TextButton(onClick = onHome, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Home", color = Color.White, fontWeight = FontWeight.Bold) }
                     }
-                    Box(modifier = Modifier.padding(horizontal = 10.dp).height(34.dp).width(1.dp).background(Color.White.copy(alpha = 0.35f)))
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable { showAboutDialog = true }) {
-                        Icon(imageVector = Icons.Default.Info, contentDescription = "About", modifier = Modifier.size(24.dp), tint = Color.White)
-                        Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable { showHistoryHub = true }) {
+                            Icon(imageVector = Icons.Default.History, contentDescription = "History", modifier = Modifier.size(24.dp), tint = Color.White)
+                            Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Box(modifier = Modifier.padding(horizontal = 8.dp).height(34.dp).width(1.dp).background(Color.White.copy(alpha = 0.35f)))
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable { showAboutDialog = true }) {
+                            Icon(imageVector = Icons.Default.Info, contentDescription = "About", modifier = Modifier.size(24.dp), tint = Color.White)
+                            Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(48.dp).background(Color.White, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
+                        Text("NM", color = NiyamHeaderBlue, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Pay Fixation Calculator", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text("NiyamMitra", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                     }
                 }
             }
@@ -183,22 +241,73 @@ fun PayFixationCalculatorScreen(onBack: () -> Unit = {}, onHome: () -> Unit = on
                 }
             }
 
-            SelectionCard("Employee Category") {
-                DropdownField(label = "Employee Category", value = employeeCategory.displayName, options = EmployeeCategory.values().map { it.displayName }, expanded = categoryMenu, onExpandedChange = { categoryMenu = it }, onSelected = { selected ->
-                    employeeCategory = EmployeeCategory.values().first { it.displayName == selected }
-                    currentLevel = null
-                    currentPay = null
-                    promotedLevel = null
-                })
+            if (completeJourneyMode) {
+                Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Complete Journey — 7th CPC", color = NiyamTextPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
+                        Text("Journey starting date: ${completeJourneyStartDateMillis?.let(::formatDate).orEmpty()}", color = NiyamTextSecondary, fontSize = 14.sp)
+                        if (!journeyStarted) {
+                            Text("Select the starting pay below using the existing calculator controls, then enter the DNI known for that starting position.", color = NiyamTextSecondary, fontSize = 13.sp)
+                            Text("Starting position DNI", color = NiyamTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            OutlinedButton(onClick = { showStartingDniPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                                Text(journeyStartingDni?.let(::formatDate) ?: "Select starting DNI", Modifier.weight(1f))
+                            }
+                            Button(
+                                onClick = {
+                                    journeyStartingLevel = currentLevel
+                                    journeyStartingPay = currentPay
+                                    journeyStarted = true
+                                },
+                                enabled = currentLevel != null && currentPay != null && journeyStartingDni != null && journeyStartingDni!! >= completeJourneyStartDateMillis!!,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Use This Position as Journey Start") }
+                            if (journeyStartingDni != null && journeyStartingDni!! < completeJourneyStartDateMillis!!) {
+                                Text("Starting DNI must be on or after the journey starting date.", color = Color(0xFFC62828), fontSize = 12.sp)
+                            }
+                        } else {
+                            Text("Starting position: Level ${journeyStartingLevel}, ${journeyStartingPay?.let(::formatCurrency)}", color = NiyamTextPrimary, fontWeight = FontWeight.Bold)
+                            Text("Starting DNI: ${journeyStartingDni?.let(::formatDate) ?: "Not available in this saved record"}", color = NiyamTextSecondary, fontSize = 13.sp)
+                            Text("Current journey position: Level ${journeyPosition?.level ?: currentLevel}, ${journeyPosition?.pay?.let(::formatCurrency) ?: currentPay?.let(::formatCurrency)}", color = NiyamBlue, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+
+            if (!completeJourneyMode) {
+                SelectionCard("Employee Category") {
+                    DropdownField(label = "Employee Category", value = employeeCategory.displayName, options = EmployeeCategory.values().map { it.displayName }, expanded = categoryMenu, onExpandedChange = { categoryMenu = it }, onSelected = { selected ->
+                        employeeCategory = EmployeeCategory.values().first { it.displayName == selected }
+                        currentLevel = null
+                        currentPay = null
+                        promotedLevel = null
+                    })
+                }
             }
 
             SelectionCard("Current Status") {
                 OutlinedTextField(value = officialName, onValueChange = { officialName = it }, label = { Text("Name of Official (for History)") }, placeholder = { Text("Enter name, if required") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                DropdownField("Present Pay Level", currentLevel?.let { "Level $it" } ?: "Select your Present Pay Level", matrix.levels, levelMenu, { levelMenu = it }, { level -> currentLevel = level; currentPay = null; payMenu = false })
-                DropdownField("Current Basic Pay", currentPay?.let { formatCurrency(it) } ?: "Select your Current Basic Pay", payStages.map { formatCurrency(it) }, payMenu, { payMenu = it }, { value -> currentPay = payStages.firstOrNull { formatCurrency(it) == value } }, currentLevel != null)
+                DropdownField("Present Pay Level", currentLevel?.let { "Level $it" } ?: "Select your Present Pay Level", matrix.levels, levelMenu, { levelMenu = it }, { level -> currentLevel = level; currentPay = null; payMenu = false }, enabled = !journeyStarted)
+                DropdownField("Current Basic Pay", currentPay?.let { formatCurrency(it) } ?: "Select your Current Basic Pay", payStages.map { formatCurrency(it) }, payMenu, { payMenu = it }, { value -> currentPay = payStages.firstOrNull { formatCurrency(it) == value } }, currentLevel != null && !journeyStarted)
             }
 
             SelectionCard("Promotion / MACP Details") {
+                if (completeJourneyMode && journeyStarted) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = journeyEventKind == CpcJourneyEventKind.PROMOTION, onClick = { journeyEventKind = CpcJourneyEventKind.PROMOTION })
+                        Text("Promotion", color = NiyamTextPrimary, fontSize = 13.sp)
+                        RadioButton(selected = journeyEventKind == CpcJourneyEventKind.MACP, onClick = { journeyEventKind = CpcJourneyEventKind.MACP })
+                        Text("MACP / Financial Upgradation", color = NiyamTextPrimary, fontSize = 13.sp)
+                    }
+                    Text("Fixation basis for this journey event", color = NiyamTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = journeyFixationBasis == CpcFixationBasis.EVENT_DATE, onClick = { journeyFixationBasis = CpcFixationBasis.EVENT_DATE })
+                        Text("From Event Date", color = NiyamTextPrimary, fontSize = 13.sp)
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = journeyFixationBasis == CpcFixationBasis.DNI, onClick = { journeyFixationBasis = CpcFixationBasis.DNI })
+                        Text("From DNI", color = NiyamTextPrimary, fontSize = 13.sp)
+                    }
+                }
                 DropdownField("Promoted / Upgraded Pay Level", promotedLevel?.let { "Level $it" } ?: "Select your Promoted / Upgraded Pay Level", matrix.levels, promotedMenu, { promotedMenu = it }, { level -> promotedLevel = level })
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                     DateField("Date of Promotion / MACP", promotionDate, { showDatePicker = true }, Modifier.weight(1f))
@@ -248,11 +357,107 @@ fun PayFixationCalculatorScreen(onBack: () -> Unit = {}, onHome: () -> Unit = on
 
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFE8F5E9))) { Text(recommendationText, Modifier.padding(16.dp), color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold) }
 
-                Button(onClick = {
+                if (completeJourneyMode && journeyStarted) {
+                    val selectedFinalPay = if (journeyFixationBasis == CpcFixationBasis.EVENT_DATE) result.option1.finalFixedPay else result.option2.finalFixedPay
+                    val selectedNextDni = if (journeyFixationBasis == CpcFixationBasis.EVENT_DATE) result.option1.nextDni else result.option2.nextDni
+                    Button(
+                        onClick = {
+                            val eventDate = promotionDate ?: return@Button
+                            val targetLevel = promotedLevel ?: return@Button
+                            val current = currentLevel ?: return@Button
+                            val pay = currentPay ?: return@Button
+                            val nextDni = selectedNextDni ?: return@Button
+                            val accepted = SeventhCpcPromotionSnapshot(
+                                currentLevel = current,
+                                currentPay = pay,
+                                knownDniMillis = journeyPosition?.dni ?: journeyStartingDni ?: nextDni,
+                                promotedLevel = targetLevel,
+                                promotionDateMillis = eventDate,
+                                fixationBasis = journeyFixationBasis,
+                                resultingPay = selectedFinalPay,
+                                resultingDniMillis = nextDni,
+                                eventKind = journeyEventKind,
+                                sequence = journeySequence + 1
+                            )
+                            journeyPromotions = journeyPromotions + accepted
+                            currentLevel = targetLevel
+                            currentPay = selectedFinalPay
+                            promotedLevel = null
+                            promotionDate = null
+                            dniDate = null
+                            journeyEventKind = CpcJourneyEventKind.PROMOTION
+                            journeyFixationBasis = CpcFixationBasis.EVENT_DATE
+                        },
+                        enabled = selectedNextDni != null && promotionDate != null &&
+                            promotionDate!! >= (journeyLatestEventDate ?: completeJourneyStartDateMillis!!),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Apply ${journeyEventKind.name.replace('_', ' ')} to Journey") }
+                    if (promotionDate != null && promotionDate!! < (journeyLatestEventDate ?: completeJourneyStartDateMillis!!)) {
+                        Text("This event date is earlier than the latest recorded journey event.", color = Color(0xFFC62828), fontSize = 12.sp)
+                    }
+                }
+
+                if (!completeJourneyMode) Button(onClick = {
                     val now = System.currentTimeMillis()
                     HistoryStore.add(context, CalculationHistory(id = now, savedAt = now, officialName = officialName.trim(), employeeCategory = employeeCategory, currentLevel = currentLevel!!, currentPay = currentPay!!, promotedLevel = promotedLevel!!, promotionDate = promotionDate, dniDate = dniDate, option1FinalPay = result.option1.finalFixedPay, option2FinalPay = result.option2.finalFixedPay))
                     history = HistoryStore.getAll(context)
                 }, modifier = Modifier.fillMaxWidth()) { Text("Save Calculation to History") }
+            }
+
+            if (completeJourneyMode && journeyStarted && journeySnapshot != null && journeyPosition != null) {
+                SelectionCard("Chronological 7th CPC Journey") {
+                    Text("Starting date: ${formatDate(journeySnapshot.conversionDateMillis)}", color = NiyamTextSecondary, fontSize = 13.sp)
+                    Text("Starting pay: Level ${journeySnapshot.startingLevel}, ${formatCurrency(journeySnapshot.startingBasicPay)}", color = NiyamTextPrimary, fontWeight = FontWeight.Bold)
+                    Text("Current pay position: Level ${journeyPosition.level}, ${formatCurrency(journeyPosition.pay)}", color = NiyamBlue, fontWeight = FontWeight.Bold)
+                    Text("Next increment date: ${formatDate(journeyPosition.dni)}", color = NiyamTextSecondary, fontSize = 13.sp)
+                    if (journeyIncrements.isNotEmpty()) {
+                        Text("Annual increments", color = NiyamTextPrimary, fontWeight = FontWeight.Bold)
+                        journeyIncrements.forEachIndexed { index, increment ->
+                            Text("Increment ${index + 1}: ${formatDate(increment.date)} — ${formatCurrency(increment.pay)}", color = NiyamTextSecondary, fontSize = 13.sp)
+                        }
+                    }
+                    if (journeyPromotions.isNotEmpty()) {
+                        Text("Promotion / MACP events", color = NiyamTextPrimary, fontWeight = FontWeight.Bold)
+                        flattenSeventhPromotions(journeyPromotions).sortedBy { it.sequence }.forEach { event ->
+                            Text("${event.eventKind.name.replace('_', ' ')} — ${event.promotionDateMillis?.let(::formatDate)}; Level ${event.currentLevel} → ${event.promotedLevel}; pay ${event.resultingPay?.let(::formatCurrency)}", color = NiyamTextSecondary, fontSize = 13.sp)
+                            event.postIncrements.forEachIndexed { index, increment ->
+                                Text("  Post-event increment ${index + 1}: ${formatDate(increment.dateMillis)} — ${formatCurrency(increment.pay)}", color = NiyamTextSecondary, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                    Button(
+                        onClick = {
+                            matrix.getNextIncrement(journeyPosition.level, journeyPosition.pay)?.let { nextPay ->
+                                val nextSequence = journeySequence + 1
+                                val increment = CpcIncrementSnapshot(
+                                    order = journeyIncrements.size + 1,
+                                    pay = nextPay,
+                                    dateMillis = journeyPosition.dni,
+                                    sequence = nextSequence
+                                )
+                                if (journeyPromotions.isEmpty()) {
+                                    journeyIncrements = journeyIncrements + SeventhCpcIncrementStep(nextPay, journeyPosition.dni, nextSequence)
+                                } else {
+                                    val lastIndex = journeyPromotions.indices.maxByOrNull { journeyPromotions[it].maxApplicationSequence() }!!
+                                    journeyPromotions = journeyPromotions.toMutableList().also { promotions ->
+                                        promotions[lastIndex] = appendSeventhPostIncrement(promotions[lastIndex], increment)
+                                    }
+                                }
+                                currentPay = nextPay
+                            }
+                        },
+                        enabled = matrix.getNextIncrement(journeyPosition.level, journeyPosition.pay) != null,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Add Next Annual Increment") }
+                    SaveCompleteJourneyButton(
+                        CompleteJourneySnapshot(
+                            startingCpc = CpcHistoryStage.SEVENTH,
+                            startingDateMillis = completeJourneyStartDateMillis!!,
+                            seventh = journeySnapshot
+                        ),
+                        sequenceIntegrity = journeySequenceIntegrity
+                    )
+                }
             }
 
             PayFixationDisclaimer()
@@ -266,6 +471,12 @@ fun PayFixationCalculatorScreen(onBack: () -> Unit = {}, onHome: () -> Unit = on
         val state = rememberDatePickerState(initialSelectedDateMillis = promotionDate)
         DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = {
             TextButton(onClick = { promotionDate = state.selectedDateMillis; showDatePicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) }
+        }) { DatePicker(state) }
+    }
+    if (showStartingDniPicker) {
+        val state = rememberDatePickerState(initialSelectedDateMillis = journeyStartingDni ?: completeJourneyStartDateMillis)
+        DatePickerDialog(onDismissRequest = { showStartingDniPicker = false }, confirmButton = {
+            TextButton(onClick = { journeyStartingDni = state.selectedDateMillis; showStartingDniPicker = false }) { Text("Confirm", fontWeight = FontWeight.Bold) }
         }) { DatePicker(state) }
     }
     if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })

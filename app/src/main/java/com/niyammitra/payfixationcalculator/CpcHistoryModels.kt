@@ -426,6 +426,7 @@ object PayJourneyReportBuilder {
             section("6th CPC Pay Journey", CpcHistoryStage.SIXTH, rows); allRows += rows
         }
         effectiveSeventh?.let { s ->
+            val seventhIsStartingPosition = snapshot.startingCpc == CpcHistoryStage.SEVENTH
             fun promotionRows(promo: SeventhCpcPromotionSnapshot, order: Int, depth: Int): List<PayJourneyReportRow> = buildList {
                 promo.promotionDateMillis?.let { date -> add(PayJourneyReportRow(date, order, CpcHistoryStage.SEVENTH, promo.eventKind,
                     "${"  ".repeat(depth)}${promo.eventKind.name.replace('_', ' ')} to Level ${promo.promotedLevel ?: "—"}", CpcPayPosition(CpcHistoryStage.SEVENTH, promo.resultingPay ?: promo.currentPay, level = promo.promotedLevel), promo.resultingDniMillis, promo.fixationBasis, remarks = "Known DNI ${java.text.SimpleDateFormat("dd MMM yyyy", java.util.Locale.ENGLISH).format(java.util.Date(promo.knownDniMillis))}", sequence = promo.sequence)) }
@@ -434,9 +435,11 @@ object PayJourneyReportBuilder {
                 promo.subsequentPromotion?.let { addAll(promotionRows(it, order + 1, depth + 1)) }
             }
             val rows = buildList {
-                add(PayJourneyReportRow(s.conversionDateMillis, 0, CpcHistoryStage.SEVENTH, CpcJourneyEventKind.CPC_CONVERSION,
-                    "6th to 7th CPC conversion", CpcPayPosition(CpcHistoryStage.SEVENTH, s.startingBasicPay, level = s.startingLevel), s.startingDniMillis,
-                    sourcePosition = effectiveSixth?.let(::finalSixth), sequence = s.sequence))
+                add(PayJourneyReportRow(s.conversionDateMillis, 0, CpcHistoryStage.SEVENTH,
+                    if (seventhIsStartingPosition) CpcJourneyEventKind.STARTING_POSITION else CpcJourneyEventKind.CPC_CONVERSION,
+                    if (seventhIsStartingPosition) "7th CPC starting position" else "6th to 7th CPC conversion",
+                    CpcPayPosition(CpcHistoryStage.SEVENTH, s.startingBasicPay, level = s.startingLevel), s.startingDniMillis,
+                    sourcePosition = if (seventhIsStartingPosition) null else effectiveSixth?.let(::finalSixth), sequence = s.sequence))
                 s.increments.forEach { add(PayJourneyReportRow(it.dateMillis, it.order, CpcHistoryStage.SEVENTH, CpcJourneyEventKind.ANNUAL_INCREMENT,
                     "Annual increment", CpcPayPosition(CpcHistoryStage.SEVENTH, it.pay, level = s.startingLevel), it.dateMillis, sequence = it.sequence)) }
                 s.promotions.forEachIndexed { ix, promo -> addAll(promotionRows(promo, ix + 1, 0)) }

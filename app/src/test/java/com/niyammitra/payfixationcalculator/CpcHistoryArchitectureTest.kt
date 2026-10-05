@@ -443,6 +443,76 @@ class CpcHistoryArchitectureTest {
         assertNull(report.chronologyNote)
     }
 
+    @Test fun seventhCompleteJourneyKeepsStartingContextAndContinuesThroughExistingFixationCalculation() {
+        val startDate = 1_000_000L
+        val startingDni = 1_200_000L
+        val promotionDate = 1_600_000L
+        val selectedDni = getPayFixationDniOptions(promotionDate).first()
+        val fixation = calculatePayFixation("4", 35_400, "5", promotionDate, selectedDni, EmployeeCategory.ORDINARY)
+        val event = SeventhCpcPromotionSnapshot(
+            currentLevel = "4",
+            currentPay = 35_400,
+            knownDniMillis = startingDni,
+            promotedLevel = "5",
+            promotionDateMillis = promotionDate,
+            fixationBasis = CpcFixationBasis.EVENT_DATE,
+            resultingPay = fixation.option1.finalFixedPay,
+            resultingDniMillis = fixation.option1.nextDni,
+            sequence = 2
+        )
+        val postIncrementDate = requireNotNull(event.resultingDniMillis)
+        val postIncrementPay = requireNotNull(PayMatrixSelection.forCategory(EmployeeCategory.ORDINARY)
+            .getNextIncrement("5", requireNotNull(event.resultingPay)))
+        val journey = CompleteJourneySnapshot(
+            startingCpc = CpcHistoryStage.SEVENTH,
+            startingDateMillis = startDate,
+            seventh = SeventhCpcJourneySnapshot(
+                startingLevel = "4",
+                startingBasicPay = 35_400,
+                conversionDateMillis = startDate,
+                promotions = listOf(event.copy(postIncrements = listOf(CpcIncrementSnapshot(1, postIncrementPay, postIncrementDate, 3)))),
+                startingDniMillis = startingDni,
+                sequence = 1
+            )
+        )
+        val record = CpcHistoryRecord(
+            uniqueId = "seventh-start-restore",
+            workflowType = CpcHistoryWorkflow.COMPLETE_JOURNEY,
+            savedAtMillis = 1L,
+            startingCpc = CpcHistoryStage.SEVENTH,
+            currentStage = CpcHistoryStage.SEVENTH,
+            payload = CompleteJourneyPayload(journey)
+        )
+
+        val restoredRecord = CpcHistoryStore.decode(CpcHistoryStore.encode(record))!!
+        val restoredJourney = (restoredRecord.payload as CompleteJourneyPayload).snapshot
+        val restored = restoredJourney.seventh!!
+        val resolved = currentSeventhPosition(
+            restored,
+            restored.increments.map { SeventhCpcIncrementStep(it.pay, it.dateMillis, it.sequence) },
+            restored.promotions,
+            restoredJourney.sequenceIntegrity
+        )
+        val report = PayJourneyReportBuilder.build(restoredRecord)!!
+
+        assertEquals(startDate, restoredJourney.startingDateMillis)
+        assertEquals(startDate, restored.conversionDateMillis)
+        assertEquals("4", restored.startingLevel)
+        assertEquals(35_400, restored.startingBasicPay)
+        assertEquals(startingDni, restored.startingDniMillis)
+        assertEquals(CpcSequenceIntegrity.ORIGINAL, restoredJourney.sequenceIntegrity)
+        assertEquals(3, restored.promotions.single().postIncrements.single().sequence)
+        assertEquals("5", resolved.level)
+        assertEquals(postIncrementPay, resolved.pay)
+        assertEquals(addYearForTest(postIncrementDate), resolved.dni)
+        assertEquals(resolved.pay, report.finalPosition!!.basicPay)
+        assertEquals(resolved.dni, report.finalDniMillis)
+        val startingRow = report.sections.single { it.heading == "7th CPC Pay Journey" }.rows.first()
+        assertEquals(CpcJourneyEventKind.STARTING_POSITION, startingRow.kind)
+        assertEquals("7th CPC starting position", startingRow.description)
+        assertEquals(startDate, startingRow.dateMillis)
+    }
+
     @Test fun originalReportChoosesNestedPostIncrementBySharedSequenceForPayAndDni() {
         val earlierDate = 1_700_000_000_000L
         val laterDate = 1_730_000_000_000L
