@@ -2,6 +2,7 @@ package com.niyammitra.payfixationcalculator
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,6 +62,15 @@ private enum class PromotionFixationBasis { EVENT_DATE, DNI }
 
 data class SeventhCpcIncrementStep(val pay: Int, val date: Long, val sequence: Int = 0)
 private data class SixthCpcHistoricalIncrement(val payInPayBand: Int, val gradePay: Int, val date: Long, val sequence: Int = 0)
+
+internal fun restorePromotionPostSteps(increments: List<CpcIncrementSnapshot>) =
+    increments.map { SeventhCpcIncrementStep(it.pay, it.dateMillis, it.sequence) }
+
+internal fun savePromotionPostSteps(steps: List<SeventhCpcIncrementStep>) =
+    steps.mapIndexed { index, step -> CpcIncrementSnapshot(index + 1, step.pay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) }
+
+internal fun nextPromotionPostSequence(steps: List<SeventhCpcIncrementStep>, sequenceBase: Int) =
+    maxOf(sequenceBase, steps.maxOfOrNull { it.sequence } ?: 0) + 1
 private data class SixthCpcCurrentPosition(val payBand: String, val gradePay: Int, val payInPayBand: Int, val date: Long)
 
 @Composable
@@ -72,7 +82,9 @@ fun SixthToSeventhCpcScreen(
     initialPayInPayBand: Int? = null,
     initialStartDate: Long? = null,
     restoredSnapshot: SixthCpcJourneySnapshot? = null,
-    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
+    continuationContext: SixthCpcContinuationContext? = null,
+    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL,
+    onHistory: (() -> Unit)? = null
 ) {
     BackHandler(onBack = onBack)
     val initialBand = initialPayBand?.let { bandPrefix ->
@@ -109,7 +121,11 @@ fun SixthToSeventhCpcScreen(
     var eventCurrentPosition by remember(selectedPayBand, selectedGradePay, payInPayBandText, startDate, sixthIncrementSteps, restoredSnapshot) { mutableStateOf(restoredEventPosition) }
     var hasSixthCpcEvents by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.eventChains?.isNotEmpty() == true) }
     var acceptedEventChains by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.eventChains.orEmpty()) }
-    var promotionHistory by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.seventhContinuation?.promotions?.firstOrNull()) }
+    var promotionHistory by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.seventhContinuation?.promotions.orEmpty()) }
+    var editingPromotionIndex by remember(restoredSnapshot) {
+        mutableStateOf(restoredSnapshot?.seventhContinuation?.promotions?.lastIndex?.takeIf { it >= 0 })
+    }
+    val currentPromotion = editingPromotionIndex?.let(promotionHistory::getOrNull)
     var sixthEventReport by remember { mutableStateOf(emptyList<String>()) }
     var incrementSteps by remember(selectedPayBand, selectedGradePay, payInPayBandText, startDate, eventCurrentPosition, restoredSnapshot) {
         mutableStateOf(restoredSnapshot?.seventhContinuation?.increments.orEmpty().map { SeventhCpcIncrementStep(it.pay, it.dateMillis, it.sequence) })
@@ -136,9 +152,10 @@ fun SixthToSeventhCpcScreen(
     Column(Modifier.fillMaxSize().background(SixSevenBackground)) {
         Surface(Modifier.fillMaxWidth(), color = SixSevenHeaderBlue, shadowElevation = 3.dp) {
             Row(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) { Text("‹", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold); Text("Back", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onBack)) { Text("‹", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold); Text("Back", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 Spacer(Modifier.width(16.dp))
-                Column { Text("6th CPC → 7th CPC", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold); Text("Pay Conversion", color = Color.White.copy(alpha = .88f), fontSize = 13.sp) }
+                Column(Modifier.weight(1f)) { Text("6th CPC → 7th CPC", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold); Text("Pay Conversion", color = Color.White.copy(alpha = .88f), fontSize = 13.sp) }
+                onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } }
             }
         }
 
@@ -299,43 +316,84 @@ fun SixthToSeventhCpcScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                SaveCompleteJourneyButton(CompleteJourneySnapshot(
+                val sixthSnapshot = SixthCpcJourneySnapshot(
+                    startingDateMillis = startDate!!,
+                    payBandId = selectedPayBand?.title?.substringBefore(":")?.trim() ?: basePayBand.orEmpty(),
+                    gradePay = selectedGradePay ?: baseGradePay ?: 0,
+                    startingPayInPayBand = payInPayBand ?: 0,
+                    increments = sixthIncrementSteps.mapIndexed { index, step -> SixthCpcIncrementSnapshot(index + 1, step.payInPayBand, step.gradePay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
+                    eventChains = acceptedEventChains,
+                    seventhContinuation = SeventhCpcJourneySnapshot(
+                        calculation.level, calculation.revisedBasicPay,
+                        java.util.Calendar.getInstance().apply { clear(); set(2016, java.util.Calendar.JANUARY, 1) }.timeInMillis,
+                        incrementSteps.mapIndexed { index, step -> CpcIncrementSnapshot(index + 1, step.pay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
+                        promotions = promotionHistory, startingDniMillis = julyFirst2016()
+                    )
+                )
+                val completeSnapshot = continuationContext?.let { context ->
+                    appendSixthContinuation(context.journey, sixthSnapshot)
+                } ?: CompleteJourneySnapshot(
                     startingCpc = CpcHistoryStage.SIXTH,
                     startingDateMillis = startDate!!,
-                    sixth = SixthCpcJourneySnapshot(
-                        startingDateMillis = startDate!!,
-                        payBandId = selectedPayBand?.title?.substringBefore(":")?.trim() ?: basePayBand.orEmpty(),
-                        gradePay = selectedGradePay ?: baseGradePay ?: 0,
-                        startingPayInPayBand = payInPayBand ?: 0,
-                        increments = sixthIncrementSteps.mapIndexed { index, step -> SixthCpcIncrementSnapshot(index + 1, step.payInPayBand, step.gradePay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
-                        eventChains = acceptedEventChains,
-                        seventhContinuation = SeventhCpcJourneySnapshot(
-                            calculation.level, calculation.revisedBasicPay,
-                            java.util.Calendar.getInstance().apply { clear(); set(2016, java.util.Calendar.JANUARY, 1) }.timeInMillis,
-                            incrementSteps.mapIndexed { index, step -> CpcIncrementSnapshot(index + 1, step.pay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
-                            promotions = listOfNotNull(promotionHistory), startingDniMillis = julyFirst2016()
-                        )
-                    )
-                ), sequenceIntegrity = sequenceIntegrity)
+                    sixth = sixthSnapshot
+                )
+                SaveCompleteJourneyButton(completeSnapshot, sequenceIntegrity = sequenceIntegrity)
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Button(onClick = {
                         nextAction = SeventhCpcNextAction.NEXT_INCREMENT
-                        val currentPay = incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay
-                        val nextDate = incrementSteps.lastOrNull()?.let { addYears(it.date, 1) } ?: julyFirst2016()
-                        getSixthToSeventhNextCell(calculation.level, currentPay)?.let { nextPay -> incrementSteps = incrementSteps + SeventhCpcIncrementStep(nextPay, nextDate, maxOf(incrementSteps.maxOfOrNull { it.sequence } ?: 0, promotionHistory?.maxApplicationSequence() ?: 0) + 1) }
+                        val current = currentSeventhPosition(
+                            SeventhCpcJourneySnapshot(calculation.level, calculation.revisedBasicPay, java.util.Calendar.getInstance().apply { clear(); set(2016, java.util.Calendar.JANUARY, 1) }.timeInMillis, startingDniMillis = julyFirst2016()),
+                            incrementSteps,
+                            promotionHistory,
+                            sequenceIntegrity
+                        )
+                        getSixthToSeventhNextCell(current.level, current.pay)?.let { nextPay -> incrementSteps = incrementSteps + SeventhCpcIncrementStep(nextPay, current.dni, maxOf(incrementSteps.maxOfOrNull { it.sequence } ?: 0, promotionHistory.maxOfOrNull { it.maxApplicationSequence() } ?: 0) + 1) }
                     }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue), shape = RoundedCornerShape(12.dp)) { Text("Next Increment", fontWeight = FontWeight.Bold) }
                     Button(onClick = { nextAction = SeventhCpcNextAction.PROMOTION_MACP }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue), shape = RoundedCornerShape(12.dp)) { Text("Promotion / MACP", fontWeight = FontWeight.Bold) }
                 }
 
+                if (promotionHistory.isNotEmpty()) {
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Saved 7th CPC Promotion / MACP Events", color = SixSevenTextPrimary, fontWeight = FontWeight.ExtraBold)
+                            promotionHistory.withIndex().sortedWith(compareBy<IndexedValue<SeventhCpcPromotionSnapshot>> { it.value.sequence }.thenBy { it.index }).forEach { indexed ->
+                                val item = indexed.value
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    Text("${item.eventKind}: Level ${item.currentLevel} → ${item.promotedLevel ?: "—"} · ${formatSixSevenDate(item.promotionDateMillis ?: item.knownDniMillis)}", Modifier.weight(1f), color = SixSevenTextSecondary, fontSize = 12.sp)
+                                    TextButton(onClick = { editingPromotionIndex = indexed.index; nextAction = SeventhCpcNextAction.PROMOTION_MACP }) { Text("Edit") }
+                                }
+                            }
+                        }
+                    }
+                }
+                OutlinedButton(onClick = { editingPromotionIndex = null; nextAction = SeventhCpcNextAction.PROMOTION_MACP }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Add another Promotion / MACP")
+                }
+
                 if (nextAction == SeventhCpcNextAction.PROMOTION_MACP) {
-                    val currentDni = incrementSteps.lastOrNull()?.let { addYears(it.date, 1) } ?: julyFirst2016()
+                    val currentPosition = currentSeventhPosition(
+                        SeventhCpcJourneySnapshot(calculation.level, calculation.revisedBasicPay, java.util.Calendar.getInstance().apply { clear(); set(2016, java.util.Calendar.JANUARY, 1) }.timeInMillis, startingDniMillis = julyFirst2016()),
+                        incrementSteps,
+                        promotionHistory,
+                        sequenceIntegrity
+                    )
                     PromotionMacpFromConversion(
-                        calculation.level,
-                        incrementSteps.lastOrNull()?.pay ?: calculation.revisedBasicPay,
-                        currentDni,
-                        restoredSnapshot = restoredSnapshot?.seventhContinuation?.promotions?.firstOrNull(),
-                    onHistorySnapshot = { accepted -> promotionHistory = accepted?.copy(sequence = accepted.sequence.takeIf { it > 0 } ?: (incrementSteps.maxOfOrNull { step -> step.sequence } ?: incrementSteps.size) + 1) }
+                        currentPromotion?.currentLevel ?: currentPosition.level,
+                        currentPromotion?.currentPay ?: currentPosition.pay,
+                        currentPromotion?.knownDniMillis ?: currentPosition.dni,
+                        restoredSnapshot = currentPromotion,
+                        sequenceBase = maxOf(incrementSteps.maxOfOrNull { it.sequence } ?: 0, promotionHistory.maxOfOrNull { it.maxApplicationSequence() } ?: 0) + if (editingPromotionIndex == null) 1 else 0,
+                    onHistorySnapshot = { accepted ->
+                        val fallbackSequence = maxOf(incrementSteps.maxOfOrNull { step -> step.sequence } ?: incrementSteps.size, promotionHistory.maxOfOrNull { it.maxApplicationSequence() } ?: 0) + 1
+                        promotionHistory = replaceSeventhPromotion(
+                            promotionHistory,
+                            editingPromotionIndex,
+                            accepted,
+                            fallbackSequence
+                        )
+                        if (accepted != null && editingPromotionIndex == null) editingPromotionIndex = promotionHistory.lastIndex
+                    }
                     )
                 }
             }
@@ -401,6 +459,7 @@ internal fun PromotionMacpFromConversion(
     currentPay: Int,
     knownDni: Long,
     restoredSnapshot: SeventhCpcPromotionSnapshot? = null,
+    sequenceBase: Int = 0,
     onHistorySnapshot: ((SeventhCpcPromotionSnapshot?) -> Unit)? = null
 ) {
     var promotedLevel by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.promotedLevel) }
@@ -410,7 +469,7 @@ internal fun PromotionMacpFromConversion(
     var showDatePicker by remember { mutableStateOf(false) }
     var basis by remember(restoredSnapshot) { mutableStateOf(if (restoredSnapshot?.fixationBasis == CpcFixationBasis.DNI) PromotionFixationBasis.DNI else PromotionFixationBasis.EVENT_DATE) }
     var postAction by remember(restoredSnapshot) { mutableStateOf(if (restoredSnapshot?.subsequentPromotion != null) SeventhCpcNextAction.PROMOTION_MACP else null) }
-    var postSteps by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.postIncrements.orEmpty().map { SeventhCpcIncrementStep(it.pay, it.dateMillis) }) }
+    var postSteps by remember(restoredSnapshot) { mutableStateOf(restorePromotionPostSteps(restoredSnapshot?.postIncrements.orEmpty())) }
     var subsequentPromotion by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.subsequentPromotion) }
 
     val matrix = PayMatrixSelection.forCategory(EmployeeCategory.ORDINARY)
@@ -422,7 +481,7 @@ internal fun PromotionMacpFromConversion(
             SeventhCpcPromotionSnapshot(
                 currentLevel, currentPay, knownDni, promotedLevel, promotionDate,
                 if (basis == PromotionFixationBasis.DNI) CpcFixationBasis.DNI else CpcFixationBasis.EVENT_DATE,
-                postSteps.mapIndexed { index, step -> CpcIncrementSnapshot(index + 1, step.pay, step.date) },
+                savePromotionPostSteps(postSteps),
                 subsequentPromotion, finalPay, firstPostIncrementDate, eventKind, restoredSnapshot?.sequence ?: 0
             )
         } else null)
@@ -471,14 +530,16 @@ internal fun PromotionMacpFromConversion(
                         postAction = SeventhCpcNextAction.NEXT_INCREMENT
                         val current = postSteps.lastOrNull()?.pay ?: pay
                         val nextDate = postSteps.lastOrNull()?.let { addYears(it.date, 1) } ?: firstPostIncrementDate ?: addYears(promotionDate!!, 1)
-                        getSixthToSeventhNextCell(promotedLevel!!, current)?.let { nextPay -> postSteps = postSteps + SeventhCpcIncrementStep(nextPay, nextDate) }
+                        val nextSequence = nextPromotionPostSequence(postSteps, maxOf(sequenceBase, restoredSnapshot?.maxApplicationSequence() ?: 0))
+                        getSixthToSeventhNextCell(promotedLevel!!, current)?.let { nextPay -> postSteps = postSteps + SeventhCpcIncrementStep(nextPay, nextDate, nextSequence) }
                     }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue), shape = RoundedCornerShape(12.dp)) { Text("Next Increment", fontWeight = FontWeight.Bold) }
                     Button(onClick = { postAction = SeventhCpcNextAction.PROMOTION_MACP }, modifier = Modifier.weight(1f), colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue), shape = RoundedCornerShape(12.dp)) { Text("Promotion / MACP", fontWeight = FontWeight.Bold) }
                 }
                 if (postAction == SeventhCpcNextAction.PROMOTION_MACP) PromotionMacpFromConversion(
                     promotedLevel!!, postSteps.lastOrNull()?.pay ?: pay, firstPostIncrementDate ?: addYears(promotionDate!!, 1),
                     restoredSnapshot = subsequentPromotion,
-                    onHistorySnapshot = { accepted -> subsequentPromotion = accepted?.copy(sequence = accepted.sequence.takeIf { it > 0 } ?: (postSteps.maxOfOrNull { step -> step.sequence } ?: postSteps.size) + (restoredSnapshot?.sequence ?: 0) + 1) }
+                    sequenceBase = maxOf(sequenceBase, restoredSnapshot?.maxApplicationSequence() ?: 0, postSteps.maxOfOrNull { it.sequence } ?: 0),
+                    onHistorySnapshot = { accepted -> subsequentPromotion = accepted?.copy(sequence = accepted.sequence.takeIf { it > 0 } ?: maxOf(sequenceBase, restoredSnapshot?.maxApplicationSequence() ?: 0, postSteps.maxOfOrNull { it.sequence } ?: 0) + 1) }
                 )
             }
         }

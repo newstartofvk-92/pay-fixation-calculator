@@ -131,10 +131,15 @@ fun CpcHistoryScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(report?.title ?: "Saved CPC conversion")
                     report?.chronologyNote?.let { Text(it, color = Color(0xFF8A5A00), fontSize = 12.sp) }
-                    report?.sections?.flatMap { it.rows }?.take(8)?.forEach { row ->
+                    val allReportRows = report?.sections?.flatMap { it.rows }.orEmpty()
+                    val previewRows = allReportRows.take(8)
+                    val omRowsNotInPreview = allReportRows.filter { it.kind == CpcJourneyEventKind.OM_SPECIAL_INCREMENT && it !in previewRows }
+                    (previewRows + omRowsNotInPreview).forEach { row ->
                         val date = row.eventDateMillis?.let { "Effective ${historyDate(row.dateMillis)} • Event ${historyDate(it)}" }
                             ?: historyDate(row.dateMillis)
-                        Text("$date  ${row.description}: ${row.position.basicPay}", fontSize = 12.sp)
+                        if (row.kind == CpcJourneyEventKind.OM_SPECIAL_INCREMENT) {
+                            Text("$date  ${row.description}: normal DNI ${historyDate(row.dniMillis)}, before ${row.sourcePosition?.basicPay}, increment ${row.position.basicPay - (row.sourcePosition?.basicPay ?: 0)}, adjusted ${row.position.basicPay}. ${row.remarks}", fontSize = 12.sp)
+                        } else Text("$date  ${row.description}: ${row.position.basicPay}", fontSize = 12.sp)
                     }
                     HorizontalDivider()
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -208,7 +213,7 @@ private object PayJourneyReportPdf {
                 section.rows.forEach { row ->
                     val pos = row.position
                     val details = buildString {
-                        append("#${row.sequence} | ")
+                        if (row.kind != CpcJourneyEventKind.OM_SPECIAL_INCREMENT) append("#${row.sequence} | ")
                         if (row.eventDateMillis != null) {
                             append("Effective date ${historyDate(row.dateMillis)} | Event date ${historyDate(row.eventDateMillis)}")
                         } else append(historyDate(row.dateMillis))

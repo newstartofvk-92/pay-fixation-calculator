@@ -20,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -28,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -62,6 +65,9 @@ fun V2AppScreen() {
     var carriedPayBand by remember { mutableStateOf<String?>(null) }
     var carriedPayInPayBand by remember { mutableStateOf<Int?>(null) }
     var carriedGradePay by remember { mutableStateOf<Int?>(null) }
+    var sixthContinuation by remember { mutableStateOf<SixthCpcContinuationContext?>(null) }
+    var restoreVersion by remember { mutableStateOf(0) }
+    var showSeventhStartingPosition by remember { mutableStateOf(false) }
     var carriedFifthScaleTitle by remember { mutableStateOf<String?>(null) }
     var carriedFifthBasicPay by remember { mutableStateOf<Int?>(null) }
     var showHistory by remember { mutableStateOf(false) }
@@ -71,57 +77,100 @@ fun V2AppScreen() {
     var showAboutDialog by remember { mutableStateOf(false) }
     var selectedMode by remember { mutableStateOf<PayFixationMode?>(null) }
     var showCpcHistory by remember { mutableStateOf(false) }
+    var cpcHistoryOverlay by remember { mutableStateOf(false) }
+    var showHistoryHub by remember { mutableStateOf(false) }
     var cpcHistory by remember { mutableStateOf(CpcHistoryStore.getAll(context)) }
     var restoreStandalone by remember { mutableStateOf<StandaloneCpcConversionSnapshot?>(null) }
     var restoreStandaloneId by remember { mutableStateOf<String?>(null) }
+    var restoreStandaloneOfficialName by remember { mutableStateOf<String?>(null) }
+    var restoreStandaloneDesignation by remember { mutableStateOf<String?>(null) }
     var restoreJourney by remember { mutableStateOf<CompleteJourneySnapshot?>(null) }
     var showStartDateScreen by remember { mutableStateOf(false) }
     var selectedStartDate by remember { mutableStateOf<Long?>(null) }
     var detectedCommission by remember { mutableStateOf<PayCommission?>(null) }
+
+    fun restoreCpcRecord(record: CpcHistoryRecord) {
+        restoreVersion++
+        showCalculator = false
+        showHistoryHub = false
+        showStartDateScreen = false
+        showSeventhStartingPosition = false
+        sixthContinuation = null
+        showFourthToFifth = false
+        showFifthToSixth = false
+        showSixthToSeventh = false
+        showSeventhHistoryJourney = false
+        restoreStandalone = (record.payload as? StandaloneConversionPayload)?.snapshot
+        restoreStandaloneId = record.uniqueId.takeIf { record.workflowType == CpcHistoryWorkflow.CPC_CONVERSION_ONLY }
+        val parsedTitleFields = parseCpcConversionTitle(record.title)
+        restoreStandaloneOfficialName = record.officialName ?: parsedTitleFields?.first
+        restoreStandaloneDesignation = record.designation ?: parsedTitleFields?.second
+        restoreJourney = (record.payload as? CompleteJourneyPayload)?.snapshot?.let(::normalizeJourneyForCpcRestore)
+        when (cpcHistoryRestoreDestination(record)) {
+            CpcHistoryRestoreDestination.CPC_CONVERSION_ONLY -> selectedMode = PayFixationMode.CPC_CONVERSION_ONLY
+            CpcHistoryRestoreDestination.FOURTH_JOURNEY,
+            CpcHistoryRestoreDestination.FIFTH_JOURNEY,
+            CpcHistoryRestoreDestination.SIXTH_JOURNEY,
+            CpcHistoryRestoreDestination.SEVENTH_JOURNEY -> if (restoreJourney != null) {
+                val snapshot = restoreJourney!!
+                selectedStartDate = snapshot.startingDateMillis
+                detectedCommission = when (record.startingCpc) {
+                    CpcHistoryStage.FOURTH -> PayCommission.FOURTH
+                    CpcHistoryStage.FIFTH -> PayCommission.FIFTH
+                    CpcHistoryStage.SIXTH -> PayCommission.SIXTH
+                    CpcHistoryStage.SEVENTH -> PayCommission.SEVENTH
+                }
+                selectedMode = PayFixationMode.COMPLETE_JOURNEY
+                when (cpcHistoryRestoreDestination(record)) {
+                    CpcHistoryRestoreDestination.FOURTH_JOURNEY -> showFourthToFifth = true
+                    CpcHistoryRestoreDestination.FIFTH_JOURNEY -> showFifthToSixth = true
+                    CpcHistoryRestoreDestination.SIXTH_JOURNEY -> showSixthToSeventh = true
+                    CpcHistoryRestoreDestination.SEVENTH_JOURNEY -> showSeventhHistoryJourney = true
+                    CpcHistoryRestoreDestination.CPC_CONVERSION_ONLY -> Unit
+                }
+            }
+        }
+        showCpcHistory = false
+        cpcHistoryOverlay = false
+    }
+    val openCpcHistoryOverlay = {
+        cpcHistory = CpcHistoryStore.getAll(context)
+        cpcHistoryOverlay = true
+        showCpcHistory = true
+    }
     
-    if (showCpcHistory) {
+    if (showCpcHistory && !cpcHistoryOverlay) {
         BackHandler { showCpcHistory = false }
         CpcHistoryScreen(
             records = cpcHistory,
             onBack = { showCpcHistory = false },
             onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) },
-            onRestore = { record ->
-                restoreStandalone = (record.payload as? StandaloneConversionPayload)?.snapshot
-                restoreStandaloneId = record.uniqueId.takeIf { record.workflowType == CpcHistoryWorkflow.CPC_CONVERSION_ONLY }
-                restoreJourney = (record.payload as? CompleteJourneyPayload)?.snapshot
-                when (cpcHistoryRestoreDestination(record)) {
-                    CpcHistoryRestoreDestination.CPC_CONVERSION_ONLY -> selectedMode = PayFixationMode.CPC_CONVERSION_ONLY
-                    CpcHistoryRestoreDestination.FOURTH_JOURNEY,
-                    CpcHistoryRestoreDestination.FIFTH_JOURNEY,
-                    CpcHistoryRestoreDestination.SIXTH_JOURNEY,
-                    CpcHistoryRestoreDestination.SEVENTH_JOURNEY -> if (restoreJourney != null) {
-                        val snapshot = restoreJourney!!
-                        selectedStartDate = snapshot.startingDateMillis
-                        detectedCommission = when (record.startingCpc) {
-                            CpcHistoryStage.FOURTH -> PayCommission.FOURTH
-                            CpcHistoryStage.FIFTH -> PayCommission.FIFTH
-                            CpcHistoryStage.SIXTH -> PayCommission.SIXTH
-                            CpcHistoryStage.SEVENTH -> PayCommission.SEVENTH
-                        }
-                        selectedMode = PayFixationMode.COMPLETE_JOURNEY
-                        when (cpcHistoryRestoreDestination(record)) {
-                            CpcHistoryRestoreDestination.FOURTH_JOURNEY -> showFourthToFifth = true
-                            CpcHistoryRestoreDestination.FIFTH_JOURNEY -> showFifthToSixth = true
-                            CpcHistoryRestoreDestination.SIXTH_JOURNEY -> showSixthToSeventh = true
-                            CpcHistoryRestoreDestination.SEVENTH_JOURNEY -> showSeventhHistoryJourney = true
-                            CpcHistoryRestoreDestination.CPC_CONVERSION_ONLY -> Unit
-                        }
-                    }
-                }
-                showCpcHistory = false
-            }
+            onRestore = ::restoreCpcRecord
         )
         return
     }
-    if (showCalculator) { BackHandler { showCalculator = false }; PayFixationCalculatorScreen(); return }
+    if (showHistoryHub) {
+        HistoryHubScreen(onBack = { showHistoryHub = false }, onLegacy = { history = HistoryStore.getAll(context); showHistory = true; showHistoryHub = false }, onCpc = { cpcHistory = CpcHistoryStore.getAll(context); showCpcHistory = true; cpcHistoryOverlay = false; showHistoryHub = false })
+        return
+    }
+    if (showCalculator) {
+        BackHandler { showCalculator = false }
+        key(restoreVersion) { PayFixationCalculatorScreen(onBack = { showCalculator = false }, onHome = { showCalculator = false }, onOpenCpcHistory = openCpcHistoryOverlay) }
+        if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord)
+        return
+    }
     if (showStartDateScreen) {
         PayFixationStartDateScreen(
-            onBack = { showStartDateScreen = false },
+            onBack = {
+                showStartDateScreen = false
+                selectedMode = null
+                selectedStartDate = null
+                detectedCommission = null
+                restoreJourney = null
+                sixthContinuation = null
+            },
+            onHome = { showStartDateScreen = false; selectedMode = null; selectedStartDate = null; detectedCommission = null; sixthContinuation = null },
+            initialStartDateMillis = selectedStartDate,
             onContinue = { date, commission ->
                 selectedStartDate = date
                 detectedCommission = commission
@@ -131,42 +180,84 @@ fun V2AppScreen() {
                     PayCommission.FOURTH -> showFourthToFifth = true
                     PayCommission.FIFTH -> showFifthToSixth = true
                     PayCommission.SIXTH -> showSixthToSeventh = true
-                    PayCommission.SEVENTH -> selectedMode = PayFixationMode.COMPLETE_JOURNEY
+                    PayCommission.SEVENTH -> showSeventhStartingPosition = true
+                }
+            }
+        )
+        return
+    }
+    if (showSeventhStartingPosition) {
+        PayFixationStartingPositionScreen(
+            commission = PayCommission.SEVENTH,
+            startDateMillis = selectedStartDate ?: 0L,
+            onBack = { showSeventhStartingPosition = false; showStartDateScreen = true },
+            onHome = { showSeventhStartingPosition = false; selectedMode = null; selectedStartDate = null; detectedCommission = null; restoreJourney = null; sixthContinuation = null },
+            onContinue = { position ->
+                val level = position.scaleOrLevel.removePrefix("Level ").trim()
+                val startDate = selectedStartDate ?: return@PayFixationStartingPositionScreen
+                val matrix = PayMatrixSelection.forCategory(EmployeeCategory.ORDINARY)
+                val basicPay = position.basicPay
+                val dni = position.dniMillis
+                if (basicPay != null && level in matrix.levels && basicPay in matrix.getPayStages(level) && dni != null && dni >= startDate) {
+                    restoreJourney = CompleteJourneySnapshot(
+                        startingCpc = CpcHistoryStage.SEVENTH,
+                        startingDateMillis = startDate,
+                        seventh = SeventhCpcJourneySnapshot(level, basicPay, startDate, startingDniMillis = dni)
+                    )
+                    showSeventhStartingPosition = false
+                    showSeventhHistoryJourney = true
                 }
             }
         )
         return
     }
     if (showFourthToFifth) {
-        FourthToFifthCpcScreen(
+        key(restoreVersion) { FourthToFifthCpcScreen(
             onBack = { showFourthToFifth = false },
             restoredSnapshot = restoreJourney?.fourth,
             restoredFifthSnapshot = restoreJourney?.fifth,
             sequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL,
-            onContinueToSeventh = { payBand, payInPayBand, gradePay ->
+            onHistory = openCpcHistoryOverlay,
+            onContinueToSeventh = { payBand, gradePay, payInPayBand, effectiveDate, journey ->
                 carriedPayBand = payBand
                 carriedPayInPayBand = payInPayBand
                 carriedGradePay = gradePay
+                sixthContinuation = SixthCpcContinuationContext(payBand, gradePay, payInPayBand, effectiveDate, journey)
+                restoreJourney = journey
+                selectedStartDate = effectiveDate
                 showFourthToFifth = false
                 showSixthToSeventh = true
             }
-        )
+        ) }
+        if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord)
         return
     }
     if (showFifthToSixth) {
-        FifthToSixthCpcScreen(onBack = { showFifthToSixth = false }, onContinueToSeventh = { payBand, payInPayBand, gradePay -> carriedPayBand = payBand; carriedPayInPayBand = payInPayBand; carriedGradePay = gradePay; showFifthToSixth = false; showSixthToSeventh = true }, initialScaleTitle = restoreJourney?.fifth?.scaleId ?: carriedFifthScaleTitle, initialBasicPay = restoreJourney?.fifth?.startingBasicPay ?: carriedFifthBasicPay, initialStartDate = restoreJourney?.fifth?.startingDateMillis ?: selectedStartDate, initialDni = restoreJourney?.fifth?.startingDniMillis, restoredSnapshot = restoreJourney?.fifth, sequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL)
+        key(restoreVersion) { FifthToSixthCpcScreen(onBack = { showFifthToSixth = false }, onContinueToSeventh = { payBand, gradePay, payInPayBand, effectiveDate, journey -> carriedPayBand = payBand; carriedPayInPayBand = payInPayBand; carriedGradePay = gradePay; sixthContinuation = SixthCpcContinuationContext(payBand, gradePay, payInPayBand, effectiveDate, journey); restoreJourney = journey; selectedStartDate = effectiveDate; showFifthToSixth = false; showSixthToSeventh = true }, initialScaleTitle = restoreJourney?.fifth?.scaleId ?: carriedFifthScaleTitle, initialBasicPay = restoreJourney?.fifth?.startingBasicPay ?: carriedFifthBasicPay, initialStartDate = restoreJourney?.fifth?.startingDateMillis ?: selectedStartDate, initialDni = restoreJourney?.fifth?.startingDniMillis, restoredSnapshot = restoreJourney?.fifth, sequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL, onHistory = openCpcHistoryOverlay) }
+        if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord)
         return
     }
     if (showSixthToSeventh) {
-        SixthToSeventhCpcScreen(onBack = { showSixthToSeventh = false }, initialPayBand = restoreJourney?.sixth?.payBandId ?: carriedPayBand, initialGradePay = restoreJourney?.sixth?.gradePay ?: carriedGradePay, initialPayInPayBand = restoreJourney?.sixth?.startingPayInPayBand ?: carriedPayInPayBand, initialStartDate = restoreJourney?.sixth?.startingDateMillis ?: selectedStartDate, restoredSnapshot = restoreJourney?.sixth, sequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL)
+        val restoredSixth = restoreJourney?.sixth ?: restoreJourney?.fifth?.sixthContinuation
+        key(restoreVersion) { SixthToSeventhCpcScreen(onBack = {
+            showSixthToSeventh = false
+            sixthContinuation?.let { context ->
+                restoreJourney = context.journey
+                if (context.journey.startingCpc == CpcHistoryStage.FOURTH) showFourthToFifth = true else showFifthToSixth = true
+            }
+            sixthContinuation = null
+        }, initialPayBand = sixthContinuation?.payBandId ?: restoredSixth?.payBandId ?: carriedPayBand, initialGradePay = sixthContinuation?.gradePay ?: restoredSixth?.gradePay ?: carriedGradePay, initialPayInPayBand = sixthContinuation?.payInPayBand ?: restoredSixth?.startingPayInPayBand ?: carriedPayInPayBand, initialStartDate = sixthContinuation?.effectiveDateMillis ?: restoredSixth?.startingDateMillis ?: selectedStartDate, restoredSnapshot = if (sixthContinuation != null) null else restoredSixth, continuationContext = sixthContinuation, sequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL, onHistory = openCpcHistoryOverlay) }
+        if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord)
         return
     }
     if (showSeventhHistoryJourney) {
-        SeventhCpcHistoryJourneyScreen(
-            snapshot = restoreJourney?.seventh,
+        key(restoreVersion) { SeventhCpcHistoryJourneyScreen(
+            snapshot = restoreJourney?.seventh ?: restoreJourney?.sixth?.seventhContinuation ?: restoreJourney?.fifth?.sixthContinuation?.seventhContinuation,
             onBack = { showSeventhHistoryJourney = false },
-            sequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL
-        )
+            sequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL,
+            onHistory = openCpcHistoryOverlay
+        ) }
+        if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord)
         return
     }
     if (showHistory) {
@@ -180,33 +271,39 @@ fun V2AppScreen() {
 
     when (selectedMode) {
         null -> PayFixationModeSelectionScreen(
-            onSelected = { selectedMode = it; restoreJourney = null; restoreStandalone = null; restoreStandaloneId = null },
-            onHistory = { history = HistoryStore.getAll(context); showHistory = true },
+            onSelected = { selectedMode = it; restoreJourney = null; restoreStandalone = null; restoreStandaloneId = null; restoreStandaloneOfficialName = null; restoreStandaloneDesignation = null; sixthContinuation = null; selectedStartDate = null; detectedCommission = null },
+            onHistory = { showHistoryHub = true },
             onCpcHistory = { cpcHistory = CpcHistoryStore.getAll(context); showCpcHistory = true },
+            onLegacyCalculator = { selectedMode = null; showCalculator = true },
             onAbout = { showAboutDialog = true }
         )
 
         PayFixationMode.COMPLETE_JOURNEY -> PayFixationModeJourneyEntryScreen(
             onStartDate = { showStartDateScreen = true },
             onLegacySelection = { },
-            onHistory = { history = HistoryStore.getAll(context); showHistory = true },
+            onHistory = { showHistoryHub = true },
             onAbout = { showAboutDialog = true },
+            onHome = { selectedMode = null; selectedStartDate = null; detectedCommission = null; restoreJourney = null; sixthContinuation = null },
             selectedStartDate = selectedStartDate,
             detectedCommission = detectedCommission
         )
 
         PayFixationMode.CPC_CONVERSION_ONLY -> {
             BackHandler { selectedMode = null }
-            CpcConversionOnlyScreen(
+            key(restoreVersion) { CpcConversionOnlyScreen(
                 onBack = { selectedMode = null },
+                onHome = { selectedMode = null },
                 initialSnapshot = restoreStandalone,
                 initialRecordId = restoreStandaloneId,
-                onSaveRecord = { snapshot, recordId ->
+                initialOfficialName = restoreStandaloneOfficialName,
+                initialDesignation = restoreStandaloneDesignation,
+                onHistory = openCpcHistoryOverlay,
+                onSaveRecord = { snapshot, recordId, title, officialName, designation ->
                     val now = System.currentTimeMillis()
                     CpcHistoryStore.save(context, CpcHistoryRecord(
                         uniqueId = recordId ?: java.util.UUID.randomUUID().toString(),
                         workflowType = CpcHistoryWorkflow.CPC_CONVERSION_ONLY,
-                        title = "${snapshot.kind.name.replace('_', ' ')} conversion",
+                        title = title,
                         savedAtMillis = now,
                         startingCpc = when (snapshot.kind) {
                             StandaloneConversionKind.FOURTH_TO_FIFTH -> CpcHistoryStage.FOURTH
@@ -218,14 +315,18 @@ fun V2AppScreen() {
                             StandaloneConversionKind.FIFTH_TO_SIXTH -> CpcHistoryStage.SIXTH
                             StandaloneConversionKind.SIXTH_TO_SEVENTH -> CpcHistoryStage.SEVENTH
                         },
-                        payload = StandaloneConversionPayload(snapshot)
+                        payload = StandaloneConversionPayload(snapshot),
+                        officialName = officialName,
+                        designation = designation
                     ))
                     cpcHistory = CpcHistoryStore.getAll(context)
                     android.widget.Toast.makeText(context, "CPC conversion saved", android.widget.Toast.LENGTH_SHORT).show()
                 }
-            )
+            ) }
         }
     }
+
+    if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord)
 
     if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })
 }
@@ -235,6 +336,7 @@ private fun PayFixationModeSelectionScreen(
     onSelected: (PayFixationMode) -> Unit,
     onHistory: () -> Unit,
     onCpcHistory: () -> Unit,
+    onLegacyCalculator: () -> Unit,
     onAbout: () -> Unit
 ) {
     Column(
@@ -274,6 +376,13 @@ private fun PayFixationModeSelectionScreen(
                 description = "Convert an existing pay position from one CPC to another without running the complete historical journey.",
                 badge = "CONVERSION",
                 onClick = { onSelected(PayFixationMode.CPC_CONVERSION_ONLY) }
+            )
+
+            PayFixationModeCard(
+                title = "Pay Fixation under 7th CPC",
+                description = "Calculate promotion or MACP pay fixation under the 7th CPC using the existing calculator.",
+                badge = "7TH CPC",
+                onClick = onLegacyCalculator
             )
         }
     }
@@ -335,6 +444,7 @@ private fun PayFixationModeJourneyEntryScreen(
     onLegacySelection: () -> Unit,
     onHistory: () -> Unit,
     onAbout: () -> Unit,
+    onHome: () -> Unit,
     selectedStartDate: Long?,
     detectedCommission: PayCommission?
 ) {
@@ -342,7 +452,7 @@ private fun PayFixationModeJourneyEntryScreen(
         modifier = Modifier.fillMaxSize().background(HomeNiyamBackground),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        HomeHeader(onHistory = onHistory, onAbout = onAbout)
+        HomeHeader(onHistory = onHistory, onAbout = onAbout, onHome = onHome)
         Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -398,17 +508,49 @@ private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -
 }
 
 @Composable
-private fun HomeHeader(onHistory: (() -> Unit)? = null, onAbout: (() -> Unit)? = null) {
+private fun HomeHeader(onHistory: (() -> Unit)? = null, onAbout: (() -> Unit)? = null, onHome: (() -> Unit)? = null) {
     Surface(modifier = Modifier.fillMaxWidth(), color = HomeNiyamHeaderBlue, shadowElevation = 3.dp) {
         Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.size(56.dp).background(Color.White, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Text("NM", color = HomeNiyamHeaderBlue, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) { Text("Pay Fixation Calculator", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold); Text("NiyamMitra", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium) }
             if (onHistory != null && onAbout != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                onHome?.let { TextButton(onClick = it) { Text("Home", color = Color.White, fontWeight = FontWeight.Bold) } }
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable(onClick = onHistory)) { Icon(Icons.Default.History, contentDescription = "History", modifier = Modifier.size(24.dp), tint = Color.White); Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                 Box(modifier = Modifier.padding(horizontal = 10.dp).height(34.dp).width(1.dp).background(Color.White.copy(alpha = 0.35f)))
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable(onClick = onAbout)) { Icon(Icons.Default.Info, contentDescription = "About", modifier = Modifier.size(24.dp), tint = Color.White); Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
             }
+        }
+    }
+}
+
+@Composable
+private fun HistoryHubScreen(onBack: () -> Unit, onLegacy: () -> Unit, onCpc: () -> Unit) {
+    Column(Modifier.fillMaxSize().background(HomeNiyamBackground)) {
+        Surface(Modifier.fillMaxWidth(), color = HomeNiyamHeaderBlue) {
+            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onBack) { Text("‹ Back", color = Color.White, fontWeight = FontWeight.Bold) }
+                Text("History", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+            }
+        }
+        Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("Choose saved calculations", color = HomeNiyamTextSecondary)
+            androidx.compose.material3.OutlinedButton(onClick = onLegacy, modifier = Modifier.fillMaxWidth()) { Text("7th CPC Pay Fixation History") }
+            androidx.compose.material3.OutlinedButton(onClick = onCpc, modifier = Modifier.fillMaxWidth()) { Text("CPC Journeys & Conversions") }
+        }
+    }
+}
+
+@Composable
+private fun CpcHistoryOverlay(
+    records: List<CpcHistoryRecord>,
+    onBack: () -> Unit,
+    onDelete: (String) -> Unit,
+    onRestore: (CpcHistoryRecord) -> Unit
+) {
+    Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize(), color = Color.White) {
+            CpcHistoryScreen(records = records, onBack = onBack, onDelete = onDelete, onRestore = onRestore)
         }
     }
 }

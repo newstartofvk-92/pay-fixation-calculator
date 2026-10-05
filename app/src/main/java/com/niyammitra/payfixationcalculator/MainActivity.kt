@@ -58,9 +58,10 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PayFixationCalculatorScreen() {
+fun PayFixationCalculatorScreen(onBack: () -> Unit = {}, onHome: () -> Unit = onBack, onOpenCpcHistory: () -> Unit = {}) {
     val context = LocalContext.current
     var showHistory by remember { mutableStateOf(false) }
+    var showHistoryHub by remember { mutableStateOf(false) }
     var history by remember { mutableStateOf(HistoryStore.getAll(context)) }
     var officialName by remember { mutableStateOf("") }
     var employeeCategory by remember { mutableStateOf(EmployeeCategory.ORDINARY) }
@@ -80,6 +81,24 @@ fun PayFixationCalculatorScreen() {
     var showAdFreeDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
 
+    if (showHistoryHub) {
+        AlertDialog(
+            onDismissRequest = { showHistoryHub = false },
+            title = { Text("History") },
+            text = { Text("Choose which saved calculations to open.") },
+            confirmButton = {
+                TextButton(onClick = { showHistoryHub = false; onOpenCpcHistory() }) { Text("CPC Journeys & Conversions") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    history = HistoryStore.getAll(context)
+                    showHistoryHub = false
+                    val activity = context as? Activity
+                    if (activity != null) HistoryInterstitialAd.showIfDue(activity) { showHistory = true } else showHistory = true
+                }) { Text("7th CPC Pay Fixation History") }
+            }
+        )
+    }
     if (showHistory) {
         androidx.activity.compose.BackHandler {
             val activity = context as? Activity
@@ -123,6 +142,8 @@ fun PayFixationCalculatorScreen() {
     Column(Modifier.fillMaxSize().background(NiyamBackground)) {
         Surface(modifier = Modifier.fillMaxWidth(), color = NiyamHeaderBlue, shadowElevation = 3.dp) {
             Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.TextButton(onClick = onBack) { Text("‹ Back", color = Color.White, fontWeight = FontWeight.Bold) }
+                androidx.compose.material3.TextButton(onClick = onHome) { Text("Home", color = Color.White, fontWeight = FontWeight.Bold) }
                 Box(modifier = Modifier.size(56.dp).background(Color.White, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
                     Text("NM", color = NiyamHeaderBlue, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
                 }
@@ -133,9 +154,7 @@ fun PayFixationCalculatorScreen() {
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable {
-                        history = HistoryStore.getAll(context)
-                        val activity = context as? Activity
-                        if (activity != null) HistoryInterstitialAd.showIfDue(activity) { showHistory = true } else showHistory = true
+                        showHistoryHub = true
                     }) {
                         Icon(imageVector = Icons.Default.History, contentDescription = "History", modifier = Modifier.size(24.dp), tint = Color.White)
                         Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)

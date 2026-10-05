@@ -11,14 +11,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -27,6 +31,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +45,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Calendar
 import java.util.Locale
 
 private val CpcConvertBlue = Color(0xFF1769AA)
@@ -56,9 +64,13 @@ private enum class StandaloneCpcConversion(val title: String) {
 @Composable
 fun CpcConversionOnlyScreen(
     onBack: () -> Unit,
+    onHome: (() -> Unit)? = null,
     initialSnapshot: StandaloneCpcConversionSnapshot? = null,
     initialRecordId: String? = null,
-    onSaveRecord: ((StandaloneCpcConversionSnapshot, String?) -> Unit)? = null
+    initialOfficialName: String? = null,
+    initialDesignation: String? = null,
+    onSaveRecord: ((StandaloneCpcConversionSnapshot, String?, String, String, String) -> Unit)? = null,
+    onHistory: (() -> Unit)? = null
 ) {
     BackHandler(onBack = onBack)
     val initialFourth = (initialSnapshot as? StandaloneCpcConversionSnapshot.FourthToFifth)?.let { saved ->
@@ -67,6 +79,7 @@ fun CpcConversionOnlyScreen(
     val initialFifth = (initialSnapshot as? StandaloneCpcConversionSnapshot.FifthToSixth)?.let { saved ->
         FifthToSixthCpcData.scales.firstOrNull { it.title == saved.scaleId }
     }
+    val initialFifthSnapshot = initialSnapshot as? StandaloneCpcConversionSnapshot.FifthToSixth
     val initialSixth = (initialSnapshot as? StandaloneCpcConversionSnapshot.SixthToSeventh)?.let { saved ->
         SixthToSeventhCpcData.payBands.firstOrNull { it.title.substringBefore(":").trim() == saved.payBandId }
     }
@@ -83,15 +96,24 @@ fun CpcConversionOnlyScreen(
     var fifthScale by remember(initialSnapshot) { mutableStateOf(initialFifth) }
     var fifthScaleMenu by remember { mutableStateOf(false) }
     var fifthPayText by remember(initialSnapshot) { mutableStateOf((initialSnapshot as? StandaloneCpcConversionSnapshot.FifthToSixth)?.existingBasicPay?.toString() ?: "") }
+    var fifthNormalDni by remember(initialSnapshot) { mutableStateOf(initialFifthSnapshot?.normalDniMillis) }
+    var fifthOmAdjustment by remember(initialSnapshot) { mutableStateOf(initialFifthSnapshot?.omAdjustment) }
+    var showFifthDniPicker by remember { mutableStateOf(false) }
     var sixthBand by remember(initialSnapshot) { mutableStateOf(initialSixth) }
     var sixthBandMenu by remember { mutableStateOf(false) }
     var sixthGradePay by remember(initialSnapshot) { mutableStateOf((initialSnapshot as? StandaloneCpcConversionSnapshot.SixthToSeventh)?.gradePay) }
     var sixthGradePayMenu by remember { mutableStateOf(false) }
     var sixthPayText by remember(initialSnapshot) { mutableStateOf((initialSnapshot as? StandaloneCpcConversionSnapshot.SixthToSeventh)?.payInPayBand?.toString() ?: "") }
     var fourthResult by remember(initialSnapshot) { mutableStateOf(if (initialFourth != null) runCatching { calculateFourthToFifthCpc((initialSnapshot as StandaloneCpcConversionSnapshot.FourthToFifth).existingBasicPay, initialFourth) }.getOrNull() else null) }
-    var fifthResult by remember(initialSnapshot) { mutableStateOf(if (initialFifth != null) runCatching { calculateFifthToSixthCpc((initialSnapshot as StandaloneCpcConversionSnapshot.FifthToSixth).existingBasicPay, initialFifth) }.getOrNull() else null) }
+    var fifthResult by remember(initialSnapshot) { mutableStateOf(if (initialFifth != null && initialFifthSnapshot != null) runCatching {
+        calculateFifthToSixthCpc(initialFifthSnapshot.omAdjustment?.adjustedBasicPay ?: initialFifthSnapshot.existingBasicPay, initialFifth)
+    }.getOrNull() else null) }
     var sixthResult by remember(initialSnapshot) { mutableStateOf(if (initialSixth != null && initialSnapshot is StandaloneCpcConversionSnapshot.SixthToSeventh) calculateSixthToSeventhCpc(initialSnapshot.payInPayBand, initialSnapshot.gradePay, initialSixth) else null) }
     var conversionError by remember { mutableStateOf<String?>(null) }
+    var saveSnapshot by remember { mutableStateOf<StandaloneCpcConversionSnapshot?>(null) }
+    var officialName by remember(initialRecordId) { mutableStateOf(initialOfficialName.orEmpty()) }
+    var designation by remember(initialRecordId) { mutableStateOf(initialDesignation.orEmpty()) }
+    var saveError by remember { mutableStateOf(false) }
 
     fun clearResult() {
         fourthResult = null
@@ -109,13 +131,15 @@ fun CpcConversionOnlyScreen(
 
     Column(Modifier.fillMaxSize().background(CpcConvertBackground)) {
         Surface(Modifier.fillMaxWidth(), color = Color(0xFF1976B8), shadowElevation = 3.dp) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onBack) { Text("‹ Back", color = Color.White, fontWeight = FontWeight.Bold) }
                 Spacer(Modifier.padding(horizontal = 4.dp))
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text("CPC Conversion Only", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                     Text("Standalone pay conversion", color = Color.White.copy(alpha = .88f), fontSize = 13.sp)
                 }
+                onHome?.let { TextButton(onClick = it) { Text("Home", color = Color.White, fontWeight = FontWeight.Bold) } }
+                onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } }
             }
         }
 
@@ -196,25 +220,47 @@ fun CpcConversionOnlyScreen(
                                     DropdownMenuItem(text = { Text(scale.title) }, onClick = {
                                         fifthScale = scale
                                         fifthScaleMenu = false
+                                        fifthOmAdjustment = null
                                         clearResult()
                                     })
                                 }
                             }
                             OutlinedTextField(
                                 value = fifthPayText,
-                                onValueChange = { fifthPayText = it.filter(Char::isDigit); clearResult() },
+                                onValueChange = { fifthPayText = it.filter(Char::isDigit); fifthOmAdjustment = null; clearResult() },
                                 label = { Text("Existing 5th CPC Basic Pay") },
                                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth()
                             )
                             if (fifthPayText.isNotBlank() && !fifthPayValid) ValidationText("Enter a basic pay greater than zero.")
+                            if (initialFifthSnapshot != null && initialFifthSnapshot.normalDniMillis == null && fifthNormalDni == null) {
+                                Text("Legacy result shown without OM eligibility being assumed. A normal DNI is needed only if you choose to recalculate.", color = CpcConvertSecondary, fontSize = 12.sp)
+                            }
+                            OutlinedButton(onClick = { showFifthDniPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                                Text(fifthNormalDni?.let(::formatStandaloneCpcDate) ?: "Normal 5th CPC DNI (needed to recalculate)", Modifier.weight(1f), color = CpcConvertPrimary)
+                                Text("📅")
+                            }
+                            if (fifthNormalDni != null) {
+                                Text("This is the employee's normal 5th CPC DNI; the OM increment date remains 01 January 2006.", color = CpcConvertSecondary, fontSize = 12.sp)
+                            }
                             Button(
                                 enabled = fifthScale != null && fifthPayValid,
                                 onClick = {
+                                    if (fifthNormalDni == null) {
+                                        conversionError = "Select the normal 5th CPC DNI before recalculating this conversion."
+                                        return@Button
+                                    }
                                     clearResult()
+                                    fifthOmAdjustment = null
                                     try {
-                                        fifthResult = calculateFifthToSixthCpc(existingBasicPay = fifthPay!!, scale = fifthScale!!)
+                                        val adjustment = calculateFifthCpcOmAdjustment(fifthNormalDni!!, fifthPay!!, fifthScale!!)
+                                        if (isEligibleForFifthCpcOmAdjustment(fifthNormalDni!!) && adjustment == null) {
+                                            conversionError = "The OM increment could not be determined for this scale and pay stage."
+                                        } else {
+                                            fifthOmAdjustment = adjustment
+                                            fifthResult = calculateFifthToSixthCpc(existingBasicPay = adjustment?.adjustedBasicPay ?: fifthPay!!, scale = fifthScale!!)
+                                        }
                                     } catch (error: IllegalArgumentException) {
                                         conversionError = error.message ?: "Enter a positive basic pay."
                                     }
@@ -303,6 +349,23 @@ fun CpcConversionOnlyScreen(
                 }
             }
             fifthResult?.let { result ->
+                if (fifthNormalDni != null) {
+                    ResultCard("5th CPC DNI and OM") {
+                        Text("Normal 5th CPC DNI: ${formatStandaloneCpcDate(fifthNormalDni!!)}", color = CpcConvertSecondary, fontSize = 13.sp)
+                        if (fifthOmAdjustment == null) {
+                            Text("Not eligible for the one-time OM increment. 5th CPC basic pay remains ${formatStandaloneCpcMoney(fifthPay ?: 0)}.", color = CpcConvertSecondary, fontSize = 12.sp)
+                        }
+                    }
+                }
+                fifthOmAdjustment?.let { adjustment ->
+                    ResultCard("Special Increment under OM dated 19 March 2012") {
+                        Text("Normal 5th CPC DNI: ${formatStandaloneCpcDate(adjustment.normalDniMillis)}", color = CpcConvertSecondary, fontSize = 13.sp)
+                        ResultValue("5th CPC Basic Pay before OM", adjustment.basicPayBefore)
+                        ResultValue("Special increment on 01 January 2006", adjustment.incrementAmount)
+                        ResultValue("Adjusted 5th CPC Basic Pay", adjustment.adjustedBasicPay)
+                        Text("Next increment in revised pay structure: ${formatStandaloneCpcDate(adjustment.nextRevisedIncrementDateMillis)}", color = CpcConvertSecondary, fontSize = 13.sp)
+                    }
+                }
                 ResultCard("5th CPC → 6th CPC") {
                     ResultValue("Existing Basic Pay", result.existingBasicPay)
                     Text("Multiplied Pay: ${formatStandaloneCpcDecimal(result.multipliedPay)}", color = CpcConvertPrimary, fontWeight = FontWeight.Bold)
@@ -336,17 +399,58 @@ fun CpcConversionOnlyScreen(
                     onClick = {
                         val snapshot = when {
                             fourthResult != null && fourthScale != null && fourthPay != null -> StandaloneCpcConversionSnapshot.FourthToFifth(fourthScale!!.existingScale, fourthPay)
-                            fifthResult != null && fifthScale != null && fifthPay != null -> StandaloneCpcConversionSnapshot.FifthToSixth(fifthScale!!.title, fifthPay)
+                            fifthResult != null && fifthScale != null && fifthPay != null -> StandaloneCpcConversionSnapshot.FifthToSixth(
+                                fifthScale!!.title, fifthPay, fifthNormalDni, fifthOmAdjustment
+                            )
                             sixthResult != null && sixthBand != null && sixthGradePay != null && sixthPay != null -> StandaloneCpcConversionSnapshot.SixthToSeventh(sixthBand!!.title.substringBefore(":").trim(), sixthPay, sixthGradePay!!)
                             else -> null
                         }
-                        snapshot?.let { onSaveRecord(it, initialRecordId) }
+                        snapshot?.let { saveSnapshot = it; saveError = false }
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text("Save Conversion to CPC History") }
             }
             Spacer(Modifier.height(12.dp))
         }
+    }
+    saveSnapshot?.let { snapshot ->
+        AlertDialog(
+            onDismissRequest = { saveSnapshot = null },
+            title = { Text("Save CPC Conversion") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(value = officialName, onValueChange = { officialName = it; saveError = false }, label = { Text("Official Name") }, singleLine = true)
+                    OutlinedTextField(value = designation, onValueChange = { designation = it; saveError = false }, label = { Text("Designation") }, singleLine = true)
+                    if (saveError) ValidationText("Enter the official name and designation to save this calculation.")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    if (officialName.isBlank() || designation.isBlank()) saveError = true
+                    else {
+                        val conversionName = snapshot.kind.name.replace('_', ' ')
+                        onSaveRecord?.invoke(snapshot, initialRecordId, "${officialName.trim()} — ${designation.trim()} — $conversionName", officialName.trim(), designation.trim())
+                        saveSnapshot = null
+                    }
+                }) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { saveSnapshot = null }) { Text("Cancel") } }
+        )
+    }
+    if (showFifthDniPicker) {
+        val pickerState = rememberDatePickerState(initialSelectedDateMillis = fifthNormalDni ?: standaloneCpcDate(2006, Calendar.FEBRUARY, 1))
+        DatePickerDialog(
+            onDismissRequest = { showFifthDniPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    fifthNormalDni = pickerState.selectedDateMillis
+                    fifthOmAdjustment = null
+                    clearResult()
+                    showFifthDniPicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showFifthDniPicker = false }) { Text("Cancel") } }
+        ) { DatePicker(state = pickerState) }
     }
 }
 
@@ -397,3 +501,8 @@ private fun formatStandaloneCpcMoney(value: Int): String =
     NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(value)
 
 private fun formatStandaloneCpcDecimal(value: Double): String = String.format(Locale.US, "%.2f", value)
+
+private fun formatStandaloneCpcDate(value: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))
+
+private fun standaloneCpcDate(year: Int, month: Int, day: Int): Long =
+    Calendar.getInstance().apply { clear(); set(year, month, day, 0, 0, 0) }.timeInMillis

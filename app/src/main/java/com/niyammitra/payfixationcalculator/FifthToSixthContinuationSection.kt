@@ -148,11 +148,7 @@ fun FifthToSixthContinuationSection(
             startingPayBand = conversion.scale.payBand,
             initialEventChains = restoredSnapshot?.eventChains.orEmpty(),
             initialSequence = incrementSteps.maxOfOrNull { it.sequence } ?: incrementSteps.size,
-            onContinueToSeventh = onContinueToSeventh?.let { callback ->
-                { band, gradePay, payInBand ->
-                    callback(band, gradePay, payInBand, eventLatestDate ?: inlineSixthJuly2015Date())
-                }
-            },
+            onContinueToSeventh = onContinueToSeventh,
             onLatestStateChange = { band, gp, payInBand, date ->
                 eventLatestPayBand = band
                 eventLatestGradePay = gp

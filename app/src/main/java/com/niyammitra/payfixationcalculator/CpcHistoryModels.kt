@@ -272,6 +272,18 @@ fun cpcHistoryRestoreDestination(record: CpcHistoryRecord): CpcHistoryRestoreDes
     record.startingCpc == CpcHistoryStage.SIXTH -> CpcHistoryRestoreDestination.SIXTH_JOURNEY
     else -> CpcHistoryRestoreDestination.SEVENTH_JOURNEY
 }
+
+/** Makes a saved 6th CPC continuation visible to the embedded 5th CPC restore flow. */
+internal fun normalizeJourneyForCpcRestore(snapshot: CompleteJourneySnapshot): CompleteJourneySnapshot {
+    if (snapshot.startingCpc > CpcHistoryStage.FIFTH) return snapshot
+    val fifth = snapshot.fifth ?: return snapshot
+    val sixth = snapshot.sixth ?: fifth.sixthContinuation ?: return snapshot
+    return snapshot.copy(
+        fifth = fifth.copy(sixthContinuation = sixth),
+        sixth = null
+    )
+}
+
 fun SeventhCpcPromotionSnapshot.maxApplicationSequence(): Int = maxOf(
     sequence,
     postIncrements.maxOfOrNull { it.sequence } ?: 0,

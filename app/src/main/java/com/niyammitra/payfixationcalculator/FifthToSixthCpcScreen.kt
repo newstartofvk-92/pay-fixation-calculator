@@ -28,13 +28,14 @@ private val FiveSixTextSecondary = Color(0xFF5B6B7A)
 @Composable
 fun FifthToSixthCpcScreen(
     onBack: () -> Unit,
-    onContinueToSeventh: ((String, Int, Int) -> Unit)? = null,
+    onContinueToSeventh: ((String, Int, Int, Long, CompleteJourneySnapshot) -> Unit)? = null,
     initialScaleTitle: String? = null,
     initialBasicPay: Int? = null,
     initialStartDate: Long? = null,
     initialDni: Long? = null,
     restoredSnapshot: FifthCpcJourneySnapshot? = null,
-    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
+    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL,
+    onHistory: (() -> Unit)? = null
 ) {
     BackHandler(onBack = onBack)
 
@@ -70,6 +71,7 @@ fun FifthToSixthCpcScreen(
                     Text("5th CPC Pay Journey", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                     Text("Historical Pay Progression", color = Color.White.copy(alpha = .88f), fontSize = 13.sp)
                 }
+                onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } }
             }
         }
 
@@ -134,11 +136,20 @@ fun FifthToSixthCpcScreen(
                     conversionDate = startDate,
                     initialDate = startDate,
                     initialDni = selectedDni,
-                    onContinueToSeventh = onContinueToSeventh?.let { callback ->
-                        { band, gradePay, payInBand, effectiveDate -> callback(band, gradePay, payInBand) }
+                    onContinueToSeventh = onContinueToSeventh?.let { continueJourney ->
+                        { band, gradePay, payInBand, effectiveDate ->
+                            val fifth = historySnapshot ?: FifthCpcJourneySnapshot(
+                                startDate, selectedScale!!.title, basicPay, selectedDni
+                            )
+                            continueJourney(
+                                band, gradePay, payInBand, effectiveDate,
+                                CompleteJourneySnapshot(CpcHistoryStage.FIFTH, startDate, fifth = fifth)
+                            )
+                        }
                     },
                     onHistorySnapshot = { historySnapshot = it },
-                    restoredSnapshot = restoredSnapshot
+                    restoredSnapshot = restoredSnapshot,
+                    sequenceIntegrity = sequenceIntegrity
                 )
                 SaveCompleteJourneyButton(
                     CompleteJourneySnapshot(

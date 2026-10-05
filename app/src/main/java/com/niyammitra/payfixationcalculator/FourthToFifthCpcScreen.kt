@@ -39,10 +39,11 @@ fun resetFourthJourneyAfterStartingDateEdit() = FourthStartingDateEditReset(empt
 @Composable
 fun FourthToFifthCpcScreen(
     onBack: () -> Unit,
-    onContinueToSeventh: ((String, Int, Int) -> Unit)? = null,
+    onContinueToSeventh: ((String, Int, Int, Long, CompleteJourneySnapshot) -> Unit)? = null,
     restoredSnapshot: FourthCpcJourneySnapshot? = null,
     restoredFifthSnapshot: FifthCpcJourneySnapshot? = null,
-    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
+    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL,
+    onHistory: (() -> Unit)? = null
 ) {
     BackHandler(onBack = onBack)
     val restoredScale = remember(restoredSnapshot?.scaleId) { FourthToFifthCpcData.scales.firstOrNull { it.existingScale == restoredSnapshot?.scaleId } }
@@ -98,6 +99,7 @@ fun FourthToFifthCpcScreen(
                     Text("4th CPC → 5th CPC", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                     Text("Pay Revision", color = Color.White.copy(alpha = .88f), fontSize = 13.sp)
                 }
+                onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } }
             }
         }
 
@@ -446,7 +448,31 @@ fun FourthToFifthCpcScreen(
                         firstIncrementDate = firstFifthIncrementDate,
                         conversionDate = fourthFiveConversionDate(),
                         onHistorySnapshot = { fifthHistorySnapshot = it },
-                        restoredSnapshot = fifthHistorySnapshot
+                        restoredSnapshot = fifthHistorySnapshot,
+                        sequenceIntegrity = sequenceIntegrity,
+                        onContinueToSeventh = onContinueToSeventh?.let { continueJourney ->
+                            { band, gradePay, payInBand, effectiveDate ->
+                                val currentFourth = FourthCpcJourneySnapshot(
+                                    scaleId = selectedScale!!.existingScale,
+                                    scaleTitle = selectedScale!!.grade,
+                                    startingBasicPay = basicPay!!,
+                                    payDateMillis = payDate!!,
+                                    nextIncrementDateMillis = parsedNextIncrementDate,
+                                    increments = incrementSteps.mapIndexed { index, step -> CpcIncrementSnapshot(index + 1, step.pay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
+                                    events = acceptedEvents,
+                                    conversionActivated = conversionActivated
+                                )
+                                continueJourney(
+                                    band, gradePay, payInBand, effectiveDate,
+                                    CompleteJourneySnapshot(
+                                        startingCpc = CpcHistoryStage.FOURTH,
+                                        startingDateMillis = payDate!!,
+                                        fourth = currentFourth,
+                                        fifth = fifthHistorySnapshot
+                                    )
+                                )
+                            }
+                        }
                     )
                 }
 

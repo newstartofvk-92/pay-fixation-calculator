@@ -3,13 +3,13 @@ package com.niyammitra.payfixationcalculator
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
@@ -27,7 +27,8 @@ import java.util.Locale
 fun SeventhCpcHistoryJourneyScreen(
     snapshot: SeventhCpcJourneySnapshot?,
     onBack: () -> Unit,
-    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
+    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL,
+    onHistory: (() -> Unit)? = null
 ) {
     BackHandler(onBack = onBack)
     if (snapshot == null) {
@@ -40,9 +41,11 @@ fun SeventhCpcHistoryJourneyScreen(
     var increments by remember(snapshot) {
         mutableStateOf(snapshot.increments.map { SeventhCpcIncrementStep(it.pay, it.dateMillis, it.sequence) })
     }
-    var promotion by remember(snapshot) { mutableStateOf(snapshot.promotions.firstOrNull()) }
-    val current = currentSeventhPosition(snapshot, increments, listOfNotNull(promotion), sequenceIntegrity)
-    val sequence = maxOf(increments.maxOfOrNull { it.sequence } ?: 0, promotion?.sequence ?: 0)
+    var promotions by remember(snapshot) { mutableStateOf(snapshot.promotions) }
+    var editingPromotionIndex by remember(snapshot) { mutableStateOf(snapshot.promotions.lastIndex.takeIf { it >= 0 }) }
+    val promotion = editingPromotionIndex?.let(promotions::getOrNull)
+    val current = currentSeventhPosition(snapshot, increments, promotions, sequenceIntegrity)
+    val sequence = maxOf(increments.maxOfOrNull { it.sequence } ?: 0, promotions.maxOfOrNull { it.maxApplicationSequence() } ?: 0)
     val date = increments.lastOrNull()?.date?.let { addSeventhHistoryYears(it, 1) }
         ?: promotion?.resultingDniMillis ?: snapshot.startingDniMillis
         ?: SeventhCpcHistoryStartDni
@@ -51,6 +54,10 @@ fun SeventhCpcHistoryJourneyScreen(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
+            TextButton(onClick = onBack) { Text("‹ Back") }
+            if (onHistory != null) TextButton(onClick = onHistory) { Text("History") }
+        }
         Text("7th CPC Pay Journey")
         Text("Starting position: Level ${snapshot.startingLevel}, ₹${snapshot.startingBasicPay}")
         Text("Conversion date: ${seventhHistoryDate(snapshot.conversionDateMillis)}")
@@ -66,13 +73,29 @@ fun SeventhCpcHistoryJourneyScreen(
                 }
             }, modifier = Modifier.fillMaxWidth()
         ) { Text("Next 7th CPC Increment") }
+        if (promotions.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Saved Promotion / MACP Events")
+                promotions.withIndex().sortedWith(compareBy<IndexedValue<SeventhCpcPromotionSnapshot>> { it.value.sequence }.thenBy { it.index }).forEach { indexed ->
+                    val item = indexed.value
+                    androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween) {
+                        Text("${item.eventKind}: Level ${item.currentLevel} → ${item.promotedLevel ?: "—"}", Modifier.weight(1f))
+                        TextButton(onClick = { editingPromotionIndex = indexed.index }) { Text("Edit") }
+                    }
+                }
+            }
+            TextButton(onClick = { editingPromotionIndex = null }) { Text("Add another Promotion / MACP") }
+        }
         PromotionMacpFromConversion(
-            currentLevel = current.level,
-            currentPay = current.pay,
-            knownDni = current.dni,
+            currentLevel = promotion?.currentLevel ?: current.level,
+            currentPay = promotion?.currentPay ?: current.pay,
+            knownDni = promotion?.knownDniMillis ?: current.dni,
             restoredSnapshot = promotion,
+            sequenceBase = sequence + if (editingPromotionIndex == null) 1 else 0,
             onHistorySnapshot = { accepted ->
-                promotion = accepted?.copy(sequence = accepted.sequence.takeIf { it > 0 } ?: sequence + 1)
+                val fallback = sequence + 1
+                promotions = replaceSeventhPromotion(promotions, editingPromotionIndex, accepted, fallback)
+                if (accepted != null && editingPromotionIndex == null) editingPromotionIndex = promotions.lastIndex
             }
         )
         SaveCompleteJourneyButton(
@@ -83,11 +106,23 @@ fun SeventhCpcHistoryJourneyScreen(
                     increments = increments.mapIndexed { index, step ->
                         CpcIncrementSnapshot(index + 1, step.pay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1)
                     },
-                    promotions = listOfNotNull(promotion)
+                    promotions = promotions
                 )
             ), sequenceIntegrity = sequenceIntegrity
         )
     }
+}
+
+internal fun replaceSeventhPromotion(
+    promotions: List<SeventhCpcPromotionSnapshot>,
+    editedIndex: Int?,
+    accepted: SeventhCpcPromotionSnapshot?,
+    fallbackSequence: Int
+): List<SeventhCpcPromotionSnapshot> {
+    if (accepted == null) return promotions
+    val index = editedIndex?.takeIf { it in promotions.indices } ?: -1
+    val saved = accepted.copy(sequence = accepted.sequence.takeIf { it > 0 } ?: if (index >= 0) promotions[index].sequence else fallbackSequence)
+    return if (index < 0) promotions + saved else promotions.toMutableList().also { it[index] = saved }
 }
 
 internal data class SeventhHistoryPosition(val level: String, val pay: Int, val dni: Long)

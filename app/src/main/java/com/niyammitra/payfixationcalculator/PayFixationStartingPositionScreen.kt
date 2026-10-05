@@ -25,7 +25,8 @@ data class PayFixationStartingPosition(
     val payBand: String?,
     val gradePay: Int?,
     val payInPayBand: Int?,
-    val dniMillis: Long?
+    val dniMillis: Long?,
+    val dniText: String
 )
 
 @Composable
@@ -33,6 +34,7 @@ fun PayFixationStartingPositionScreen(
     commission: PayCommission,
     startDateMillis: Long,
     onBack: () -> Unit,
+    onHome: () -> Unit,
     onContinue: (PayFixationStartingPosition) -> Unit
 ) {
     var scaleOrLevel by remember { mutableStateOf("") }
@@ -44,6 +46,11 @@ fun PayFixationStartingPositionScreen(
 
     BackHandler(onBack = onBack)
 
+    val seventhLevel = scaleOrLevel.removePrefix("Level ").trim()
+    val seventhPay = basicPay.toIntOrNull()
+    val seventhMatrix = PayMatrixSelection.forCategory(EmployeeCategory.ORDINARY)
+    val seventhDni = parseStartingPositionDate(dni)
+
     val canContinue = when (commission) {
         PayCommission.FOURTH, PayCommission.FIFTH ->
             scaleOrLevel.isNotBlank() && basicPay.toIntOrNull() != null && dni.isNotBlank()
@@ -51,7 +58,8 @@ fun PayFixationStartingPositionScreen(
             payBand.isNotBlank() && gradePay.toIntOrNull() != null &&
                 payInPayBand.toIntOrNull() != null && dni.isNotBlank()
         PayCommission.SEVENTH ->
-            scaleOrLevel.isNotBlank() && basicPay.toIntOrNull() != null && dni.isNotBlank()
+            seventhLevel in seventhMatrix.levels && seventhPay != null && seventhPay in seventhMatrix.getPayStages(seventhLevel) &&
+                seventhDni != null && seventhDni >= startDateMillis
     }
 
     Column(Modifier.fillMaxSize().background(Color(0xFFF7FAFC))) {
@@ -63,6 +71,7 @@ fun PayFixationStartingPositionScreen(
                 IconButton(onClick = onBack) {
                     Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
                 }
+                TextButton(onClick = onHome) { Text("Home", color = Color.White, fontWeight = FontWeight.Bold) }
                 Column(Modifier.weight(1f).padding(start = 4.dp)) {
                     Text("Pay Fixation Calculator", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                     Text("NiyamMitra", color = Color.White.copy(alpha = 0.88f), fontSize = 12.sp)
@@ -142,7 +151,7 @@ fun PayFixationStartingPositionScreen(
                 value = dni, onValueChange = { dni = it },
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Date of Next Increment (DNI)") },
-                placeholder = { Text("Enter DNI") }, singleLine = true
+                placeholder = { Text("dd/MM/yyyy") }, singleLine = true
             )
 
             Button(
@@ -153,7 +162,8 @@ fun PayFixationStartingPositionScreen(
                         payBand = payBand.trim().ifBlank { null },
                         gradePay = gradePay.toIntOrNull(),
                         payInPayBand = payInPayBand.toIntOrNull(),
-                        dniMillis = null
+                        dniMillis = parseStartingPositionDate(dni),
+                        dniText = dni.trim()
                     ))
                 },
                 enabled = canContinue, modifier = Modifier.fillMaxWidth(),
@@ -161,8 +171,24 @@ fun PayFixationStartingPositionScreen(
             ) {
                 Text("Continue", fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
+            if (commission == PayCommission.SEVENTH && scaleOrLevel.isNotBlank() && basicPay.isNotBlank() && dni.isNotBlank() && !canContinue) {
+                Text("Enter a valid 7th CPC level, a basic pay cell from that level, and a DNI on or after the starting date.", color = Color(0xFFC62828), fontSize = 12.sp)
+            }
             Spacer(Modifier.height(20.dp))
         }
+    }
+}
+
+private fun parseStartingPositionDate(value: String): Long? {
+    val normalized = value.trim()
+    val patterns = listOf("dd/MM/yyyy", "dd-MM-yyyy", "ddMMyyyy")
+    return patterns.firstNotNullOfOrNull { pattern ->
+        val formatter = java.text.SimpleDateFormat(pattern, java.util.Locale.ROOT).apply {
+            isLenient = false
+            timeZone = java.util.TimeZone.getTimeZone("UTC")
+        }
+        val position = java.text.ParsePosition(0)
+        formatter.parse(normalized, position)?.time?.takeIf { position.index == normalized.length }
     }
 }
 

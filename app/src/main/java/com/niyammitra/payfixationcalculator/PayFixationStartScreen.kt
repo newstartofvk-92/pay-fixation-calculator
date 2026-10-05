@@ -96,9 +96,11 @@ private fun formatStartDate(dateMillis: Long): String {
 @Composable
 fun PayFixationStartDateScreen(
     onBack: () -> Unit,
+    onHome: () -> Unit,
+    initialStartDateMillis: Long? = null,
     onContinue: (startDateMillis: Long, commission: PayCommission) -> Unit
 ) {
-    var selectedDate by remember { mutableStateOf<Long?>(null) }
+    var selectedDate by remember(initialStartDateMillis) { mutableStateOf(initialStartDateMillis) }
     var showDatePicker by remember { mutableStateOf(false) }
 
     BackHandler(onBack = onBack)
@@ -127,6 +129,7 @@ fun PayFixationStartDateScreen(
                         tint = Color.White
                     )
                 }
+                TextButton(onClick = onHome) { Text("Home", color = Color.White, fontWeight = FontWeight.Bold) }
                 Column(Modifier.weight(1f).padding(start = 4.dp)) {
                     Text(
                         "Pay Fixation Calculator",

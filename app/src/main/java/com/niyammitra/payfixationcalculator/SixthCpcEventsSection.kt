@@ -101,7 +101,7 @@ fun SixthCpcEventsSection(
     latestAllowedEventDate: Long? = null,
     initialEventChains: List<SixthCpcEventChain> = emptyList(),
     initialSequence: Int = 0,
-    onContinueToSeventh: ((String, Int, Int) -> Unit)? = null,
+    onContinueToSeventh: ((String, Int, Int, Long) -> Unit)? = null,
     onLatestStateChange: ((String, Int, Int, Long) -> Unit)? = null,
     onEventsStateChange: ((Boolean) -> Unit)? = null,
     onJourneyLinesChange: ((List<String>) -> Unit)? = null,
@@ -188,7 +188,7 @@ fun SixthCpcEventsSection(
 
         if (events.isEmpty()) Button(onClick = { showForm = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(12.dp)) { Text("Add Event", fontWeight = FontWeight.Bold) }
         if (latest != null && latestDate != null && latestDate >= july2015Date() && onContinueToSeventh != null) {
-            Button(onClick = { onContinueToSeventh(payBand, gradePay, payInBand) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(12.dp)) { Text("Continue to 7th CPC", fontWeight = FontWeight.Bold) }
+            Button(onClick = { onContinueToSeventh(payBand, gradePay, payInBand, latestDate) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(12.dp)) { Text("Continue to 7th CPC", fontWeight = FontWeight.Bold) }
         }
 
         if (showForm) {
