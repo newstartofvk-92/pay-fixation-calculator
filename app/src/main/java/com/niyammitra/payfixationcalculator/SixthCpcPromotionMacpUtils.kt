@@ -108,7 +108,11 @@ fun calculateSixthCpcPromotionOrMacp(
         newGradePay = effectiveTargetGradePay,
         newPayBand = targetBand.title,
         revisedBasicPay = newPayInBand + effectiveTargetGradePay,
-        nextIncrementDate = if (fixationOption == SixthCpcFixationOption.FROM_DNI) addSixthYears(annualIncrementDate, 1) else nextSixthCpcIncrementDate(eventDate),
+        nextIncrementDate = if (fixationOption == SixthCpcFixationOption.FROM_DNI) {
+            addSixthYears(annualIncrementDate, 1)
+        } else {
+            nextSixthCpcPromotionIncrementDate(eventDate)
+        },
         ruleBasis = basis
     )
 }
@@ -146,6 +150,24 @@ private fun nextSixthCpcIncrementDate(eventDate: Long): Long {
     val year = calendar.get(java.util.Calendar.YEAR)
     val july = java.util.Calendar.getInstance().apply { clear(); set(year, java.util.Calendar.JULY, 1, 0, 0, 0) }
     return if (eventDate <= july.timeInMillis) july.timeInMillis else addSixthYears(july.timeInMillis, 1)
+}
+
+private fun nextSixthCpcPromotionIncrementDate(eventDate: Long): Long {
+    val event = java.util.Calendar.getInstance().apply { timeInMillis = eventDate }
+    val year = event.get(java.util.Calendar.YEAR)
+    val month = event.get(java.util.Calendar.MONTH)
+    val day = event.get(java.util.Calendar.DAY_OF_MONTH)
+    // Clarification 2(b): 02 January–30 June receives the next July in the following year.
+    // 01 January is within the 02 July–01 January window; 01 July retains the existing
+    // uniform annual increment date for a promotion effective on that date.
+    val incrementYear = if (
+        (month == java.util.Calendar.JANUARY && day == 1) ||
+        (month == java.util.Calendar.JULY && day == 1)
+    ) year else year + 1
+    return java.util.Calendar.getInstance().apply {
+        clear()
+        set(incrementYear, java.util.Calendar.JULY, 1, 0, 0, 0)
+    }.timeInMillis
 }
 
 private fun addSixthYears(date: Long, years: Int): Long = java.util.Calendar.getInstance().apply {
