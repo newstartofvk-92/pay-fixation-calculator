@@ -29,20 +29,35 @@ data class PayFixationStartingPosition(
     val dniText: String
 )
 
+internal fun seventhSnapshotFromStartingPosition(
+    startDateMillis: Long,
+    position: PayFixationStartingPosition
+): SeventhCpcJourneySnapshot? {
+    val basicPay = position.basicPay ?: return null
+    val dni = position.dniMillis ?: return null
+    return SeventhCpcJourneySnapshot(
+        startingLevel = position.scaleOrLevel.removePrefix("Level ").trim(),
+        startingBasicPay = basicPay,
+        conversionDateMillis = startDateMillis,
+        startingDniMillis = dni
+    )
+}
+
 @Composable
 fun PayFixationStartingPositionScreen(
     commission: PayCommission,
     startDateMillis: Long,
+    initialPosition: PayFixationStartingPosition? = null,
     onBack: () -> Unit,
     onHome: () -> Unit,
     onContinue: (PayFixationStartingPosition) -> Unit
 ) {
-    var scaleOrLevel by remember { mutableStateOf("") }
-    var basicPay by remember { mutableStateOf("") }
-    var payBand by remember { mutableStateOf("") }
-    var gradePay by remember { mutableStateOf("") }
-    var payInPayBand by remember { mutableStateOf("") }
-    var dni by remember { mutableStateOf("") }
+    var scaleOrLevel by remember(initialPosition) { mutableStateOf(initialPosition?.scaleOrLevel.orEmpty()) }
+    var basicPay by remember(initialPosition) { mutableStateOf(initialPosition?.basicPay?.toString().orEmpty()) }
+    var payBand by remember(initialPosition) { mutableStateOf(initialPosition?.payBand.orEmpty()) }
+    var gradePay by remember(initialPosition) { mutableStateOf(initialPosition?.gradePay?.toString().orEmpty()) }
+    var payInPayBand by remember(initialPosition) { mutableStateOf(initialPosition?.payInPayBand?.toString().orEmpty()) }
+    var dni by remember(initialPosition) { mutableStateOf(initialPosition?.dniText.orEmpty()) }
 
     BackHandler(onBack = onBack)
 

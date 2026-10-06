@@ -84,11 +84,16 @@ fun V2AppScreen() {
     var restoreStandaloneDesignation by remember { mutableStateOf<String?>(null) }
     var restoreJourney by remember { mutableStateOf<CompleteJourneySnapshot?>(null) }
     var showStartDateScreen by remember { mutableStateOf(false) }
+    var showStartingPositionScreen by remember { mutableStateOf(false) }
+    var directSeventhPosition by remember { mutableStateOf<PayFixationStartingPosition?>(null) }
+    var directSeventhSnapshot by remember { mutableStateOf<SeventhCpcJourneySnapshot?>(null) }
     var selectedStartDate by remember { mutableStateOf<Long?>(null) }
     var detectedCommission by remember { mutableStateOf<PayCommission?>(null) }
 
     fun restoreCpcRecord(record: CpcHistoryRecord) {
         restoreVersion++
+        directSeventhPosition = null
+        directSeventhSnapshot = null
         showCalculator = false
         showHistoryHub = false
         showStartDateScreen = false
@@ -121,7 +126,10 @@ fun V2AppScreen() {
                     CpcHistoryRestoreDestination.FOURTH_JOURNEY -> showFourthToFifth = true
                     CpcHistoryRestoreDestination.FIFTH_JOURNEY -> showFifthToSixth = true
                     CpcHistoryRestoreDestination.SIXTH_JOURNEY -> showSixthToSeventh = true
-                    CpcHistoryRestoreDestination.SEVENTH_JOURNEY -> showCalculator = true
+                    CpcHistoryRestoreDestination.SEVENTH_JOURNEY -> {
+                        directSeventhSnapshot = snapshot.seventh
+                        showSixthToSeventh = snapshot.seventh != null
+                    }
                     CpcHistoryRestoreDestination.CPC_CONVERSION_ONLY -> Unit
                 }
             }
@@ -184,8 +192,10 @@ fun V2AppScreen() {
                 detectedCommission = null
                 restoreJourney = null
                 sixthContinuation = null
+                directSeventhPosition = null
+                directSeventhSnapshot = null
             },
-            onHome = { showStartDateScreen = false; selectedMode = null; selectedStartDate = null; detectedCommission = null; sixthContinuation = null },
+            onHome = { showStartDateScreen = false; selectedMode = null; selectedStartDate = null; detectedCommission = null; sixthContinuation = null; directSeventhPosition = null; directSeventhSnapshot = null },
             initialStartDateMillis = selectedStartDate,
             onContinue = { date, commission ->
                 selectedStartDate = date
@@ -196,7 +206,37 @@ fun V2AppScreen() {
                     PayCommission.FOURTH -> showFourthToFifth = true
                     PayCommission.FIFTH -> showFifthToSixth = true
                     PayCommission.SIXTH -> showSixthToSeventh = true
-                    PayCommission.SEVENTH -> showCalculator = true
+                    PayCommission.SEVENTH -> {
+                        directSeventhPosition = null
+                        directSeventhSnapshot = null
+                        showStartingPositionScreen = true
+                    }
+                }
+            }
+        )
+        return
+    }
+    if (showStartingPositionScreen) {
+        val startDate = selectedStartDate ?: return
+        PayFixationStartingPositionScreen(
+            commission = PayCommission.SEVENTH,
+            startDateMillis = startDate,
+            initialPosition = directSeventhPosition,
+            onBack = { showStartingPositionScreen = false; showStartDateScreen = true },
+            onHome = {
+                showStartingPositionScreen = false
+                selectedMode = null
+                selectedStartDate = null
+                detectedCommission = null
+                directSeventhPosition = null
+                directSeventhSnapshot = null
+            },
+            onContinue = { position ->
+                directSeventhPosition = position
+                directSeventhSnapshot = seventhSnapshotFromStartingPosition(startDate, position)
+                if (directSeventhSnapshot != null) {
+                    showStartingPositionScreen = false
+                    showSixthToSeventh = true
                 }
             }
         )
@@ -232,12 +272,15 @@ fun V2AppScreen() {
         val restoredSixth = restoreJourney?.sixth ?: restoreJourney?.fifth?.sixthContinuation
         key(restoreVersion) { SixthToSeventhCpcScreen(onBack = {
             showSixthToSeventh = false
+            if (directSeventhSnapshot != null) {
+                if (directSeventhPosition != null) showStartingPositionScreen = true else showStartDateScreen = true
+            }
             sixthContinuation?.let { context ->
                 restoreJourney = context.journey
                 if (context.journey.startingCpc == CpcHistoryStage.FOURTH) showFourthToFifth = true else showFifthToSixth = true
             }
             sixthContinuation = null
-        }, initialPayBand = sixthContinuation?.payBandId ?: restoredSixth?.payBandId ?: carriedPayBand, initialGradePay = sixthContinuation?.gradePay ?: restoredSixth?.gradePay ?: carriedGradePay, initialPayInPayBand = sixthContinuation?.payInPayBand ?: restoredSixth?.startingPayInPayBand ?: carriedPayInPayBand, initialStartDate = sixthContinuation?.effectiveDateMillis ?: restoredSixth?.startingDateMillis ?: selectedStartDate, restoredSnapshot = if (sixthContinuation != null) null else restoredSixth, continuationContext = sixthContinuation, sequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL, onHistory = openCpcHistoryOverlay) }
+        }, initialPayBand = sixthContinuation?.payBandId ?: restoredSixth?.payBandId ?: carriedPayBand, initialGradePay = sixthContinuation?.gradePay ?: restoredSixth?.gradePay ?: carriedGradePay, initialPayInPayBand = sixthContinuation?.payInPayBand ?: restoredSixth?.startingPayInPayBand ?: carriedPayInPayBand, initialStartDate = sixthContinuation?.effectiveDateMillis ?: restoredSixth?.startingDateMillis ?: selectedStartDate, restoredSnapshot = if (sixthContinuation != null) null else restoredSixth, continuationContext = sixthContinuation, initialSeventhSnapshot = directSeventhSnapshot, sequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL, onHistory = openCpcHistoryOverlay) }
         if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord)
         return
     }
@@ -252,7 +295,7 @@ fun V2AppScreen() {
 
     when (selectedMode) {
         null -> PayFixationModeSelectionScreen(
-            onSelected = { selectedMode = it; restoreJourney = null; restoreStandalone = null; restoreStandaloneId = null; restoreStandaloneOfficialName = null; restoreStandaloneDesignation = null; sixthContinuation = null; selectedStartDate = null; detectedCommission = null },
+            onSelected = { selectedMode = it; restoreJourney = null; restoreStandalone = null; restoreStandaloneId = null; restoreStandaloneOfficialName = null; restoreStandaloneDesignation = null; sixthContinuation = null; selectedStartDate = null; detectedCommission = null; directSeventhPosition = null; directSeventhSnapshot = null },
             onHistory = { showHistoryHub = true },
             onCpcHistory = { cpcHistory = CpcHistoryStore.getAll(context); showCpcHistory = true },
             onLegacyCalculator = { selectedMode = null; showCalculator = true },
