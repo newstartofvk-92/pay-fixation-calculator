@@ -5,12 +5,30 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import java.util.Calendar
 
 class DirectSeventhCpcJourneyTest {
     private fun date(year: Int, month: Int, day: Int): Long =
         Calendar.getInstance().apply { clear(); set(year, month, day) }.timeInMillis
+
+    @Test
+    fun directStartingPositionSelectionsUseOnlyExistingValidMatrixCellsAndDniOptions() {
+        val matrix = PayMatrixSelection.forCategory(EmployeeCategory.ORDINARY)
+        val levelSixCells = validStartingSeventhPayCells("6")
+        val startDate = date(2016, Calendar.JANUARY, 1)
+        val dniOptions = validStartingSeventhDniOptions(startDate)
+
+        assertTrue(matrix.levels.contains("6"))
+        assertTrue(levelSixCells.contains(35_400))
+        assertFalse(levelSixCells.contains(35_500))
+        assertEquals(35_400, validInitialStartingSeventhBasicPay("6", 35_400))
+        assertNull(validInitialStartingSeventhBasicPay("6", 35_500))
+        assertTrue(validStartingSeventhPayCells("not-a-level").isEmpty())
+        assertEquals(getPayFixationDniOptions(startDate).filter { it >= startDate }.distinct().sorted(), dniOptions)
+        assertTrue(dniOptions.all { it >= startDate })
+    }
 
     @Test
     fun directStartingPositionRetainsSuppliedDateLevelBasicPayAndDni() {
