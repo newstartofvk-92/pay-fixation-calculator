@@ -35,7 +35,8 @@ fun FifthToSixthCpcScreen(
     initialDni: Long? = null,
     restoredSnapshot: FifthCpcJourneySnapshot? = null,
     sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL,
-    onHistory: (() -> Unit)? = null
+    onHistory: (() -> Unit)? = null,
+    onJourneySnapshotChange: ((CompleteJourneySnapshot) -> Unit)? = null
 ) {
     BackHandler(onBack = onBack)
 
@@ -61,22 +62,28 @@ fun FifthToSixthCpcScreen(
         selectedDni != null &&
         selectedDni!! >= startDate &&
         selectedDni!! <= endDate
+    val liveJourneySnapshot = if (validStartingPosition && startDate != null && selectedScale != null && basicPay != null) {
+        CompleteJourneySnapshot(
+            startingCpc = CpcHistoryStage.FIFTH,
+            startingDateMillis = startDate,
+            fifth = historySnapshot ?: FifthCpcJourneySnapshot(startDate, selectedScale!!.title, basicPay, selectedDni),
+            sequenceIntegrity = sequenceIntegrity
+        )
+    } else null
+    LaunchedEffect(liveJourneySnapshot) {
+        liveJourneySnapshot?.let { onJourneySnapshotChange?.invoke(it) }
+    }
 
-    Column(Modifier.fillMaxSize().background(FiveSixBackground)) {
-        Surface(Modifier.fillMaxWidth(), color = FiveSixHeaderBlue, shadowElevation = 3.dp) {
-            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack) { Text("‹ Back", color = Color.White, fontWeight = FontWeight.Bold) }
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("5th CPC Pay Journey", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Historical Pay Progression", color = Color.White.copy(alpha = .88f), fontSize = 13.sp)
-                }
-                onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } }
-            }
-        }
+    Column(Modifier.fillMaxSize().imePadding().background(FiveSixBackground)) {
+        PayFixationAppHeader(
+            title = "5th CPC Pay Journey",
+            subtitle = "Historical Pay Progression",
+            onBack = onBack,
+            actions = { onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } } }
+        )
 
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {

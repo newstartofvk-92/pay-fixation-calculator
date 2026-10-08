@@ -193,40 +193,22 @@ fun PayFixationCalculatorScreen(
         calculatePayFixation(currentLevel!!, currentPay!!, promotedLevel!!, promotionDate, dniDate, employeeCategory)
     } else null
 
-    Column(Modifier.fillMaxSize().background(NiyamBackground)) {
-        Surface(modifier = Modifier.fillMaxWidth(), color = NiyamHeaderBlue, shadowElevation = 3.dp) {
-            Column(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        androidx.compose.material3.TextButton(onClick = onBack, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("‹ Back", color = Color.White, fontWeight = FontWeight.Bold) }
-                        androidx.compose.material3.TextButton(onClick = onHome, contentPadding = PaddingValues(horizontal = 8.dp)) { Text("Home", color = Color.White, fontWeight = FontWeight.Bold) }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable { showHistoryHub = true }) {
-                            Icon(imageVector = Icons.Default.History, contentDescription = "History", modifier = Modifier.size(24.dp), tint = Color.White)
-                            Text("History", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Box(modifier = Modifier.padding(horizontal = 8.dp).height(34.dp).width(1.dp).background(Color.White.copy(alpha = 0.35f)))
-                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(52.dp).clickable { showAboutDialog = true }) {
-                            Icon(imageVector = Icons.Default.Info, contentDescription = "About", modifier = Modifier.size(24.dp), tint = Color.White)
-                            Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-                Row(modifier = Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(48.dp).background(Color.White, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
-                        Text("NM", color = NiyamHeaderBlue, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Pay Fixation Calculator", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                        Text("NiyamMitra", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                    }
-                }
+    Column(Modifier.fillMaxSize().imePadding().background(NiyamBackground)) {
+        PayFixationAppHeader(
+            title = "Pay Fixation Calculator",
+            subtitle = "NiyamMitra",
+            onBack = onBack,
+            onHome = onHome,
+            branded = true,
+            actions = {
+                PayFixationHeaderIconAction("History", Icons.Default.History) { showHistoryHub = true }
+                PayFixationHeaderIconAction("About", Icons.Default.Info) { showAboutDialog = true }
             }
-        }
+        )
 
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
+            .then(if (BillingManager.isPremium) Modifier.navigationBarsPadding() else Modifier)
+            .padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             if (!BillingManager.isPremium) {
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(Color(0xFFEAF5FC))) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -508,15 +490,13 @@ private fun AdFreePurchaseDialog(context: android.content.Context, onClose: () -
 @Composable
 fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit, onDelete: (Long) -> Unit, onClear: () -> Unit, onOpen: (CalculationHistory) -> Unit, onAbout: () -> Unit) {
     Column(Modifier.fillMaxSize().background(NiyamBackground)) {
-        Surface(modifier = Modifier.fillMaxWidth(), color = NiyamHeaderBlue, shadowElevation = 3.dp) {
-            Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onBack)) { Text("‹", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold); Text("Back", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                Spacer(Modifier.width(16.dp))
-                Column(Modifier.weight(1f)) { Text("Calculation History", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold); Text("Saved calculations", color = Color.White.copy(alpha = 0.88f), fontSize = 13.sp, fontWeight = FontWeight.Medium) }
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onAbout)) { Text("ⓘ", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold); Text("About", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-            }
-        }
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        PayFixationAppHeader(
+            title = "Calculation History",
+            subtitle = "Saved calculations",
+            onBack = onBack,
+            actions = { PayFixationHeaderIconAction("About", Icons.Default.Info, onAbout) }
+        )
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (history.isNotEmpty()) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { TextButton(onClick = onClear) { Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold) } }
             if (history.isEmpty()) {
                 Box(Modifier.fillMaxSize().padding(top = 80.dp), contentAlignment = Alignment.Center) { Text("No saved calculations yet.", color = NiyamTextSecondary, fontSize = 16.sp) }

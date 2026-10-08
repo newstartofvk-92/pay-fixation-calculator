@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
@@ -34,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -87,6 +90,15 @@ internal fun directSeventhCompleteJourneySnapshot(
     sequenceIntegrity = sequenceIntegrity
 )
 
+internal fun replaceSixthInCompleteJourney(
+    journey: CompleteJourneySnapshot,
+    sixth: SixthCpcJourneySnapshot
+): CompleteJourneySnapshot = when {
+    journey.sixth != null -> journey.copy(sixth = sixth)
+    journey.fifth != null -> journey.copy(fifth = journey.fifth.copy(sixthContinuation = sixth))
+    else -> journey.copy(sixth = sixth)
+}
+
 internal fun convertedSeventhStartingSnapshot(calculation: SixthToSeventhResult): SeventhCpcJourneySnapshot =
     SeventhCpcJourneySnapshot(
         startingLevel = calculation.level,
@@ -108,8 +120,10 @@ fun SixthToSeventhCpcScreen(
     restoredSnapshot: SixthCpcJourneySnapshot? = null,
     continuationContext: SixthCpcContinuationContext? = null,
     initialSeventhSnapshot: SeventhCpcJourneySnapshot? = null,
+    initialCompleteJourneySnapshot: CompleteJourneySnapshot? = null,
     sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL,
-    onHistory: (() -> Unit)? = null
+    onHistory: (() -> Unit)? = null,
+    onJourneySnapshotChange: ((CompleteJourneySnapshot) -> Unit)? = null
 ) {
     BackHandler(onBack = onBack)
     val initialBand = initialPayBand?.let { bandPrefix ->
@@ -176,20 +190,15 @@ fun SixthToSeventhCpcScreen(
     } else null
     val seventhStartingSnapshot = initialSeventhSnapshot ?: result?.let(::convertedSeventhStartingSnapshot)
 
-    Column(Modifier.fillMaxSize().background(SixSevenBackground)) {
-        Surface(Modifier.fillMaxWidth(), color = SixSevenHeaderBlue, shadowElevation = 3.dp) {
-            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onBack)) { Text("‹", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold); Text("Back", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                Spacer(Modifier.width(16.dp))
-                 Column(Modifier.weight(1f)) {
-                     Text(if (initialSeventhSnapshot == null) "6th CPC → 7th CPC" else "Complete Pay Fixation Journey — 7th CPC", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                     Text(if (initialSeventhSnapshot == null) "Pay Conversion" else "7th CPC Starting Position", color = Color.White.copy(alpha = .88f), fontSize = 13.sp)
-                 }
-                onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } }
-            }
-        }
+    Column(Modifier.fillMaxSize().imePadding().background(SixSevenBackground)) {
+        PayFixationAppHeader(
+            title = if (initialSeventhSnapshot == null) "6th CPC → 7th CPC" else "Complete Pay Fixation Journey — 7th CPC",
+            subtitle = if (initialSeventhSnapshot == null) "Pay Conversion" else "7th CPC Starting Position",
+            onBack = onBack,
+            actions = { onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } } }
+        )
 
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (initialSeventhSnapshot == null) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -390,9 +399,15 @@ fun SixthToSeventhCpcScreen(
                             eventChains = acceptedEventChains,
                             seventhContinuation = savedSeventh
                         )
-                        continuationContext?.let { context -> appendSixthContinuation(context.journey, sixthSnapshot) }
-                            ?: CompleteJourneySnapshot(CpcHistoryStage.SIXTH, startDate!!, sixth = sixthSnapshot)
+                        when {
+                            initialCompleteJourneySnapshot != null -> replaceSixthInCompleteJourney(initialCompleteJourneySnapshot, sixthSnapshot)
+                            continuationContext != null -> appendSixthContinuation(continuationContext.journey, sixthSnapshot)
+                            else -> CompleteJourneySnapshot(CpcHistoryStage.SIXTH, startDate!!, sixth = sixthSnapshot)
+                        }
                     }
+                }
+                LaunchedEffect(completeSnapshot) {
+                    completeSnapshot?.let { onJourneySnapshotChange?.invoke(it) }
                 }
                 completeSnapshot?.let { SaveCompleteJourneyButton(it, sequenceIntegrity = sequenceIntegrity) }
 

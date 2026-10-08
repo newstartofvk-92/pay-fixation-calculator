@@ -20,7 +20,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -93,16 +97,12 @@ fun CpcHistoryScreen(
         }
     }
     Column(Modifier.fillMaxSize()) {
-        Surface(color = Color(0xFF1976B8), modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = onBack) { Text("‹ Back", color = Color.White) }
-                Text("CPC Journey History", color = Color.White, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)
-                Spacer(Modifier.padding(4.dp))
-            }
-        }
+        PayFixationAppHeader("CPC Journey History", onBack = onBack)
         if (records.isEmpty()) {
-            Text("No CPC history saved yet.", Modifier.padding(24.dp), color = Color(0xFF5B6B7A))
-        } else LazyColumn(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            androidx.compose.foundation.layout.Box(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                Text("No CPC history saved yet.", Modifier.padding(24.dp), color = Color(0xFF5B6B7A))
+            }
+        } else LazyColumn(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(records, key = { it.uniqueId }) { record ->
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -128,7 +128,10 @@ fun CpcHistoryScreen(
             onDismissRequest = { selected = null },
             title = { Text("Pay Journey Report") },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    Modifier.fillMaxWidth().heightIn(max = 480.dp).verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(report?.title ?: "Saved CPC conversion")
                     report?.chronologyNote?.let { Text(it, color = Color(0xFF8A5A00), fontSize = 12.sp) }
                     val allReportRows = report?.sections?.flatMap { it.rows }.orEmpty()

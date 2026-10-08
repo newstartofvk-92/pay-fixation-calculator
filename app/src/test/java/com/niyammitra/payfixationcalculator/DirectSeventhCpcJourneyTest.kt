@@ -55,6 +55,73 @@ class DirectSeventhCpcJourneyTest {
     }
 
     @Test
+    fun directJourneyReentryRetainsLiveEventsWhenStartingPositionIsUnchanged() {
+        val startDate = date(2020, Calendar.JANUARY, 1)
+        val dni = date(2020, Calendar.JULY, 1)
+        val base = SeventhCpcJourneySnapshot("6", 35_400, startDate, startingDniMillis = dni)
+        val live = base.copy(
+            increments = listOf(CpcIncrementSnapshot(1, 36_500, dni, sequence = 1)),
+            promotions = listOf(SeventhCpcPromotionSnapshot(
+                currentLevel = "6", currentPay = 36_500, knownDniMillis = date(2021, Calendar.JULY, 1),
+                promotedLevel = "7", promotionDateMillis = date(2021, Calendar.MAY, 1),
+                resultingPay = 44_900, resultingDniMillis = date(2022, Calendar.JULY, 1), sequence = 2
+            ))
+        )
+        val position = positionFromSeventhJourney(live)
+
+        val resumed = preserveSeventhJourneyForStartingPosition(live, startDate, position)
+        val changed = preserveSeventhJourneyForStartingPosition(live, startDate, position.copy(basicPay = 36_500))
+
+        assertEquals(live, resumed)
+        assertTrue(changed!!.increments.isEmpty())
+        assertTrue(changed.promotions.isEmpty())
+    }
+
+    @Test
+    fun updatingSixthContinuationReplacesItsNestedSnapshotWithoutLosingJourneyOwner() {
+        val startingDate = date(1995, Calendar.JANUARY, 1)
+        val baseFifth = FifthCpcJourneySnapshot(date(1996, Calendar.JANUARY, 1), "scale", 5_000, date(1996, Calendar.JULY, 1))
+        val owner = CompleteJourneySnapshot(CpcHistoryStage.FOURTH, startingDate, fifth = baseFifth)
+        val updatedSixth = SixthCpcJourneySnapshot(
+            startingDateMillis = date(2006, Calendar.JANUARY, 1), payBandId = "PB-2", gradePay = 4_200,
+            startingPayInPayBand = 13_500,
+            increments = listOf(SixthCpcIncrementSnapshot(1, 13_910, 4_200, date(2006, Calendar.JULY, 1), sequence = 4))
+        )
+
+        val resumed = replaceSixthInCompleteJourney(owner, updatedSixth)
+
+        assertEquals(CpcHistoryStage.FOURTH, resumed.startingCpc)
+        assertEquals(startingDate, resumed.startingDateMillis)
+        assertEquals(baseFifth, resumed.fifth?.copy(sixthContinuation = null))
+        assertEquals(updatedSixth, resumed.fifth?.sixthContinuation)
+        assertNull(resumed.sixth)
+    }
+
+    @Test
+    fun latestSixthContinuationIsResumedOnlyWhenItsStartingInputsStillMatch() {
+        val owner = CompleteJourneySnapshot(
+            startingCpc = CpcHistoryStage.FOURTH,
+            startingDateMillis = date(1995, Calendar.JANUARY, 1),
+            fifth = FifthCpcJourneySnapshot(date(1996, Calendar.JANUARY, 1), "scale", 5_000, date(1996, Calendar.JULY, 1))
+        )
+        val effectiveDate = date(2006, Calendar.JANUARY, 1)
+        val latestSixth = SixthCpcJourneySnapshot(
+            startingDateMillis = effectiveDate,
+            payBandId = "PB-2",
+            gradePay = 4_200,
+            startingPayInPayBand = 13_910,
+            increments = listOf(SixthCpcIncrementSnapshot(1, 14_330, 4_200, date(2006, Calendar.JULY, 1), sequence = 4))
+        )
+        val live = owner.copy(fifth = owner.fifth!!.copy(sixthContinuation = latestSixth))
+
+        assertEquals(
+            live,
+            matchingSixthContinuation(live, owner, "PB-2", 4_200, 13_910, effectiveDate)
+        )
+        assertNull(matchingSixthContinuation(live, owner, "PB-2", 4_200, 13_500, effectiveDate))
+    }
+
+    @Test
     fun existingIncrementAndPromotionPositionLogicContinuesFromDirectBase() {
         val startDate = date(2022, Calendar.MARCH, 1)
         val dni = date(2022, Calendar.JULY, 1)

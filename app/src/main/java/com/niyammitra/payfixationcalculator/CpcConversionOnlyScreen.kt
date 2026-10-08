@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -129,22 +131,17 @@ fun CpcConversionOnlyScreen(
     val fifthPayValid = fifthPay != null && fifthPay > 0
     val sixthPayValid = sixthPay != null && sixthPay >= 0
 
-    Column(Modifier.fillMaxSize().background(CpcConvertBackground)) {
-        Surface(Modifier.fillMaxWidth(), color = Color(0xFF1976B8), shadowElevation = 3.dp) {
-            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 8.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack) { Text("‹ Back", color = Color.White, fontWeight = FontWeight.Bold) }
-                Spacer(Modifier.padding(horizontal = 4.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("CPC Conversion Only", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Standalone pay conversion", color = Color.White.copy(alpha = .88f), fontSize = 13.sp)
-                }
-                onHome?.let { TextButton(onClick = it) { Text("Home", color = Color.White, fontWeight = FontWeight.Bold) } }
-                onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } }
-            }
-        }
+    Column(Modifier.fillMaxSize().imePadding().background(CpcConvertBackground)) {
+        PayFixationAppHeader(
+            title = "CPC Conversion Only",
+            subtitle = "Standalone pay conversion",
+            onBack = onBack,
+            onHome = onHome,
+            actions = { onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } } }
+        )
 
         Column(
-            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Text("CPC Conversion", color = CpcConvertPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)

@@ -43,7 +43,8 @@ fun FourthToFifthCpcScreen(
     restoredSnapshot: FourthCpcJourneySnapshot? = null,
     restoredFifthSnapshot: FifthCpcJourneySnapshot? = null,
     sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL,
-    onHistory: (() -> Unit)? = null
+    onHistory: (() -> Unit)? = null,
+    onJourneySnapshotChange: ((CompleteJourneySnapshot) -> Unit)? = null
 ) {
     BackHandler(onBack = onBack)
     val restoredScale = remember(restoredSnapshot?.scaleId) { FourthToFifthCpcData.scales.firstOrNull { it.existingScale == restoredSnapshot?.scaleId } }
@@ -89,21 +90,37 @@ fun FourthToFifthCpcScreen(
         (currentIncrementDate == null || currentIncrementDate < fourthFiveConversionEndDate()) &&
         (currentIncrementDate != null || validNextIncrementDate != null) &&
         currentScale != null && calculateFourthCpcNextIncrement(currentPay, currentScale) != null
+    val liveJourneySnapshot = if (validStartingPosition && selectedScale != null && basicPay != null && payDate != null) {
+        CompleteJourneySnapshot(
+            startingCpc = CpcHistoryStage.FOURTH,
+            startingDateMillis = payDate,
+            fourth = FourthCpcJourneySnapshot(
+                scaleId = selectedScale!!.existingScale,
+                scaleTitle = selectedScale!!.grade,
+                startingBasicPay = basicPay,
+                payDateMillis = payDate,
+                nextIncrementDateMillis = parsedNextIncrementDate,
+                increments = incrementSteps.mapIndexed { index, step -> CpcIncrementSnapshot(index + 1, step.pay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
+                events = acceptedEvents,
+                conversionActivated = conversionActivated
+            ),
+            fifth = fifthHistorySnapshot,
+            sequenceIntegrity = sequenceIntegrity
+        )
+    } else null
+    LaunchedEffect(liveJourneySnapshot) {
+        liveJourneySnapshot?.let { onJourneySnapshotChange?.invoke(it) }
+    }
 
-    Column(Modifier.fillMaxSize().background(FourFiveBackground)) {
-        Surface(Modifier.fillMaxWidth(), color = FourFiveHeaderBlue, shadowElevation = 3.dp) {
-            Row(Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onBack) { Text("‹ Back", color = Color.White, fontWeight = FontWeight.Bold) }
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("4th CPC → 5th CPC", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Pay Revision", color = Color.White.copy(alpha = .88f), fontSize = 13.sp)
-                }
-                onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } }
-            }
-        }
+    Column(Modifier.fillMaxSize().imePadding().background(FourFiveBackground)) {
+        PayFixationAppHeader(
+            title = "4th CPC → 5th CPC",
+            subtitle = "Pay Revision",
+            onBack = onBack,
+            actions = { onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } } }
+        )
 
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("4th CPC Pay Details", color = FourFiveBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)

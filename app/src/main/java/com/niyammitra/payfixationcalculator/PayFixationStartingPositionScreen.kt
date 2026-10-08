@@ -110,25 +110,17 @@ fun PayFixationStartingPositionScreen(
                 seventhDni != null && seventhDni in seventhDniOptions
     }
 
-    Column(Modifier.fillMaxSize().background(Color(0xFFF7FAFC))) {
-        Surface(Modifier.fillMaxWidth(), color = Color(0xFF1976B8), shadowElevation = 3.dp) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
-                }
-                TextButton(onClick = onHome) { Text("Home", color = Color.White, fontWeight = FontWeight.Bold) }
-                Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                    Text("Pay Fixation Calculator", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("NiyamMitra", color = Color.White.copy(alpha = 0.88f), fontSize = 12.sp)
-                }
-            }
-        }
+    Column(Modifier.fillMaxSize().imePadding().background(Color(0xFFF7FAFC))) {
+        PayFixationAppHeader(
+            title = "Pay Fixation Calculator",
+            subtitle = "NiyamMitra",
+            onBack = onBack,
+            onHome = onHome,
+            branded = true
+        )
 
         Column(
-            Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+            Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).navigationBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
