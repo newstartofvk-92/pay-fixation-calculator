@@ -318,6 +318,82 @@ data class PayJourneyReport(
     val chronologyNote: String? = null
 )
 
+internal data class FifthCpcReportPositionResolution(
+    val incrementPositions: List<CpcPayPosition>,
+    val eventPositions: List<CpcPayPosition>,
+    val finalPosition: CpcPayPosition
+)
+
+private data class FifthCpcReportPositionEntry(
+    val dateMillis: Long,
+    val sequence: Int,
+    val index: Int,
+    val ordinal: Int,
+    val kind: CpcJourneyEventKind,
+    val pay: Int,
+    val scaleAfter: String?,
+    val incrementIndex: Int? = null,
+    val eventIndex: Int? = null
+)
+
+/** Resolves historical row scales by replaying the saved date/sequence order without recalculating pay. */
+internal fun resolveFifthCpcReportPositions(
+    snapshot: FifthCpcJourneySnapshot,
+    sequenceIntegrity: CpcSequenceIntegrity
+): FifthCpcReportPositionResolution {
+    val entries = buildList {
+        add(FifthCpcReportPositionEntry(snapshot.startingDateMillis, snapshot.sequence, 0, 0,
+            CpcJourneyEventKind.STARTING_POSITION, snapshot.startingBasicPay, snapshot.scaleId))
+        snapshot.increments.forEachIndexed { index, row ->
+            add(FifthCpcReportPositionEntry(row.dateMillis, row.sequence, row.order, index + 1,
+                CpcJourneyEventKind.ANNUAL_INCREMENT, row.pay, null, incrementIndex = index))
+        }
+        snapshot.events.forEachIndexed { index, row ->
+            add(FifthCpcReportPositionEntry(row.implementationDateMillis, row.sequence, row.order,
+                snapshot.increments.size + index + 1, row.eventType, row.resultingPay,
+                row.targetScaleId, eventIndex = index))
+        }
+        snapshot.omAdjustment?.let { adjustment ->
+            add(FifthCpcReportPositionEntry(adjustment.incrementDateMillis, Int.MIN_VALUE, 0,
+                Int.MIN_VALUE, CpcJourneyEventKind.OM_SPECIAL_INCREMENT, adjustment.adjustedBasicPay,
+                adjustment.scaleTitle))
+        }
+    }.sortedWith { left, right ->
+        val dateOrder = left.dateMillis.compareTo(right.dateMillis)
+        if (dateOrder != 0) dateOrder else when {
+            left.kind == CpcJourneyEventKind.STARTING_POSITION && right.kind != CpcJourneyEventKind.STARTING_POSITION -> -1
+            right.kind == CpcJourneyEventKind.STARTING_POSITION && left.kind != CpcJourneyEventKind.STARTING_POSITION -> 1
+            left.kind == CpcJourneyEventKind.OM_SPECIAL_INCREMENT && right.kind != CpcJourneyEventKind.OM_SPECIAL_INCREMENT -> -1
+            right.kind == CpcJourneyEventKind.OM_SPECIAL_INCREMENT && left.kind != CpcJourneyEventKind.OM_SPECIAL_INCREMENT -> 1
+            sequenceIntegrity == CpcSequenceIntegrity.ORIGINAL -> left.sequence.compareTo(right.sequence)
+                .takeIf { it != 0 } ?: left.ordinal.compareTo(right.ordinal)
+            left.kind != right.kind -> if (left.kind == CpcJourneyEventKind.ANNUAL_INCREMENT) 1 else -1
+            else -> left.sequence.compareTo(right.sequence).takeIf { it != 0 } ?: left.index.compareTo(right.index)
+        }
+    }
+
+    var activeScale = snapshot.scaleId
+    val incrementPositions = MutableList(snapshot.increments.size) {
+        CpcPayPosition(CpcHistoryStage.FIFTH, snapshot.startingBasicPay, activeScale, activeScale)
+    }
+    val eventPositions = MutableList(snapshot.events.size) {
+        CpcPayPosition(CpcHistoryStage.FIFTH, snapshot.startingBasicPay, activeScale, activeScale)
+    }
+    var finalPosition: CpcPayPosition? = null
+    entries.forEach { entry ->
+        entry.scaleAfter?.let { activeScale = it }
+        val position = CpcPayPosition(CpcHistoryStage.FIFTH, entry.pay, activeScale, activeScale)
+        entry.incrementIndex?.let { incrementPositions[it] = position }
+        entry.eventIndex?.let { eventPositions[it] = position }
+        finalPosition = position
+    }
+    return FifthCpcReportPositionResolution(
+        incrementPositions,
+        eventPositions,
+        finalPosition ?: CpcPayPosition(CpcHistoryStage.FIFTH, snapshot.startingBasicPay, snapshot.scaleId, snapshot.scaleId)
+    )
+}
+
 /** Reusable text/report model; renderers never recalculate pay. */
 object PayJourneyReportBuilder {
     fun build(record: CpcHistoryRecord): PayJourneyReport? {
@@ -338,18 +414,30 @@ object PayJourneyReportBuilder {
                 CpcPayPosition(CpcHistoryStage.FOURTH, lastEvent.resultingPay, lastEvent.targetScaleId, lastEvent.targetScaleId)
             else CpcPayPosition(CpcHistoryStage.FOURTH, lastIncrement?.pay ?: s.startingBasicPay, s.scaleId, s.scaleTitle)
         }
-        fun finalFifth(s: FifthCpcJourneySnapshot): CpcPayPosition {
-            val lastIncrement = s.increments.maxWithOrNull(compareBy<CpcIncrementSnapshot> { it.dateMillis }.thenBy { it.order })
-            val lastEvent = s.events.maxWithOrNull(compareBy<FifthCpcEventSnapshot> { it.implementationDateMillis }.thenBy { it.order })
-            val ordinaryPosition = if (lastEvent != null && (lastIncrement == null || lastEvent.implementationDateMillis > lastIncrement.dateMillis ||
-                    lastEvent.implementationDateMillis == lastIncrement.dateMillis && lastEvent.sequence >= lastIncrement.sequence))
-                CpcPayPosition(CpcHistoryStage.FIFTH, lastEvent.resultingPay, lastEvent.targetScaleId, lastEvent.targetScaleId)
-            else CpcPayPosition(CpcHistoryStage.FIFTH, lastIncrement?.pay ?: s.startingBasicPay, s.scaleId, s.scaleId)
-            val ordinaryDate = maxOf(lastIncrement?.dateMillis ?: Long.MIN_VALUE, lastEvent?.implementationDateMillis ?: Long.MIN_VALUE)
-            val adjustment = s.omAdjustment
-            return if (adjustment != null && adjustment.incrementDateMillis >= ordinaryDate) {
-                CpcPayPosition(CpcHistoryStage.FIFTH, adjustment.adjustedBasicPay, scaleId = adjustment.scaleTitle, scaleTitle = adjustment.scaleTitle)
-            } else ordinaryPosition
+        fun fifthPositions(s: FifthCpcJourneySnapshot) =
+            resolveFifthCpcReportPositions(s, snapshot.sequenceIntegrity)
+        fun finalFifth(s: FifthCpcJourneySnapshot): CpcPayPosition = fifthPositions(s).finalPosition
+        fun finalFifthDni(s: FifthCpcJourneySnapshot): Long? {
+            data class Candidate(val date: Long, val sequence: Int, val order: Int, val kind: CpcJourneyEventKind, val dni: Long?)
+            val candidates = buildList {
+                add(Candidate(s.startingDateMillis, s.sequence, 0, CpcJourneyEventKind.STARTING_POSITION, s.startingDniMillis))
+                s.increments.forEach { add(Candidate(it.dateMillis, it.sequence, it.order, CpcJourneyEventKind.ANNUAL_INCREMENT, addOneYear(it.dateMillis))) }
+                s.events.forEach { add(Candidate(it.implementationDateMillis, it.sequence, it.order, it.eventType, it.resultingDniMillis)) }
+                s.omAdjustment?.let { add(Candidate(it.incrementDateMillis, Int.MIN_VALUE, 0, CpcJourneyEventKind.OM_SPECIAL_INCREMENT, it.normalDniMillis)) }
+            }
+            return candidates.maxWithOrNull { left, right ->
+                val dateOrder = left.date.compareTo(right.date)
+                if (dateOrder != 0) dateOrder else when {
+                    left.kind == CpcJourneyEventKind.STARTING_POSITION && right.kind != CpcJourneyEventKind.STARTING_POSITION -> -1
+                    right.kind == CpcJourneyEventKind.STARTING_POSITION && left.kind != CpcJourneyEventKind.STARTING_POSITION -> 1
+                    left.kind == CpcJourneyEventKind.OM_SPECIAL_INCREMENT && right.kind != CpcJourneyEventKind.OM_SPECIAL_INCREMENT -> -1
+                    right.kind == CpcJourneyEventKind.OM_SPECIAL_INCREMENT && left.kind != CpcJourneyEventKind.OM_SPECIAL_INCREMENT -> 1
+                    snapshot.sequenceIntegrity == CpcSequenceIntegrity.ORIGINAL -> left.sequence.compareTo(right.sequence).takeIf { it != 0 }
+                        ?: left.order.compareTo(right.order)
+                    left.kind != right.kind -> if (left.kind == CpcJourneyEventKind.ANNUAL_INCREMENT) 1 else -1
+                    else -> left.order.compareTo(right.order)
+                }
+            }?.dni
         }
         fun finalSixth(s: SixthCpcJourneySnapshot): CpcPayPosition {
             val base = CpcPayPosition(CpcHistoryStage.SIXTH, s.startingPayInPayBand + s.gradePay, payBandId = s.payBandId, gradePay = s.gradePay, payInPayBand = s.startingPayInPayBand)
@@ -372,8 +460,15 @@ object PayJourneyReportBuilder {
                 val dateOrder = (left.dateMillis ?: Long.MIN_VALUE).compareTo(right.dateMillis ?: Long.MIN_VALUE)
                 if (dateOrder != 0) dateOrder
                 else when {
-                    left.kind == CpcJourneyEventKind.OM_SPECIAL_INCREMENT && right.kind != CpcJourneyEventKind.OM_SPECIAL_INCREMENT -> 1
-                    right.kind == CpcJourneyEventKind.OM_SPECIAL_INCREMENT && left.kind != CpcJourneyEventKind.OM_SPECIAL_INCREMENT -> -1
+                    left.kind == CpcJourneyEventKind.STARTING_POSITION && right.kind != CpcJourneyEventKind.STARTING_POSITION -> -1
+                    right.kind == CpcJourneyEventKind.STARTING_POSITION && left.kind != CpcJourneyEventKind.STARTING_POSITION -> 1
+                    left.kind == CpcJourneyEventKind.OM_SPECIAL_INCREMENT && right.kind != CpcJourneyEventKind.OM_SPECIAL_INCREMENT -> -1
+                    right.kind == CpcJourneyEventKind.OM_SPECIAL_INCREMENT && left.kind != CpcJourneyEventKind.OM_SPECIAL_INCREMENT -> 1
+                    stage == CpcHistoryStage.FIFTH && snapshot.sequenceIntegrity == CpcSequenceIntegrity.INFERRED &&
+                        left.kind != right.kind -> if (left.kind == CpcJourneyEventKind.PROMOTION ||
+                            left.kind == CpcJourneyEventKind.ACP || left.kind == CpcJourneyEventKind.MACP ||
+                            left.kind == CpcJourneyEventKind.FINANCIAL_UPGRADATION ||
+                            left.kind == CpcJourneyEventKind.PAY_SCALE_UPGRADATION) -1 else 1
                     else -> left.sequence.compareTo(right.sequence)
                 }
             })
@@ -390,15 +485,16 @@ object PayJourneyReportBuilder {
             section("4th CPC Pay Journey", CpcHistoryStage.FOURTH, rows); allRows += rows
         }
         snapshot.fifth?.let { s ->
+            val positions = fifthPositions(s)
             val rows = buildList {
                 val isConversion = snapshot.startingCpc < CpcHistoryStage.FIFTH
                 add(PayJourneyReportRow(s.startingDateMillis, 0, CpcHistoryStage.FIFTH, if (isConversion) CpcJourneyEventKind.CPC_CONVERSION else CpcJourneyEventKind.STARTING_POSITION,
                     if (isConversion) "4th to 5th CPC conversion" else "Starting position", CpcPayPosition(CpcHistoryStage.FIFTH, s.startingBasicPay, s.scaleId, s.scaleId), s.startingDniMillis,
                     sourcePosition = snapshot.fourth?.let(::finalFourth), sequence = s.sequence))
-                s.increments.forEach { add(PayJourneyReportRow(it.dateMillis, it.order, CpcHistoryStage.FIFTH, CpcJourneyEventKind.ANNUAL_INCREMENT,
-                    "Annual increment", CpcPayPosition(CpcHistoryStage.FIFTH, it.pay, s.scaleId, s.scaleId), it.dateMillis, sequence = it.sequence)) }
-                s.events.forEach { e -> add(PayJourneyReportRow(e.implementationDateMillis, e.order, CpcHistoryStage.FIFTH, e.eventType,
-                    e.eventType.name.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase), CpcPayPosition(CpcHistoryStage.FIFTH, e.resultingPay, e.targetScaleId, e.targetScaleId), e.resultingDniMillis, e.fixationBasis,
+                s.increments.forEachIndexed { index, it -> add(PayJourneyReportRow(it.dateMillis, it.order, CpcHistoryStage.FIFTH, CpcJourneyEventKind.ANNUAL_INCREMENT,
+                    "Annual increment", positions.incrementPositions[index], it.dateMillis, sequence = it.sequence)) }
+                s.events.forEachIndexed { index, e -> add(PayJourneyReportRow(e.implementationDateMillis, e.order, CpcHistoryStage.FIFTH, e.eventType,
+                    e.eventType.name.replace('_', ' ').lowercase().replaceFirstChar(Char::uppercase), positions.eventPositions[index], e.resultingDniMillis, e.fixationBasis,
                     "placement ${e.placementMethod}; option ${e.implementationOption}", sequence = e.sequence, implementationDateMillis = e.implementationDateMillis, eventDateMillis = e.eventDateMillis)) }
                 s.omAdjustment?.let { om -> add(omReportRow(om)) }
             }
@@ -473,9 +569,7 @@ object PayJourneyReportBuilder {
                 chain.increments.maxByOrNull { it.sequence }?.date ?: chain.result?.nextIncrementDate ?: chain.scaleUpgrade?.nextIncrementDate
             }
             ?: effectiveSixth?.increments?.maxByOrNull { it.sequence }?.dateMillis
-            ?: snapshot.fifth?.events?.maxByOrNull { it.sequence }?.resultingDniMillis
-            ?: snapshot.fifth?.increments?.maxByOrNull { it.sequence }?.let { addOneYear(it.dateMillis) }
-            ?: snapshot.fifth?.startingDniMillis
+            ?: snapshot.fifth?.let(::finalFifthDni)
         return PayJourneyReport(record.title ?: "Pay Fixation / Pay Journey Report", record.savedAtMillis, snapshot.startingCpc,
             snapshot.startingDateMillis, sections, final, finalDni,
             chronologyNote = if (snapshot.sequenceIntegrity == CpcSequenceIntegrity.INFERRED)

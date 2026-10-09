@@ -17,14 +17,14 @@ fun FifthCpcEventSection(
     currentDate: Long,
     currentDni: Long?,
     omAdjustment: FifthCpcOmAdjustmentSnapshot? = null,
-    onEventApplied: (String, FifthCpcScale, Int, Long, Long, Long) -> Unit,
-    onEventAppliedDetailed: ((String, FifthCpcScale, Int, Long, Long, Long, String, String, FifthCpcOmAdjustmentSnapshot?) -> Unit)? = null
+    initialEvent: FifthCpcHistoricalEventStep? = null,
+    onEventApplied: (FifthCpcHistoricalEventStep) -> Unit
 ) {
-    var eventDate by remember { mutableStateOf<Long?>(null) }
-    var targetScale by remember { mutableStateOf<FifthCpcScale?>(null) }
-    var eventType by remember { mutableStateOf("Promotion") }
-    var placementMethod by remember { mutableStateOf("Next Higher After Increment") }
-    var implementationOption by remember { mutableStateOf("From Event Date") }
+    var eventDate by remember(initialEvent) { mutableStateOf(initialEvent?.eventDate) }
+    var targetScale by remember(initialEvent) { mutableStateOf(initialEvent?.scale?.let(::findFifthScaleForHistoricalJourney)) }
+    var eventType by remember(initialEvent) { mutableStateOf(initialEvent?.type ?: "Promotion") }
+    var placementMethod by remember(initialEvent) { mutableStateOf(initialEvent?.placementMethod?.ifBlank { "Next Higher After Increment" } ?: "Next Higher After Increment") }
+    var implementationOption by remember(initialEvent) { mutableStateOf(initialEvent?.implementationOption?.ifBlank { "From Event Date" } ?: "From Event Date") }
     var menuExpanded by remember { mutableStateOf(false) }
     var pickerOpen by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<Int?>(null) }
@@ -158,8 +158,19 @@ fun FifthCpcEventSection(
                 result = pay
                 val effectiveDate = implementationDate ?: return@Button
                 val nextDni = newDni ?: return@Button
-                onEventApplied(eventType, scale, pay, date, effectiveDate, nextDni)
-                onEventAppliedDetailed?.invoke(eventType, scale, pay, date, effectiveDate, nextDni, placementMethod, implementationOption, eventFixation?.appliedOmAdjustment)
+                onEventApplied(
+                    FifthCpcHistoricalEventStep(
+                        type = eventType,
+                        scale = scale.title,
+                        pay = pay,
+                        eventDate = date,
+                        implementationDate = effectiveDate,
+                        dniDate = nextDni,
+                        placementMethod = placementMethod,
+                        implementationOption = implementationOption,
+                        eventIdentity = initialEvent?.eventIdentity ?: UUID.randomUUID().toString()
+                    )
+                )
             },
             enabled = eventDate != null &&
                 eventDate!! >= currentDate &&
@@ -171,7 +182,7 @@ fun FifthCpcEventSection(
                 (implementationOption != "From DNI" || currentDni != null),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Apply 5th CPC Event", fontWeight = FontWeight.Bold)
+            Text(if (initialEvent == null) "Apply 5th CPC Event" else "Update 5th CPC Event", fontWeight = FontWeight.Bold)
         }
 
         result?.let { Text(eventType + " fixed pay: ₹" + it, fontWeight = FontWeight.Bold) }
@@ -252,27 +263,6 @@ private fun parseFifthCpcScaleStagesForEvent(scale: String): List<Int> {
     }
     return stages.distinct().sorted()
 }
-
-private fun calculateEventBasedFifthCpcDni(eventDate: Long): Long =
-    Calendar.getInstance().apply {
-        timeInMillis = eventDate
-        add(Calendar.YEAR, 1)
-        set(Calendar.DAY_OF_MONTH, 1)
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
-
-private fun calculateNextFifthCpcDni(effectiveDate: Long): Long =
-    Calendar.getInstance().apply {
-        timeInMillis = effectiveDate
-        add(Calendar.YEAR, 1)
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }.timeInMillis
 
 private fun fifthCpcEventEndDate(): Long =
     Calendar.getInstance().apply {

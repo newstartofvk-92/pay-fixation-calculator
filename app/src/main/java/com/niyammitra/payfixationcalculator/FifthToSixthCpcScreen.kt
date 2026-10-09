@@ -49,6 +49,7 @@ fun FifthToSixthCpcScreen(
     var basicPayText by remember(initialBasicPay) { mutableStateOf(initialBasicPay?.toString() ?: "") }
     var selectedDni by remember(initialDni) { mutableStateOf(initialDni) }
     var historySnapshot by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot) }
+    var activeRestoredSnapshot by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot) }
     var showDniPicker by remember { mutableStateOf(false) }
 
     val basicPay = basicPayText.toIntOrNull()
@@ -100,7 +101,15 @@ fun FifthToSixthCpcScreen(
                         }
                         DropdownMenu(expanded = scaleMenu, onDismissRequest = { scaleMenu = false }) {
                             FifthToSixthCpcData.scales.forEach { scale ->
-                                DropdownMenuItem(text = { Text(scale.title) }, onClick = { selectedScale = scale; scaleMenu = false })
+                            DropdownMenuItem(text = { Text(scale.title) }, onClick = {
+                                if (selectedScale != scale) {
+                                    selectedScale = scale
+                                    basicPayText = ""
+                                    historySnapshot = null
+                                    activeRestoredSnapshot = null
+                                }
+                                scaleMenu = false
+                            })
                             }
                         }
                     }
@@ -111,7 +120,13 @@ fun FifthToSixthCpcScreen(
 
                     OutlinedTextField(
                         value = basicPayText,
-                        onValueChange = { if (it.all(Char::isDigit)) basicPayText = it },
+                        onValueChange = {
+                            if (it.all(Char::isDigit) && it != basicPayText) {
+                                basicPayText = it
+                                historySnapshot = null
+                                activeRestoredSnapshot = null
+                            }
+                        },
                         label = { Text("5th CPC Basic Pay") },
                         placeholder = { Text("e.g. 8300") },
                         singleLine = true,
@@ -155,7 +170,7 @@ fun FifthToSixthCpcScreen(
                         }
                     },
                     onHistorySnapshot = { historySnapshot = it },
-                    restoredSnapshot = restoredSnapshot,
+                    restoredSnapshot = activeRestoredSnapshot,
                     sequenceIntegrity = sequenceIntegrity
                 )
                 SaveCompleteJourneyButton(
@@ -183,7 +198,15 @@ fun FifthToSixthCpcScreen(
         DatePickerDialog(
             onDismissRequest = { showDniPicker = false },
             confirmButton = {
-                TextButton(onClick = { selectedDni = pickerState.selectedDateMillis; showDniPicker = false }) { Text("OK", fontWeight = FontWeight.Bold) }
+                TextButton(onClick = {
+                    val selected = pickerState.selectedDateMillis
+                    if (selectedDni != selected) {
+                        selectedDni = selected
+                        historySnapshot = null
+                        activeRestoredSnapshot = null
+                    }
+                    showDniPicker = false
+                }) { Text("OK", fontWeight = FontWeight.Bold) }
             },
             dismissButton = { TextButton(onClick = { showDniPicker = false }) { Text("Cancel") }
         }) { DatePicker(state = pickerState) }

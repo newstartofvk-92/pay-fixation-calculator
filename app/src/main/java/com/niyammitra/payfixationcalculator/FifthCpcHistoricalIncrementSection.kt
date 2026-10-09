@@ -18,16 +18,21 @@ data class FifthCpcHistoricalEventStep(
     val type: String, val scale: String, val pay: Int, val eventDate: Long,
     val implementationDate: Long, val dniDate: Long,
     val placementMethod: String = "", val implementationOption: String = "", val sequence: Int = 0,
-    val omAppliedBeforeEvent: Boolean = false
+    val omAppliedBeforeEvent: Boolean = false,
+    // UI-only identity: deliberately excluded from persisted CPC history snapshots.
+    val eventIdentity: String = UUID.randomUUID().toString()
 )
 
 private data class FifthCpcTimelineItem(
     val date: Long,
     val kind: String,
     val pay: Int,
+    val sequence: Int = 0,
     val scale: String? = null,
     val incrementIndex: Int? = null,
-    val eventType: String? = null
+    val eventIndex: Int? = null,
+    val eventType: String? = null,
+    val eventDate: Long? = null
 )
 
 private val FifthHistoricalBlue = Color(0xFF1769AA)
@@ -50,73 +55,54 @@ fun FifthCpcHistoricalIncrementSection(
     var incrementSteps by remember(initialPay, revisedScale, conversionDate, firstIncrementDate, restoredSnapshot) {
         mutableStateOf(restoredSnapshot?.increments.orEmpty().map { FifthCpcHistoricalIncrementStep(it.pay, it.dateMillis, it.sequence) })
     }
-    var eventScale by remember(revisedScale, restoredSnapshot) {
-        mutableStateOf(restoredSnapshot?.events?.lastOrNull()?.targetScaleId?.let(::findFifthScaleForHistoricalJourney) ?: findFifthScaleForHistoricalJourney(revisedScale))
-    }
-    var eventPay by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.events?.lastOrNull()?.resultingPay) }
-    var eventDate by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.events?.lastOrNull()?.implementationDateMillis) }
-    var eventDni by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.events?.lastOrNull()?.resultingDniMillis) }
     var showEventSection by remember { mutableStateOf(false) }
-    var showSixthCpcContinuation by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.sixthContinuation != null) }
+    var continuationState by remember(restoredSnapshot) {
+        mutableStateOf(FifthCpcContinuationState(
+            historySnapshot = restoredSnapshot?.sixthContinuation,
+            restoredSnapshot = restoredSnapshot?.sixthContinuation,
+            visible = restoredSnapshot?.sixthContinuation != null
+        ))
+    }
     var eventHistory by remember(initialPay, revisedScale, conversionDate, firstIncrementDate, restoredSnapshot) {
         mutableStateOf(restoredSnapshot?.events.orEmpty().map { FifthCpcHistoricalEventStep(
-            type = it.eventType.name, scale = it.targetScaleId, pay = it.resultingPay,
+            type = normalizeFifthCpcEventType(it.eventType.name), scale = it.targetScaleId, pay = it.resultingPay,
             eventDate = it.eventDateMillis, implementationDate = it.implementationDateMillis,
             dniDate = it.resultingDniMillis, placementMethod = it.placementMethod,
             implementationOption = it.implementationOption, sequence = it.sequence,
             omAppliedBeforeEvent = it.omAppliedBeforeEvent
         ) })
     }
-    var sixthHistorySnapshot by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.sixthContinuation) }
-    var retainedOmAdjustment by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.omAdjustment) }
-    var normalDniForOm by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.omAdjustment?.normalDniMillis) }
-    var omAppliedBeforeLaterEvent by remember(restoredSnapshot) {
-        mutableStateOf(restoredSnapshot?.events?.any { it.omAppliedBeforeEvent } == true)
-    }
+    var editingEventIdentity by remember { mutableStateOf<String?>(null) }
 
     val initialScale = remember(revisedScale) {
         findFifthScaleForHistoricalJourney(revisedScale)
     }
-    val latest = incrementSteps.lastOrNull()
-    val eventApplied = eventDate != null && eventScale != null && eventPay != null
+    val replay = initialScale?.let {
+        replayFifthCpcJourney(
+            initialPay, it, initialDate, initialDni, incrementSteps, eventHistory,
+            sequenceIntegrity
+        )
+    }
 
     // Once an event changes the employee's scale, that scale remains the
     // active scale for all subsequent increments. A later increment may
     // replace the current pay/date position, but it must NOT revert the
     // employee to the original pre-event scale.
-    val currentScale = if (eventApplied) eventScale else initialScale
-    val latestIsAfterEvent = eventApplied && latest != null && latest.date > eventDate!!
-    val currentPay = when {
-        latestIsAfterEvent -> latest!!.pay
-        eventApplied -> eventPay!!
-        latest != null -> latest.pay
-        else -> initialPay
-    }
-    val currentDate = when {
-        latestIsAfterEvent -> latest!!.date
-        eventApplied -> eventDate!!
-        latest != null -> latest.date
-        else -> initialDate
-    }
+    val currentScale = replay?.scale ?: initialScale
+    val currentPay = replay?.pay ?: initialPay
+    val currentDate = replay?.date ?: initialDate
     val stages = remember(currentScale) {
         currentScale?.let { parseFifthCpcScaleStages(it.title) }.orEmpty()
     }
-    val currentDni = when {
-        latestIsAfterEvent -> addFifthHistoricalYear(currentDate)
-        eventApplied && eventDni != null -> eventDni!!
-        latest != null -> addFifthHistoricalYear(latest.date)
-        else -> initialDni
-    }
+    val currentDni = replay?.dni ?: initialDni
+    val editingInput = editingEventIdentity
+        ?.let { identity -> eventHistory.indexOfFirst { it.eventIdentity == identity }.takeIf { it >= 0 } }
+        ?.let { replay?.eventInputs?.getOrNull(it) }
     val endDate = fifthCpcEndDate()
     val reachesSixthBoundary = currentDate >= endDate || (currentDni != null && currentDni > endDate)
-    val omNormalDni = normalDniForOm ?: currentDni
-    val omEligible = omNormalDni?.let(::isEligibleForFifthCpcOmAdjustment) == true
-    val calculatedOmAdjustment = if (!omAppliedBeforeLaterEvent && reachesSixthBoundary && currentScale != null) omNormalDni?.let { dni ->
-        if (isEligibleForFifthCpcOmAdjustment(dni)) calculateFifthCpcOmAdjustment(dni, currentPay, currentScale) else null
-    } else null
-    val omAdjustment = retainedOmAdjustment ?: calculatedOmAdjustment
-    val currentPositionIncludesOm = omAppliedBeforeLaterEvent && currentDate > (omAdjustment?.incrementDateMillis ?: Long.MAX_VALUE)
-    val finalFifthPay = if (omAdjustment != null && !currentPositionIncludesOm) omAdjustment.adjustedBasicPay else currentPay
+    val omAdjustment = replay?.omAdjustment
+    val omEligible = replay?.normalDniForOm != null
+    val finalFifthPay = currentPay
     val sixthCpcInputPay = finalFifthPay
     SideEffect {
         onHistorySnapshot?.invoke(FifthCpcJourneySnapshot(
@@ -124,8 +110,8 @@ fun FifthCpcHistoricalIncrementSection(
             scaleId = initialScale?.title ?: revisedScale,
             startingBasicPay = initialPay,
             startingDniMillis = initialDni,
-            increments = incrementSteps.mapIndexed { index, step -> CpcIncrementSnapshot(index + 1, step.pay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
-            events = eventHistory.mapIndexed { index, event ->
+            increments = (replay?.increments ?: incrementSteps).mapIndexed { index, step -> CpcIncrementSnapshot(index + 1, step.pay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
+            events = (replay?.events ?: eventHistory).mapIndexed { index, event ->
                 val kind = when (event.type.lowercase().replace('_', ' ')) {
                     "acp" -> CpcJourneyEventKind.ACP
                     "macp" -> CpcJourneyEventKind.MACP
@@ -139,7 +125,7 @@ fun FifthCpcHistoricalIncrementSection(
                     event.placementMethod, event.implementationOption, event.sequence.takeIf { it > 0 } ?: index + 1,
                     event.omAppliedBeforeEvent)
             },
-            sixthContinuation = sixthHistorySnapshot,
+            sixthContinuation = continuationState.historySnapshot,
             omAdjustment = omAdjustment
         ))
     }
@@ -174,33 +160,40 @@ fun FifthCpcHistoricalIncrementSection(
             }
         }
 
-        if (incrementSteps.isNotEmpty() || eventHistory.isNotEmpty()) {
+        if (initialPay > 0 || incrementSteps.isNotEmpty() || eventHistory.isNotEmpty() || omAdjustment != null) {
             val timelineItems = buildList {
-                incrementSteps.forEachIndexed { index, step ->
+                add(FifthCpcTimelineItem(initialDate, "starting", initialPay))
+                (replay?.increments ?: incrementSteps).forEachIndexed { index, step ->
                     add(
                         FifthCpcTimelineItem(
                             date = step.date,
                             kind = "increment",
                             pay = step.pay,
+                            sequence = step.sequence,
                             incrementIndex = index
                         )
                     )
                 }
-                eventHistory.forEach { event ->
+                (replay?.events ?: eventHistory).forEachIndexed { index, event ->
                     add(
                         FifthCpcTimelineItem(
                             date = event.implementationDate,
                             kind = "event",
                             pay = event.pay,
+                            sequence = event.sequence,
                             scale = event.scale,
-                            eventType = event.type
+                            eventType = event.type,
+                            eventIndex = index,
+                            eventDate = event.eventDate
                         )
                     )
                 }
-            }.sortedWith(
-                compareBy<FifthCpcTimelineItem> { it.date }
-                    .thenBy { if (it.kind == "event") 0 else 1 }
-            )
+                omAdjustment?.let { add(FifthCpcTimelineItem(it.incrementDateMillis, "om", it.adjustedBasicPay)) }
+                if (reachesSixthBoundary) add(FifthCpcTimelineItem(currentDate, "final", currentPay))
+            }.sortedWith(compareBy<FifthCpcTimelineItem> { it.date }
+                .thenBy { when (it.kind) { "starting" -> -1; "om" -> 0; "final" -> 2; else -> 1 } }
+                .thenBy { if (sequenceIntegrity == CpcSequenceIntegrity.ORIGINAL) it.sequence else if (it.kind == "event") 0 else 1 }
+                .thenBy { it.sequence })
 
             Card(
                 Modifier.fillMaxWidth(),
@@ -214,6 +207,13 @@ fun FifthCpcHistoricalIncrementSection(
                         fontSize = 17.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
+                    if (sequenceIntegrity == CpcSequenceIntegrity.INFERRED) {
+                        Text(
+                            "This saved journey predates shared event sequencing. The original order of same-date events and increments could not be recovered.",
+                            color = FifthHistoricalSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
 
                     timelineItems.forEach { item ->
                         Surface(
@@ -223,7 +223,25 @@ fun FifthCpcHistoricalIncrementSection(
                         ) {
                             Row(Modifier.fillMaxWidth().padding(14.dp)) {
                                 Column(Modifier.weight(1f)) {
-                                    if (item.kind == "event") {
+                                    if (item.kind == "starting") {
+                                        Text("Starting position", color = FifthHistoricalSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Text("Effective date: ${formatFifthHistoricalDate(item.date)}", color = FifthHistoricalText, fontSize = 13.sp)
+                                        Text("Scale: ${initialScale?.title ?: revisedScale}", color = FifthHistoricalText, fontSize = 13.sp)
+                                        Text("5th CPC Basic Pay: ${formatFifthHistoricalCurrency(item.pay)}", color = FifthHistoricalBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                                    } else if (item.kind == "om") {
+                                        Text("Special increment under O.M. dated 19 March 2012", color = FifthHistoricalSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Text("Effective date: ${formatFifthHistoricalDate(item.date)}", color = FifthHistoricalText, fontSize = 13.sp)
+                                        omAdjustment?.let { adjustment ->
+                                            Text("Normal DNI: ${formatFifthHistoricalDate(adjustment.normalDniMillis)}", color = FifthHistoricalText, fontSize = 12.sp)
+                                            Text("Pay before: ${formatFifthHistoricalCurrency(adjustment.basicPayBefore)} · Special increment: ${formatFifthHistoricalCurrency(adjustment.incrementAmount)}", color = FifthHistoricalText, fontSize = 12.sp)
+                                            Text("Next revised-pay increment: ${formatFifthHistoricalDate(adjustment.nextRevisedIncrementDateMillis)}", color = FifthHistoricalText, fontSize = 12.sp)
+                                        }
+                                        Text("Adjusted 5th CPC Basic Pay: ${formatFifthHistoricalCurrency(item.pay)}", color = FifthHistoricalBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                                    } else if (item.kind == "final") {
+                                        Text("Final 5th CPC position / 6th CPC conversion", color = FifthHistoricalSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Text("Effective date: ${formatFifthHistoricalDate(item.date)}", color = FifthHistoricalText, fontSize = 13.sp)
+                                        Text("5th CPC Basic Pay: ${formatFifthHistoricalCurrency(item.pay)}", color = FifthHistoricalBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                                    } else if (item.kind == "event") {
                                         Text(
                                             item.eventType + " Event",
                                             color = FifthHistoricalSecondary,
@@ -231,10 +249,13 @@ fun FifthCpcHistoricalIncrementSection(
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
-                                            "Date: " + formatFifthHistoricalDate(item.date),
+                                            "Effective date: " + formatFifthHistoricalDate(item.date),
                                             color = FifthHistoricalText,
                                             fontSize = 13.sp
                                         )
+                                        item.eventDate?.takeIf { it != item.date }?.let { originalDate ->
+                                            Text("Event date: ${formatFifthHistoricalDate(originalDate)}", color = FifthHistoricalSecondary, fontSize = 12.sp)
+                                        }
                                         item.scale?.let {
                                             Text(
                                                 "Scale: " + it,
@@ -275,9 +296,30 @@ fun FifthCpcHistoricalIncrementSection(
                                             incrementSteps = incrementSteps.toMutableList().also {
                                                 if (index in it.indices) it.removeAt(index)
                                             }
+                                            continuationState = invalidateFifthCpcContinuation(continuationState)
                                         }
                                     }) {
                                         Text("Delete", fontWeight = FontWeight.Bold)
+                                    }
+                                } else if (item.kind == "event") {
+                                    Column {
+                                        TextButton(onClick = {
+                                            editingEventIdentity = eventHistory.getOrNull(item.eventIndex ?: -1)?.eventIdentity
+                                            showEventSection = true
+                                        }) { Text("Edit", fontWeight = FontWeight.Bold) }
+                                        TextButton(onClick = {
+                                            item.eventIndex?.let { index ->
+                                                val deleted = eventHistory.getOrNull(index)
+                                                if (deleted != null) {
+                                                    eventHistory = deleteFifthCpcHistoricalEvent(eventHistory, deleted.eventIdentity)
+                                                    if (editingEventIdentity == deleted.eventIdentity) {
+                                                        editingEventIdentity = null
+                                                        showEventSection = false
+                                                    }
+                                                }
+                                                continuationState = invalidateFifthCpcContinuation(continuationState)
+                                            }
+                                        }) { Text("Delete", fontWeight = FontWeight.Bold) }
                                     }
                                 }
                             }
@@ -289,7 +331,7 @@ fun FifthCpcHistoricalIncrementSection(
 
         if (!showEventSection) {
             Button(
-                onClick = { showEventSection = true },
+                onClick = { editingEventIdentity = null; showEventSection = true },
                 enabled = currentScale != null && currentPay > 0,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = FifthHistoricalBlue),
@@ -316,45 +358,37 @@ fun FifthCpcHistoricalIncrementSection(
                             fontSize = 17.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
-                        TextButton(onClick = { showEventSection = false }) {
+                        TextButton(onClick = { showEventSection = false; editingEventIdentity = null }) {
                             Text("Collapse", fontWeight = FontWeight.Bold)
                         }
                     }
                     FifthCpcEventSection(
-                        currentPay = currentPay,
-                        currentScale = currentScale,
-                        currentDate = currentDate,
-                        currentDni = currentDni,
-                        omAdjustment = if (omAppliedBeforeLaterEvent) null else omAdjustment,
-                        onEventApplied = { appliedEventType, newScale, newPay, appliedEventDate, implementationDate, newDni ->
-                            if (normalDniForOm == null && currentDni?.let(::isEligibleForFifthCpcOmAdjustment) == true) {
-                                normalDniForOm = currentDni
+                        currentPay = editingInput?.pay ?: currentPay,
+                        currentScale = editingInput?.scale ?: currentScale,
+                        currentDate = editingInput?.date ?: currentDate,
+                        currentDni = editingInput?.dni ?: currentDni,
+                        // Replay has already applied the OM position to currentPay when due.
+                        // Passing it again would apply the special increment twice.
+                        omAdjustment = null,
+                        initialEvent = editingEventIdentity?.let { identity -> eventHistory.firstOrNull { it.eventIdentity == identity } },
+                        onEventApplied = { acceptedEvent ->
+                            val eventStillExists = editingEventIdentity == null || eventHistory.any {
+                                it.eventIdentity == editingEventIdentity
                             }
-                            eventHistory = eventHistory + FifthCpcHistoricalEventStep(
-                                type = appliedEventType,
-                                scale = newScale.title,
-                                pay = newPay,
-                                eventDate = appliedEventDate,
-                                implementationDate = implementationDate,
-                                dniDate = newDni,
-                                sequence = maxOf(incrementSteps.maxOfOrNull { it.sequence } ?: 0, eventHistory.maxOfOrNull { it.sequence } ?: 0) + 1
-                            )
-                            eventScale = newScale
-                            eventPay = newPay
-                            eventDate = implementationDate
-                            eventDni = newDni
+                            if (eventStillExists) {
+                                eventHistory = upsertFifthCpcHistoricalEvent(
+                                    existingEvents = eventHistory,
+                                    acceptedEvent = acceptedEvent,
+                                    editingIdentity = editingEventIdentity,
+                                    nextSequence = maxOf(
+                                        incrementSteps.maxOfOrNull { it.sequence } ?: 0,
+                                        eventHistory.maxOfOrNull { it.sequence } ?: 0
+                                    ) + 1
+                                )
+                                continuationState = invalidateFifthCpcContinuation(continuationState)
+                            }
                             showEventSection = false
-                        },
-                        onEventAppliedDetailed = { appliedType, newScale, newPay, eventDate, implementationDate, newDni, placement, option, eventOmAdjustment ->
-                            eventOmAdjustment?.let { adjustment ->
-                                retainedOmAdjustment = adjustment
-                                omAppliedBeforeLaterEvent = true
-                            }
-                            eventHistory = eventHistory.dropLast(1) + eventHistory.last().copy(
-                                placementMethod = placement,
-                                implementationOption = option,
-                                omAppliedBeforeEvent = eventOmAdjustment != null
-                            )
+                            editingEventIdentity = null
                         }
                     )
                 }
@@ -366,6 +400,7 @@ fun FifthCpcHistoricalIncrementSection(
                 val pay = nextPay ?: return@Button
                 val date = nextDate ?: return@Button
                 incrementSteps = incrementSteps + FifthCpcHistoricalIncrementStep(pay, date, maxOf(incrementSteps.maxOfOrNull { it.sequence } ?: 0, eventHistory.maxOfOrNull { it.sequence } ?: 0) + 1)
+                continuationState = invalidateFifthCpcContinuation(continuationState)
             },
             enabled = canAdd,
             modifier = Modifier.fillMaxWidth(),
@@ -405,22 +440,11 @@ fun FifthCpcHistoricalIncrementSection(
                             color = FifthHistoricalSecondary,
                             fontSize = 12.sp
                         )
-                        if (omAdjustment != null) {
-                            Surface(Modifier.fillMaxWidth(), color = Color(0xFFFFF8E1), shape = RoundedCornerShape(12.dp)) {
-                                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Text("Special Increment under OM dated 19 March 2012", color = FifthHistoricalBlue, fontWeight = FontWeight.Bold)
-                                    Text("Normal DNI: ${formatFifthHistoricalDate(omAdjustment.normalDniMillis)}", color = FifthHistoricalText, fontSize = 12.sp)
-                                    Text("5th CPC Basic Pay before special increment: ${formatFifthHistoricalCurrency(omAdjustment.basicPayBefore)}", color = FifthHistoricalText, fontSize = 12.sp)
-                                    Text("Special increment on 01 January 2006: ${formatFifthHistoricalCurrency(omAdjustment.incrementAmount)}", color = FifthHistoricalText, fontSize = 12.sp)
-                                    Text("Adjusted 5th CPC Basic Pay: ${formatFifthHistoricalCurrency(omAdjustment.adjustedBasicPay)}", color = FifthHistoricalBlue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                    Text("Next increment in revised pay structure: ${formatFifthHistoricalDate(omAdjustment.nextRevisedIncrementDateMillis)}", color = FifthHistoricalText, fontSize = 12.sp)
-                                }
-                            }
-                        } else if (omEligible) {
+                        if (omAdjustment == null && omEligible) {
                             Text("The OM increment could not be determined from the selected 5th CPC scale and pay stage. 6th CPC fixation is unavailable until the scale/pay position is corrected.", color = Color(0xFFC62828), fontSize = 12.sp)
                         }
                         Button(
-                            onClick = { showSixthCpcContinuation = true },
+                            onClick = { continuationState = continuationState.copy(visible = true) },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(containerColor = FifthHistoricalBlue),
                             shape = RoundedCornerShape(12.dp)
@@ -430,7 +454,7 @@ fun FifthCpcHistoricalIncrementSection(
                     }
                 }
 
-                if (showSixthCpcContinuation) {
+                if (continuationState.visible) {
                     val conversion = if (omEligible && omAdjustment == null) null else runCatching {
                         calculateFifthToSixthCpc(sixthCpcInputPay, mappedScale)
                     }.getOrNull()
@@ -439,9 +463,9 @@ fun FifthCpcHistoricalIncrementSection(
                         FifthToSixthContinuationSection(
                             conversion = it,
                             onContinueToSeventh = onContinueToSeventh,
-                            restoredSnapshot = restoredSnapshot?.sixthContinuation,
+                            restoredSnapshot = continuationState.restoredSnapshot,
                             sequenceIntegrity = sequenceIntegrity,
-                            onHistorySnapshot = { sixthHistorySnapshot = it }
+                            onHistorySnapshot = { continuationState = continuationState.copy(historySnapshot = it) }
                         )
                     }
                 }
@@ -450,7 +474,7 @@ fun FifthCpcHistoricalIncrementSection(
     }
 }
 
-private fun parseFifthCpcScaleStages(scale: String): List<Int> {
+internal fun parseFifthCpcScaleStages(scale: String): List<Int> {
     val body = scale
         .removePrefix("Rs. ")
         .substringBefore(" (")
@@ -538,7 +562,7 @@ internal fun calculateNextFifthCpcStage(currentPay: Int, scaleTitle: String): In
     return null
 }
 
-private fun findFifthScaleForHistoricalJourney(revisedScale: String): FifthCpcScale? {
+internal fun findFifthScaleForHistoricalJourney(revisedScale: String): FifthCpcScale? {
     val normalized = revisedScale.removePrefix("Rs. ").substringBefore(" (").trim()
     return FifthToSixthCpcData.scales.firstOrNull {
         it.title.removePrefix("Rs. ").substringBefore(" (").trim() == normalized
@@ -548,7 +572,7 @@ private fun findFifthScaleForHistoricalJourney(revisedScale: String): FifthCpcSc
 private fun fifthCpcEndDate(): Long =
     Calendar.getInstance().apply { clear(); set(2006, Calendar.JANUARY, 1, 0, 0, 0) }.timeInMillis
 
-private fun addFifthHistoricalYear(date: Long): Long =
+internal fun addFifthHistoricalYear(date: Long): Long =
     Calendar.getInstance().apply {
         timeInMillis = date
         add(Calendar.YEAR, 1)
