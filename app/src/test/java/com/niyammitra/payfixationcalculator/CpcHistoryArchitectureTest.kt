@@ -6,6 +6,112 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class CpcHistoryArchitectureTest {
+    @Test fun sixthReportFinalDniAdvancesAfterStandaloneIncrement() {
+        val starting = testSixthDate(2006, java.util.Calendar.JANUARY, 1)
+        val incrementDate = testSixthDate(2006, java.util.Calendar.JULY, 1)
+        val report = reportForSixth(SixthCpcJourneySnapshot(
+            starting, "PB-2", 4200, 9300,
+            increments = listOf(SixthCpcIncrementSnapshot(1, 9710, 4200, incrementDate, 1))
+        ))
+        assertEquals(testSixthDate(2007, java.util.Calendar.JULY, 1), report.finalDniMillis)
+        assertEquals(13_910, report.finalPosition!!.basicPay)
+    }
+
+    @Test fun sixthReportFinalDniAdvancesAfterNestedEventIncrement() {
+        val starting = testSixthDate(2006, java.util.Calendar.JANUARY, 1)
+        val eventDate = testSixthDate(2006, java.util.Calendar.APRIL, 1)
+        val incrementDate = testSixthDate(2007, java.util.Calendar.JULY, 1)
+        val result = calculateSixthCpcPromotionOrMacp(9300, 4200, 4600, eventDate, "Promotion")
+        val report = reportForSixth(SixthCpcJourneySnapshot(
+            starting, "PB-2", 4200, 9300,
+            eventChains = listOf(SixthCpcEventChain(SixthCpcEventKind.PROMOTION, result = result,
+                increments = listOf(SixthCpcEventIncrement(0, 0, incrementDate, 2)), sequence = 1))
+        ))
+        assertEquals(testSixthDate(2008, java.util.Calendar.JULY, 1), report.finalDniMillis)
+        val eventSection = report.sections.single { it.heading == "6th CPC Pay Journey" }
+        assertEquals(listOf("Starting position", "Promotion", "Event-chain increment"), eventSection.rows.map { it.description })
+    }
+
+    @Test fun sixthReportAndLivePdfUseSameDateAndSequenceTimeline() {
+        val starting = testSixthDate(2006, java.util.Calendar.JANUARY, 1)
+        val sameDate = testSixthDate(2006, java.util.Calendar.JULY, 1)
+        val promotion = calculateSixthCpcPromotionOrMacp(9300, 4200, 4600, sameDate, "Promotion")
+        val sixth = SixthCpcJourneySnapshot(
+            starting, "PB-2", 4200, 9300,
+            increments = listOf(SixthCpcIncrementSnapshot(1, 0, 4200, sameDate, 1)),
+            eventChains = listOf(SixthCpcEventChain(SixthCpcEventKind.PROMOTION, result = promotion, sequence = 2))
+        )
+        val replay = replaySixthCpcJourney(SixthCpcJourneyState(
+            SixthCpcJourneyStartingPosition(starting, "PB-2", 4200, 9300),
+            listOf(SixthCpcHistoricalIncrement(0, 4200, sameDate, 1)),
+            sixth.eventChains,
+            CpcSequenceIntegrity.ORIGINAL
+        ))
+        val rows = reportForSixth(sixth).sections.single { it.heading == "6th CPC Pay Journey" }.rows
+        val pdfLines = sixthCpcTimelineExportLines(replay, { it.toString() }, { it.toString() })
+
+        assertEquals(replay.timeline.map { it.dateMillis }, rows.map { it.dateMillis })
+        assertEquals(replay.timeline.map { it.position.basicPay }, rows.map { it.position.basicPay })
+        assertEquals(listOf("Starting position", "Annual increment", "Promotion"), rows.map { it.description })
+        assertEquals(rows.map { it.description }, pdfLines.map { line ->
+            when {
+                "Starting position" in line -> "Starting position"
+                "Annual increment" in line -> "Annual increment"
+                "Promotion" in line -> "Promotion"
+                else -> error("Unexpected PDF timeline row: $line")
+            }
+        })
+        assertEquals(replay.finalPosition.basicPay, reportForSixth(sixth).finalPosition!!.basicPay)
+    }
+
+    @Test fun unreplayableSixthReportLabelsSavedRowsAndFinalPositionAsUnvalidated() {
+        val starting = testSixthDate(2006, java.util.Calendar.JANUARY, 1)
+        val eventDate = testSixthDate(2008, java.util.Calendar.APRIL, 1)
+        val savedUpgrade = SixthCpcScaleUpgradeResult(
+            eventDate = eventDate,
+            oldPayInPayBand = 10_000,
+            oldGradePay = 4_200,
+            oldPayBand = "PB-2",
+            newPayInPayBand = 12_000,
+            newGradePay = 4_600,
+            newPayBand = "PB-2",
+            revisedBasicPay = 16_600,
+            nextIncrementDate = testSixthDate(2009, java.util.Calendar.JULY, 1),
+            historicalRoute = null
+        )
+        val sixth = SixthCpcJourneySnapshot(
+            starting, "PB-2", 4_200, 9_300,
+            increments = listOf(SixthCpcIncrementSnapshot(1, 9_710, 4_200,
+                testSixthDate(2006, java.util.Calendar.JULY, 1), 1),
+                SixthCpcIncrementSnapshot(2, 10_140, 4_200,
+                    testSixthDate(2007, java.util.Calendar.JULY, 1), 2)),
+            eventChains = listOf(SixthCpcEventChain(
+                kind = SixthCpcEventKind.PAY_SCALE_UPGRADATION,
+                scaleUpgrade = savedUpgrade,
+                sequence = 3
+            ))
+        )
+
+        val replayError = runCatching {
+            replaySixthCpcJourney(SixthCpcJourneyState(
+                SixthCpcJourneyStartingPosition(starting, "PB-2", 4_200, 9_300),
+                sixth.increments.map { SixthCpcHistoricalIncrement(it.payInPayBand, it.gradePay, it.dateMillis, it.sequence) },
+                sixth.eventChains
+            ))
+        }.exceptionOrNull()?.message
+        assertTrue(replayError.orEmpty().contains("lacks replayable inputs"))
+
+        val report = reportForSixth(sixth)
+        val section = report.sections.single { it.heading == "6th CPC Pay Journey" }
+
+        assertTrue(report.replayWarnings.any { "could not be replay-validated" in it })
+        assertTrue(section.rows.any { "Saved annual increment — not replay-validated" == it.description })
+        assertTrue(section.rows.any { "Saved pay-scale upgradation — not replay-validated" == it.description })
+        assertEquals(16_600, report.finalPosition!!.basicPay)
+        assertEquals(savedUpgrade.nextIncrementDate, report.finalDniMillis)
+        assertFalse(section.rows.any { "replay-validated" in it.description && "Saved" !in it.description })
+    }
+
     private fun completeRecord(id: String = "journey-a"): CpcHistoryRecord {
         val eventResult = SixthCpcEventResult(
             eventType = "Promotion", fixationOption = SixthCpcFixationOption.FROM_DNI, eventDate = 1_200_000L,
@@ -48,9 +154,11 @@ class CpcHistoryArchitectureTest {
         assertEquals(11_000, snapshot.sixth!!.eventChains.single().increments.single().payInPayBand)
         assertEquals(SixthCpcFixationOption.FROM_DNI, snapshot.sixth!!.eventChains.single().result!!.fixationOption)
         assertEquals("6", snapshot.seventh!!.promotions.single().subsequentPromotion!!.promotedLevel)
-        val sixthEventRow = PayJourneyReportBuilder.build(restored)!!.sections
+        val report = PayJourneyReportBuilder.build(restored)!!
+        assertTrue(report.replayWarnings.any { "could not be replay-validated" in it })
+        val sixthEventRow = report.sections
             .single { it.heading == "6th CPC Pay Journey" }.rows
-            .single { it.description == "Promotion" }
+            .single { it.description == "Saved Promotion — not replay-validated" }
         assertTrue(sixthEventRow.remarks!!.contains("From-DNI option"))
     }
 
@@ -559,6 +667,18 @@ class CpcHistoryArchitectureTest {
     private fun addYearForTest(date: Long): Long = java.util.Calendar.getInstance().apply {
         timeInMillis = date
         add(java.util.Calendar.YEAR, 1)
+    }.timeInMillis
+
+    private fun reportForSixth(sixth: SixthCpcJourneySnapshot): PayJourneyReport {
+        val snapshot = CompleteJourneySnapshot(CpcHistoryStage.SIXTH, sixth.startingDateMillis, sixth = sixth)
+        val record = CpcHistoryRecord("sixth-report-test", workflowType = CpcHistoryWorkflow.COMPLETE_JOURNEY,
+            savedAtMillis = sixth.startingDateMillis, startingCpc = CpcHistoryStage.SIXTH,
+            currentStage = CpcHistoryStage.SIXTH, payload = CompleteJourneyPayload(snapshot))
+        return PayJourneyReportBuilder.build(record)!!
+    }
+
+    private fun testSixthDate(year: Int, month: Int, day: Int): Long = java.util.Calendar.getInstance().apply {
+        clear(); set(year, month, day, 0, 0, 0)
     }.timeInMillis
 
     @Test fun inferredJourneyUsesStoredDatesWhenPromotionSequencesAreDuplicated() {

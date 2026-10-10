@@ -315,7 +315,9 @@ data class PayJourneyReport(
     val sections: List<PayJourneyReportSection>,
     val finalPosition: CpcPayPosition?,
     val finalDniMillis: Long? = null,
-    val chronologyNote: String? = null
+    val chronologyNote: String? = null,
+    /** Transient report warnings; never serialized into CPC History records. */
+    val replayWarnings: List<String> = emptyList()
 )
 
 internal data class FifthCpcReportPositionResolution(
@@ -406,6 +408,7 @@ object PayJourneyReportBuilder {
         val effectiveSeventh = snapshot.seventh ?: effectiveSixth?.seventhContinuation
         val allRows = mutableListOf<PayJourneyReportRow>()
         val sections = mutableListOf<PayJourneyReportSection>()
+        val replayWarnings = mutableListOf<String>()
         fun finalFourth(s: FourthCpcJourneySnapshot): CpcPayPosition {
             val lastIncrement = s.increments.maxWithOrNull(compareBy<CpcIncrementSnapshot> { it.dateMillis }.thenBy { it.order })
             val lastEvent = s.events.maxWithOrNull(compareBy<FourthCpcEventSnapshot> { it.eventDateMillis }.thenBy { it.order })
@@ -439,7 +442,16 @@ object PayJourneyReportBuilder {
                 }
             }?.dni
         }
+        fun replaySixth(s: SixthCpcJourneySnapshot): SixthCpcJourneyReplay? = runCatching {
+            replaySixthCpcJourney(SixthCpcJourneyState(
+                SixthCpcJourneyStartingPosition(s.startingDateMillis, s.payBandId, s.gradePay, s.startingPayInPayBand),
+                s.increments.map { SixthCpcHistoricalIncrement(it.payInPayBand, it.gradePay, it.dateMillis, it.sequence) },
+                s.eventChains,
+                snapshot.sequenceIntegrity
+            ))
+        }.getOrNull()
         fun finalSixth(s: SixthCpcJourneySnapshot): CpcPayPosition {
+            replaySixth(s)?.finalPosition?.let { return sixthPosition(it.payBand, it.gradePay, it.payInPayBand) }
             val base = CpcPayPosition(CpcHistoryStage.SIXTH, s.startingPayInPayBand + s.gradePay, payBandId = s.payBandId, gradePay = s.gradePay, payInPayBand = s.startingPayInPayBand)
             var latestDate = s.startingDateMillis
             var latestSequence = s.sequence
@@ -454,6 +466,29 @@ object PayJourneyReportBuilder {
                 chain.increments.forEach { inc -> if (inc.date > latestDate || inc.date == latestDate && inc.sequence >= latestSequence) { latestDate = inc.date; latestSequence = inc.sequence; latest = sixthPosition(eventBand, inc.gradePay, inc.payInPayBand) } }
             }
             return latest
+        }
+        fun finalSixthDniMillis(s: SixthCpcJourneySnapshot): Long? {
+            replaySixth(s)?.let { return it.finalPosition.nextDniMillis }
+            data class DniCandidate(val date: Long, val sequence: Int, val order: Int, val dni: Long?)
+            val candidates = buildList {
+                add(DniCandidate(s.startingDateMillis, s.sequence, 0, addOneYear(s.startingDateMillis)))
+                s.increments.forEachIndexed { index, item -> add(DniCandidate(item.dateMillis, item.sequence, index + 1, addOneYear(item.dateMillis))) }
+                var order = s.increments.size + 1
+                s.eventChains.forEach { chain ->
+                    val result = chain.result
+                    val upgrade = chain.scaleUpgrade
+                    val eventDate = result?.eventDate ?: upgrade?.eventDate
+                    if (eventDate != null) add(DniCandidate(eventDate, chain.sequence, order++, result?.nextIncrementDate ?: upgrade?.nextIncrementDate))
+                    chain.increments.forEach { increment -> add(DniCandidate(increment.date, increment.sequence, order++, addOneYear(increment.date))) }
+                }
+            }
+            return candidates.maxWithOrNull { left, right ->
+                val byDate = left.date.compareTo(right.date)
+                if (byDate != 0) byDate
+                else if (snapshot.sequenceIntegrity == CpcSequenceIntegrity.ORIGINAL) {
+                    left.sequence.compareTo(right.sequence).takeIf { it != 0 } ?: left.order.compareTo(right.order)
+                } else left.order.compareTo(right.order)
+            }?.dni
         }
         fun section(name: String, stage: CpcHistoryStage, rows: List<PayJourneyReportRow>) {
             if (rows.isNotEmpty()) sections += PayJourneyReportSection(name, rows.sortedWith { left, right ->
@@ -501,22 +536,57 @@ object PayJourneyReportBuilder {
             section("5th CPC Pay Journey", CpcHistoryStage.FIFTH, rows); allRows += rows
         }
         effectiveSixth?.let { s ->
-            val rows = buildList {
-                val isConversion = snapshot.startingCpc < CpcHistoryStage.SIXTH
+            val isConversion = snapshot.startingCpc < CpcHistoryStage.SIXTH
+            val replayed = replaySixth(s)
+            if (replayed == null) {
+                replayWarnings += "The 6th CPC journey could not be replay-validated. The 6th CPC positions and DNI below are saved historical values, not recalculated values."
+            }
+            val rows = if (replayed != null) buildList {
+                replayed.timeline.forEachIndexed { index, entry ->
+                    val rowSequence = if (snapshot.sequenceIntegrity == CpcSequenceIntegrity.ORIGINAL) entry.sequence else index
+                    when (entry.kind) {
+                        SixthCpcTimelineKind.STARTING_POSITION -> add(PayJourneyReportRow(entry.dateMillis, index, CpcHistoryStage.SIXTH,
+                            if (isConversion) CpcJourneyEventKind.CPC_CONVERSION else CpcJourneyEventKind.STARTING_POSITION,
+                            if (isConversion) "5th to 6th CPC conversion" else "Starting position",
+                            sixthPosition(entry.position.payBand, entry.position.gradePay, entry.position.payInPayBand), entry.position.nextDniMillis,
+                            sourcePosition = snapshot.fifth?.let(::finalFifth), sequence = rowSequence))
+                        SixthCpcTimelineKind.ANNUAL_INCREMENT, SixthCpcTimelineKind.EVENT_INCREMENT -> add(PayJourneyReportRow(
+                            entry.dateMillis, index, CpcHistoryStage.SIXTH, CpcJourneyEventKind.ANNUAL_INCREMENT,
+                            entry.description, sixthPosition(entry.position.payBand, entry.position.gradePay, entry.position.payInPayBand),
+                            entry.dniMillis, sequence = rowSequence))
+                        SixthCpcTimelineKind.EVENT -> {
+                            val chain = s.eventChains.firstOrNull { it.localId == entry.eventId }
+                            val result = chain?.result
+                            val upgrade = chain?.scaleUpgrade
+                            add(PayJourneyReportRow(entry.dateMillis, index, CpcHistoryStage.SIXTH,
+                                result?.let(::eventKind) ?: CpcJourneyEventKind.PAY_SCALE_UPGRADATION,
+                                entry.description, sixthPosition(entry.position.payBand, entry.position.gradePay, entry.position.payInPayBand),
+                                entry.dniMillis,
+                                result?.let { if (it.fixationOption == SixthCpcFixationOption.FROM_DNI) CpcFixationBasis.DNI else CpcFixationBasis.EVENT_DATE }
+                                    ?: CpcFixationBasis.NOT_APPLICABLE,
+                                result?.ruleBasis?.joinToString(" ") ?: listOfNotNull(upgrade?.historicalRoute?.name,
+                                    upgrade?.sourcePreRevisedBasicPay?.let { "Source pre-revised pay $it" },
+                                    upgrade?.fixationIncrement?.let { "Fixation increment $it" }).joinToString("; "), sequence = rowSequence))
+                        }
+                    }
+                }
+            } else buildList {
                 add(PayJourneyReportRow(s.startingDateMillis, 0, CpcHistoryStage.SIXTH, if (isConversion) CpcJourneyEventKind.CPC_CONVERSION else CpcJourneyEventKind.STARTING_POSITION,
                     if (isConversion) "5th to 6th CPC conversion" else "Starting position", sixthPosition(s.payBandId, s.gradePay, s.startingPayInPayBand),
                     sourcePosition = snapshot.fifth?.let(::finalFifth), sequence = s.sequence))
                 s.increments.forEach { add(PayJourneyReportRow(it.dateMillis, it.order, CpcHistoryStage.SIXTH, CpcJourneyEventKind.ANNUAL_INCREMENT,
-                    "Annual increment", sixthPosition(s.payBandId, it.gradePay, it.payInPayBand), it.dateMillis, sequence = it.sequence)) }
+                    "Saved annual increment — not replay-validated", sixthPosition(s.payBandId, it.gradePay, it.payInPayBand), addOneYear(it.dateMillis), sequence = it.sequence)) }
                 s.eventChains.forEachIndexed { index, chain ->
-                    chain.result?.let { r -> add(PayJourneyReportRow(r.eventDate, index + 1, CpcHistoryStage.SIXTH, eventKind(r),
-                        r.eventType, sixthPosition(r.newPayBand, r.newGradePay, r.newPayInPayBand), r.nextIncrementDate, when (r.fixationOption) { SixthCpcFixationOption.FROM_EVENT_DATE -> CpcFixationBasis.EVENT_DATE; SixthCpcFixationOption.FROM_DNI -> CpcFixationBasis.DNI }, r.ruleBasis.joinToString(" "), sequence = chain.sequence)) }
+                    chain.result?.let { r -> add(PayJourneyReportRow(r.eventDate, index + 1, CpcHistoryStage.SIXTH, eventKind(r), "Saved ${r.eventType} — not replay-validated",
+                        sixthPosition(r.newPayBand, r.newGradePay, r.newPayInPayBand), r.nextIncrementDate,
+                        if (r.fixationOption == SixthCpcFixationOption.FROM_DNI) CpcFixationBasis.DNI else CpcFixationBasis.EVENT_DATE,
+                        r.ruleBasis.joinToString(" "), sequence = chain.sequence)) }
                     chain.scaleUpgrade?.let { r -> add(PayJourneyReportRow(r.eventDate, index + 1, CpcHistoryStage.SIXTH, CpcJourneyEventKind.PAY_SCALE_UPGRADATION,
-                        "Pay-scale upgradation", sixthPosition(r.newPayBand, r.newGradePay, r.newPayInPayBand), r.nextIncrementDate,
+                        "Saved pay-scale upgradation — not replay-validated", sixthPosition(r.newPayBand, r.newGradePay, r.newPayInPayBand), r.nextIncrementDate,
                         remarks = listOfNotNull(r.historicalRoute?.name, r.sourcePreRevisedBasicPay?.let { "Source pre-revised pay $it" }, r.fixationIncrement?.let { "Fixation increment $it" }).joinToString("; "), sequence = chain.sequence)) }
-                    val eventPayBand = chain.result?.newPayBand ?: chain.scaleUpgrade?.newPayBand ?: s.payBandId
-                    chain.increments.forEachIndexed { ix, inc -> add(PayJourneyReportRow(inc.date, index * 1000 + ix + 2, CpcHistoryStage.SIXTH, CpcJourneyEventKind.ANNUAL_INCREMENT,
-                        "Event-chain increment", sixthPosition(eventPayBand, inc.gradePay, inc.payInPayBand), sequence = chain.sequence + ix + 1)) }
+                    val eventBand = chain.result?.newPayBand ?: chain.scaleUpgrade?.newPayBand ?: s.payBandId
+                    chain.increments.forEachIndexed { ix, inc -> add(PayJourneyReportRow(inc.date, index * 1000 + ix + 2, CpcHistoryStage.SIXTH,
+                        CpcJourneyEventKind.ANNUAL_INCREMENT, "Saved event-chain increment — not replay-validated", sixthPosition(eventBand, inc.gradePay, inc.payInPayBand), addOneYear(inc.date), sequence = chain.sequence + ix + 1)) }
                 }
             }
             section("6th CPC Pay Journey", CpcHistoryStage.SIXTH, rows); allRows += rows
@@ -565,16 +635,14 @@ object PayJourneyReportBuilder {
         val finalDni = resolvedSeventh?.dni?.takeIf { hasSeventhPositionDate }
             ?: seventhSnapshot?.increments?.maxByOrNull { it.sequence }?.let { addOneYear(it.dateMillis) }
             ?: seventhSnapshot?.startingDniMillis
-            ?: effectiveSixth?.eventChains?.maxByOrNull { it.sequence }?.let { chain ->
-                chain.increments.maxByOrNull { it.sequence }?.date ?: chain.result?.nextIncrementDate ?: chain.scaleUpgrade?.nextIncrementDate
-            }
-            ?: effectiveSixth?.increments?.maxByOrNull { it.sequence }?.dateMillis
+            ?: effectiveSixth?.let(::finalSixthDniMillis)
             ?: snapshot.fifth?.let(::finalFifthDni)
         return PayJourneyReport(record.title ?: "Pay Fixation / Pay Journey Report", record.savedAtMillis, snapshot.startingCpc,
             snapshot.startingDateMillis, sections, final, finalDni,
             chronologyNote = if (snapshot.sequenceIntegrity == CpcSequenceIntegrity.INFERRED)
                 "Note: This saved calculation predates chronological event sequencing. Where multiple events share the same date, their original application order could not be determined."
-            else null)
+            else null,
+            replayWarnings = replayWarnings)
     }
 
     private fun addOneYear(date: Long): Long = java.util.Calendar.getInstance().apply { timeInMillis = date; add(java.util.Calendar.YEAR, 1) }.timeInMillis
