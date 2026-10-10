@@ -47,17 +47,31 @@ data class SixthCpcEventChain(
     val result: SixthCpcEventResult? = null,
     val scaleUpgrade: SixthCpcScaleUpgradeResult? = null,
     val increments: List<SixthCpcEventIncrement> = emptyList(),
-    val sequence: Int = 0
-)
+    val sequence: Int = 0,
+    /** Ephemeral identity for safe in-memory editing; intentionally not persisted. */
+    val localId: String = java.util.UUID.randomUUID().toString()
+) {
+    // localId is UI-session identity, not saved journey data. Keep value equality
+    // stable across JSON restore/resave while retaining identity for editor actions.
+    override fun equals(other: Any?): Boolean = other is SixthCpcEventChain &&
+        kind == other.kind && result == other.result && scaleUpgrade == other.scaleUpgrade &&
+        increments == other.increments && sequence == other.sequence
+
+    override fun hashCode(): Int {
+        var resultCode = kind.hashCode()
+        resultCode = 31 * resultCode + (result?.hashCode() ?: 0)
+        resultCode = 31 * resultCode + (scaleUpgrade?.hashCode() ?: 0)
+        resultCode = 31 * resultCode + increments.hashCode()
+        resultCode = 31 * resultCode + sequence
+        return resultCode
+    }
+}
 
 private val EventBlue = Color(0xFF1769AA)
 private val EventPrimary = Color(0xFF172B4D)
 private val EventSecondary = Color(0xFF5B6B7A)
 
-private fun january2006Date() = Calendar.getInstance().apply { clear(); set(2006, Calendar.JANUARY, 1) }.timeInMillis
-private fun august2008NotificationDate() = Calendar.getInstance().apply { clear(); set(2008, Calendar.AUGUST, 29) }.timeInMillis
 private fun july2015Date() = Calendar.getInstance().apply { clear(); set(2015, Calendar.JULY, 1) }.timeInMillis
-private fun isInterimSixthCpcEventDate(date: Long) = date in january2006Date()..august2008NotificationDate()
 
 private fun payBandMinimum(title: String): Int = when (title.substringBefore(":")) {
     "PB-1" -> 5200
@@ -100,11 +114,14 @@ fun SixthCpcEventsSection(
     startingPositionDate: Long? = null,
     latestAllowedEventDate: Long? = null,
     initialEventChains: List<SixthCpcEventChain> = emptyList(),
+    initialIncrements: List<SixthCpcHistoricalIncrement> = emptyList(),
     initialSequence: Int = 0,
+    sequenceIntegrity: CpcSequenceIntegrity = CpcSequenceIntegrity.ORIGINAL,
     onContinueToSeventh: ((String, Int, Int, Long) -> Unit)? = null,
     onLatestStateChange: ((String, Int, Int, Long) -> Unit)? = null,
     onEventsStateChange: ((Boolean) -> Unit)? = null,
     onJourneyLinesChange: ((List<String>) -> Unit)? = null,
+    onIncrementsStateChange: ((List<SixthCpcHistoricalIncrement>) -> Unit)? = null,
     onAcceptedEventChainsChange: ((List<SixthCpcEventChain>) -> Unit)? = null
 ) {
     var events by remember(startingPayInPayBand, startingGradePay, startingPayBand, startingPositionDate, latestAllowedEventDate, initialEventChains) { mutableStateOf(initialEventChains) }
@@ -119,34 +136,85 @@ fun SixthCpcEventsSection(
     var bandMenu by remember { mutableStateOf(false) }
     var gpMenu by remember { mutableStateOf(false) }
     var fixationOption by remember { mutableStateOf(SixthCpcFixationOption.FROM_EVENT_DATE) }
+    var editingEventId by remember { mutableStateOf<String?>(null) }
+    var pendingDependentDeleteId by remember { mutableStateOf<String?>(null) }
+    var journeyError by remember { mutableStateOf<String?>(null) }
 
-    val latest = events.lastOrNull()
-    val payInBand = latest?.let(::currentPayInBand) ?: startingPayInPayBand
-    val gradePay = latest?.let(::currentGradePay) ?: startingGradePay
-    val payBand = latest?.let(::currentPayBand) ?: startingPayBand
+    val fallbackStartDate = startingPositionDate ?: Calendar.getInstance().apply { clear(); set(2006, Calendar.JANUARY, 1) }.timeInMillis
+    val journeyState = SixthCpcJourneyState(
+        SixthCpcJourneyStartingPosition(fallbackStartDate, startingPayBand, startingGradePay, startingPayInPayBand),
+        increments = initialIncrements,
+        events = events,
+        sequenceIntegrity = sequenceIntegrity
+    )
+    val replay = runCatching { replaySixthCpcJourney(journeyState) }.getOrNull()
+    val journeyEvents = replay?.events ?: events
+    val latest = journeyEvents.lastOrNull()
+    val payInBand = replay?.finalPosition?.payInPayBand ?: latest?.let(::currentPayInBand) ?: startingPayInPayBand
+    val gradePay = replay?.finalPosition?.gradePay ?: latest?.let(::currentGradePay) ?: startingGradePay
+    val payBand = replay?.finalPosition?.payBand ?: latest?.let(::currentPayBand) ?: startingPayBand
     val basicPay = payInBand + gradePay
-    val currentPositionDate = latest?.let(::currentDate) ?: startingPositionDate
+    val currentPositionDate = replay?.finalPosition?.dateMillis ?: latest?.let(::currentDate) ?: startingPositionDate
+    val editingPosition = editingEventId?.let { sixthCpcPositionBeforeEvent(journeyState, it) }
+    val formPayInBand = editingPosition?.payInPayBand ?: payInBand
+    val formGradePay = editingPosition?.gradePay ?: gradePay
+    val formPayBand = editingPosition?.payBand ?: payBand
+    val formPositionDate = editingPosition?.dateMillis ?: currentPositionDate
+    val finalTimelineEntry = replay?.timeline?.lastOrNull()
+    val nextRequiredDni = editingPosition?.nextDniMillis
+        ?: finalTimelineEntry?.dniMillis
+        ?: currentPositionDate?.let(::sixthCpcNextAnnualIncrementDate)
+    val eventMaximumDate = listOfNotNull(latestAllowedEventDate, nextRequiredDni).minOrNull()
     val eventDateInRange = eventDate?.let { date ->
-        (currentPositionDate == null || date >= currentPositionDate) &&
-            (latestAllowedEventDate == null || date <= latestAllowedEventDate)
+        (formPositionDate == null || date >= formPositionDate) &&
+            (eventMaximumDate == null || date <= eventMaximumDate)
     } == true
-    val isInterim = eventDate?.let(::isInterimSixthCpcEventDate) == true
     val financialScheme = eventDate?.let(::financialUpgradationForSixthCpcEvent)
-    val latestDate = latest?.let(::currentDate)
+    val latestDate = currentPositionDate
+
+    fun applyMutation(result: SixthCpcMutationResult) {
+        if (result.accepted) {
+            events = result.state.events
+            onIncrementsStateChange?.invoke(result.state.increments)
+            journeyError = null
+        } else journeyError = result.error
+    }
+
+    fun openEventEditor(chain: SixthCpcEventChain) {
+        editingEventId = chain.localId
+        eventDate = chain.result?.eventDate ?: chain.scaleUpgrade?.eventDate
+        eventKind = chain.kind
+        fixationOption = chain.result?.fixationOption ?: SixthCpcFixationOption.FROM_EVENT_DATE
+        historicalRoute = chain.scaleUpgrade?.historicalRoute ?: HistoricalSixthCpcRoute.SCALE_6500_10500_FROM_5500_9000
+        targetGp = chain.result?.newGradePay ?: chain.scaleUpgrade?.newGradePay
+        targetBand = chain.scaleUpgrade?.newPayBand?.let { saved -> SixthToSeventhCpcData.payBands.firstOrNull { it.title == saved } }
+        showForm = true
+    }
+
+    LaunchedEffect(journeyEvents, editingEventId) {
+        if (editingEventId != null && journeyEvents.none { it.localId == editingEventId }) {
+            editingEventId = null
+            showForm = false
+            eventDate = null
+        }
+    }
 
     LaunchedEffect(latest, payInBand, gradePay, payBand, latestDate, currentPositionDate) {
         val stateDate = latestDate ?: currentPositionDate
         if (stateDate != null) onLatestStateChange?.invoke(payBand, gradePay, payInBand, stateDate)
     }
-    LaunchedEffect(events.size) {
-        onEventsStateChange?.invoke(events.isNotEmpty())
+    LaunchedEffect(journeyEvents.size) {
+        onEventsStateChange?.invoke(journeyEvents.isNotEmpty())
     }
-    LaunchedEffect(events) {
-        onAcceptedEventChainsChange?.invoke(events)
+    LaunchedEffect(journeyEvents) {
+        onAcceptedEventChainsChange?.invoke(journeyEvents)
     }
-    LaunchedEffect(events) {
+    LaunchedEffect(replay?.increments) {
+        replay?.increments?.let { onIncrementsStateChange?.invoke(it) }
+    }
+    LaunchedEffect(journeyEvents) {
         onJourneyLinesChange?.invoke(buildList {
-            events.forEachIndexed { index, chain ->
+            journeyEvents.forEachIndexed { index, chain ->
                 val label = when (chain.kind) {
                     SixthCpcEventKind.PROMOTION -> "Promotion"
                     SixthCpcEventKind.FINANCIAL_UPGRADATION -> "Financial Upgradation"
@@ -175,18 +243,69 @@ fun SixthCpcEventsSection(
         Text("6th CPC Events", color = EventPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
         Text("Add promotion, financial-upgradation or pay-scale events chronologically. The latest result becomes the input for the next event.", color = EventSecondary, fontSize = 12.sp)
 
-        events.forEachIndexed { index, chain ->
-            EventCard(chain, index, onDelete = { events = events.take(index) }, onIncrementDeleted = { updatedIncrements -> events = events.toMutableList().also { it[index] = chain.copy(increments = updatedIncrements) } }, onNextIncrement = {
-                val pb = currentPayInBand(chain) ?: return@EventCard
-                val gp = currentGradePay(chain) ?: return@EventCard
-                val next = calculateSixthCpcNextIncrement(pb, gp, bandForGradePay(gp).payBandMaximum) ?: return@EventCard
-                val nextPb = next - gp
-                val nextDate = nextIncrementDate(chain) ?: return@EventCard
-                if (nextDate <= july2015Date()) events = events.toMutableList().also { it[index] = chain.copy(increments = chain.increments + SixthCpcEventIncrement(nextPb, gp, nextDate, chain.sequence + chain.increments.size + 1)) }
-            }, onAddEvent = { showForm = true })
+        journeyError?.let { Text(it, color = Color(0xFFC62828), fontSize = 12.sp) }
+        if (sequenceIntegrity == CpcSequenceIntegrity.INFERRED) {
+            Text("Older saved 6th CPC ordering is reconstructed; same-date event order may not match the original application order.", color = EventSecondary, fontSize = 12.sp)
+        }
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("6th CPC Pay Journey", color = EventBlue, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
+                replay?.timeline.orEmpty().forEachIndexed { rowIndex, row ->
+                    Surface(Modifier.fillMaxWidth(), color = if (row.kind == SixthCpcTimelineKind.STARTING_POSITION) Color(0xFFF2F6FA) else EventBlue.copy(alpha = .045f), shape = RoundedCornerShape(12.dp)) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("${rowIndex + 1}. ${row.description}", color = EventPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("${dateText(row.dateMillis)} · ${row.position.payBand}", color = EventSecondary, fontSize = 12.sp)
+                            Text("Pay in Pay Band ${money(row.position.payInPayBand)} + Grade Pay ${money(row.position.gradePay)} = Basic Pay ${money(row.position.basicPay)}", color = EventBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            if (row.eventId != null && row.dniMillis != null) Text("Next DNI: ${dateText(row.dniMillis)}", color = EventSecondary, fontSize = 12.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                when (row.kind) {
+                                    SixthCpcTimelineKind.ANNUAL_INCREMENT -> TextButton(onClick = {
+                                        val mutation = deleteSixthCpcIncrement(journeyState, row.incrementIndex ?: return@TextButton)
+                                        applyMutation(mutation)
+                                    }) { Text("Delete") }
+                                    SixthCpcTimelineKind.EVENT -> journeyEvents.firstOrNull { it.localId == row.eventId }?.let { chain ->
+                                        chain.result?.let { result ->
+                                            Text("${result.eventType} · ${result.financialUpgradation ?: "Promotion"} · ${if (result.fixationOption == SixthCpcFixationOption.FROM_DNI) "From DNI" else "From event date"}", color = EventSecondary, fontSize = 11.sp)
+                                            Text("Previous pay: ${money(result.oldPayInPayBand)} + GP ${money(result.oldGradePay)}; fixation increment(s): ${money(result.increment)}", color = EventSecondary, fontSize = 11.sp)
+                                        }
+                                        chain.scaleUpgrade?.let { upgrade ->
+                                            Text("Route: ${upgrade.historicalRoute ?: "Saved scale-upgrade route unavailable"}", color = EventSecondary, fontSize = 11.sp)
+                                            Text("Previous pay: ${money(upgrade.oldPayInPayBand)} + GP ${money(upgrade.oldGradePay)}", color = EventSecondary, fontSize = 11.sp)
+                                        }
+                                        if (chain.scaleUpgrade?.historicalRoute == null && chain.kind == SixthCpcEventKind.PAY_SCALE_UPGRADATION) {
+                                            Text("Editing unavailable: saved route inputs are missing.", color = EventSecondary, fontSize = 11.sp)
+                                        } else {
+                                            TextButton(onClick = { openEventEditor(chain) }) { Text("Edit") }
+                                        }
+                                        TextButton(onClick = {
+                                            val deletion = deleteSixthCpcEvent(journeyState, chain.localId)
+                                            if (deletion.accepted) applyMutation(deletion)
+                                            else { journeyError = deletion.error; pendingDependentDeleteId = chain.localId }
+                                        }) { Text("Delete") }
+                                    }
+                                    SixthCpcTimelineKind.EVENT_INCREMENT -> TextButton(onClick = {
+                                        val id = row.eventId ?: return@TextButton
+                                        val nested = row.nestedIncrementIndex ?: return@TextButton
+                                        applyMutation(deleteSixthCpcEventIncrement(journeyState, id, nested))
+                                    }) { Text("Delete") }
+                                    SixthCpcTimelineKind.STARTING_POSITION -> Unit
+                                }
+                                if (rowIndex == replay?.timeline?.lastIndex && row.eventId != null &&
+                                    row.kind in setOf(SixthCpcTimelineKind.EVENT, SixthCpcTimelineKind.EVENT_INCREMENT) &&
+                                    row.dniMillis != null && (latestAllowedEventDate == null || row.dniMillis <= latestAllowedEventDate)) {
+                                    TextButton(onClick = {
+                                        applyMutation(addNextSixthCpcEventChainIncrement(journeyState, row.eventId, latestAllowedEventDate))
+                                    }) { Text("Next Increment") }
+                                }
+                            }
+                        }
+                    }
+                }
+                Text("Final 6th CPC position: ${payBand} · ${money(payInBand)} + ${money(gradePay)} = ${money(basicPay)}", color = EventPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+            }
         }
 
-        if (events.isEmpty()) Button(onClick = { showForm = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(12.dp)) { Text("Add Event", fontWeight = FontWeight.Bold) }
+        Button(onClick = { editingEventId = null; showForm = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(12.dp)) { Text("Add Event", fontWeight = FontWeight.Bold) }
         if (latest != null && latestDate != null && latestDate >= july2015Date() && onContinueToSeventh != null) {
             Button(onClick = { onContinueToSeventh(payBand, gradePay, payInBand, latestDate) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(12.dp)) { Text("Continue to 7th CPC", fontWeight = FontWeight.Bold) }
         }
@@ -194,12 +313,12 @@ fun SixthCpcEventsSection(
         if (showForm) {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("New 6th CPC Event", color = EventBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Current position: $payBand | Pay in Pay Band ${money(payInBand)} | GP ${money(gradePay)} | Basic ${money(basicPay)}", color = EventSecondary, fontSize = 12.sp)
+                    Text(if (editingEventId == null) "New 6th CPC Event" else "Edit 6th CPC Event", color = EventBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Current position: $formPayBand | Pay in Pay Band ${money(formPayInBand)} | GP ${money(formGradePay)} | Basic ${money(formPayInBand + formGradePay)}", color = EventSecondary, fontSize = 12.sp)
                     OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(eventDate?.let(::dateText) ?: "Select Event Date") }
                     if (eventDate != null && !eventDateInRange) {
                         Text(
-                            "Event date must be on or after the current 6th CPC position and on or before ${latestAllowedEventDate?.let(::dateText) ?: "the end of the 6th CPC period"}.",
+                            "Event date must be on or after the current position and no later than its next DNI (${nextRequiredDni?.let(::dateText) ?: "not available"}). Add the due increment before entering a later event.",
                             color = Color(0xFFC62828), fontSize = 12.sp
                         )
                     }
@@ -230,7 +349,7 @@ fun SixthCpcEventsSection(
                         }
                     }
 
-                    if (!isInterim && eventKind != SixthCpcEventKind.PAY_SCALE_UPGRADATION) {
+                    if (eventKind != SixthCpcEventKind.PAY_SCALE_UPGRADATION) {
                         Text("Fixation option", color = EventPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         EventRadio("From Date of Event", fixationOption == SixthCpcFixationOption.FROM_EVENT_DATE) { fixationOption = SixthCpcFixationOption.FROM_EVENT_DATE }
                         EventRadio("From Date of DNI (1 July)", fixationOption == SixthCpcFixationOption.FROM_DNI) { fixationOption = SixthCpcFixationOption.FROM_DNI }
@@ -271,9 +390,13 @@ fun SixthCpcEventsSection(
 
                     Button(onClick = {
                         val date = eventDate ?: return@Button
+                        val oldChain = editingEventId?.let { id -> journeyEvents.firstOrNull { it.localId == id } }
+                        val sequence = oldChain?.sequence ?: nextSixthCpcApplicationSequence(emptyList(), journeyEvents, initialSequence)
+                        val localId = oldChain?.localId ?: java.util.UUID.randomUUID().toString()
+                        val updatedChain: SixthCpcEventChain
                         if (eventKind == SixthCpcEventKind.PAY_SCALE_UPGRADATION) {
-                            val oldPb = payInBand
-                            val oldGp = gradePay
+                            val oldPb = formPayInBand
+                            val oldGp = formGradePay
                             val newPb: Int
                             val newGp: Int
                             val newBand = "PB-2: ₹9,300–34,800"
@@ -296,29 +419,36 @@ fun SixthCpcEventsSection(
                                     fixationIncrement = calculated.second
                                 }
                             }
-                            events = events + SixthCpcEventChain(
+                            updatedChain = SixthCpcEventChain(
                                 kind = SixthCpcEventKind.PAY_SCALE_UPGRADATION,
                                 scaleUpgrade = SixthCpcScaleUpgradeResult(
-                                    date, oldPb, oldGp, payBand, newPb, newGp, newBand,
+                                    date, oldPb, oldGp, formPayBand, newPb, newGp, newBand,
                                     newPb + newGp, nextJuly(date), historicalRoute, oldPb, fixationIncrement
-                                ), sequence = maxOf(initialSequence, events.maxOfOrNull { it.sequence } ?: 0) + 1
+                                ), sequence = sequence, localId = localId
                             )
                         } else {
                             val gp = targetGp ?: return@Button
                             val result = calculateSixthCpcPromotionOrMacp(
-                                payInBand, gradePay, gp, date,
+                                formPayInBand, formGradePay, gp, date,
                                 if (eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION) "Financial Upgradation" else "Promotion",
                                 fixationOption,
                                 if (eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION) financialScheme else null
                             )
-                            events = events + SixthCpcEventChain(eventKind, result = result, sequence = maxOf(initialSequence, events.maxOfOrNull { it.sequence } ?: 0) + 1)
+                            updatedChain = SixthCpcEventChain(eventKind, result = result, sequence = sequence, localId = localId)
                         }
-                        showForm = false
-                        targetBand = null
-                        targetGp = null
-                        eventDate = null
-                        fifthBasicText = ""
-                    }, enabled = canSave, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(12.dp)) { Text("Save Event", fontWeight = FontWeight.Bold) }
+                        val mutation = editingEventId?.let { replaceSixthCpcEvent(journeyState, it, updatedChain) }
+                            ?: addSixthCpcEvent(journeyState, updatedChain, initialSequence)
+                        if (mutation.accepted) {
+                            events = mutation.state.events
+                            journeyError = null
+                            showForm = false
+                            editingEventId = null
+                            targetBand = null
+                            targetGp = null
+                            eventDate = null
+                            fifthBasicText = ""
+                        } else journeyError = mutation.error
+                    }, enabled = canSave && eventDateInRange, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(12.dp)) { Text("Save Event", fontWeight = FontWeight.Bold) }
                 }
             }
         }
@@ -328,18 +458,67 @@ fun SixthCpcEventsSection(
         val state = rememberDatePickerState(initialSelectedDateMillis = eventDate)
         DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = { TextButton(onClick = { eventDate = state.selectedDateMillis; showDatePicker = false }) { Text("Confirm") } }, dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } }) { DatePicker(state) }
     }
+
+    pendingDependentDeleteId?.let { eventId ->
+        val deletionPlan = planSixthCpcEventAndLaterDeletion(journeyState, eventId)
+        val affectedEntries = buildList<Pair<Long, String>> {
+            deletionPlan?.removedTopIncrementIndices.orEmpty().forEach { index ->
+                journeyState.increments.getOrNull(index)?.let { increment ->
+                    add(increment.date to "Annual increment ${index + 1} — ${dateText(increment.date)}")
+                }
+            }
+            deletionPlan?.removedEventIds.orEmpty().forEach { removedId ->
+                val eventIndex = journeyState.events.indexOfFirst { it.localId == removedId }
+                journeyState.events.getOrNull(eventIndex)?.let { chain ->
+                    val date = chain.result?.eventDate ?: chain.scaleUpgrade?.eventDate ?: Long.MAX_VALUE
+                    val label = if (removedId == eventId) "Selected event" else "Following event ${eventIndex + 1}"
+                    add(date to "$label (${chain.kind.name.lowercase().replace('_', ' ')}) — ${dateText(date)}")
+                }
+            }
+            deletionPlan?.removedNestedIncrements.orEmpty().forEach { ref ->
+                val eventIndex = journeyState.events.indexOfFirst { it.localId == ref.eventId }
+                val increment = journeyState.events.getOrNull(eventIndex)?.increments?.getOrNull(ref.incrementIndex)
+                increment?.let {
+                    add(it.date to "Event-chain increment ${eventIndex + 1}.${ref.incrementIndex + 1} — ${dateText(it.date)}")
+                }
+            }
+        }.sortedBy { it.first }.map { it.second }
+        AlertDialog(
+            onDismissRequest = { pendingDependentDeleteId = null },
+            title = { Text("Remove dependent 6th CPC entries?") },
+            text = {
+                Text(buildString {
+                    append("At least one later item cannot be recalculated from saved inputs. Confirmed deletion removes this event and the following entries:")
+                    if (affectedEntries.isEmpty()) append("\n• No later items could be identified; the saved sequence is incomplete.")
+                    else affectedEntries.forEach { append("\n• "); append(it) }
+                    if (sequenceIntegrity == CpcSequenceIntegrity.INFERRED) append("\n\nThis older record has inferred ordering; same-date cross-type order is unknown.")
+                })
+            },
+            confirmButton = { TextButton(onClick = {
+                val deletion = confirmDeleteSixthCpcEventAndLater(journeyState, eventId)
+                applyMutation(deletion)
+                pendingDependentDeleteId = null
+            }) { Text("Remove later entries") } },
+            dismissButton = { TextButton(onClick = { pendingDependentDeleteId = null }) { Text("Cancel") } }
+        )
+    }
 }
 
 @Composable
-private fun EventCard(chain: SixthCpcEventChain, index: Int, onDelete: () -> Unit, onIncrementDeleted: (List<SixthCpcEventIncrement>) -> Unit, onNextIncrement: () -> Unit, onAddEvent: () -> Unit) {
+private fun EventCard(chain: SixthCpcEventChain, index: Int, onEdit: () -> Unit, onDelete: () -> Unit, onIncrementDeleted: (Int) -> Unit, onNextIncrement: () -> Unit, onAddEvent: () -> Unit) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("Event ${index + 1}: ${when (chain.kind) { SixthCpcEventKind.PROMOTION -> "Promotion"; SixthCpcEventKind.FINANCIAL_UPGRADATION -> "Financial Upgradation"; SixthCpcEventKind.PAY_SCALE_UPGRADATION -> "Pay Scale Upgradation / Revision" }}", Modifier.weight(1f), color = EventBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                TextButton(onClick = onEdit) { Text("Edit") }
                 TextButton(onClick = onDelete) { Text("Delete") }
             }
             chain.result?.let { r ->
                 Text("Date: ${dateText(r.eventDate)}", color = EventPrimary, fontWeight = FontWeight.Bold)
+                Text("Fixation: ${when (r.fixationOption) {
+                    SixthCpcFixationOption.FROM_EVENT_DATE -> "From Date of Event"
+                    SixthCpcFixationOption.FROM_DNI -> "From Date of DNI (1 July)"
+                }}", color = EventBlue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 RowValue("Old Pay in Pay Band", r.oldPayInPayBand); RowValue("Old Grade Pay", r.oldGradePay); RowValue("Fixation Increment(s)", r.increment); RowValue("New Pay in Pay Band", r.newPayInPayBand); RowValue("New Grade Pay", r.newGradePay); RowValue("New Basic Pay", r.revisedBasicPay)
                 Text("Pay Band: ${r.newPayBand}", color = EventSecondary, fontSize = 12.sp); Text("Next DNI: ${dateText(r.nextIncrementDate)}", color = EventSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
@@ -379,11 +558,7 @@ private fun EventCard(chain: SixthCpcEventChain, index: Int, onDelete: () -> Uni
                                 fontWeight = FontWeight.ExtraBold
                             )
                         }
-                        TextButton(onClick = {
-                            val updated = chain.increments.toMutableList()
-                            if (i in updated.indices) updated.removeAt(i)
-                            onIncrementDeleted(updated)
-                        }) {
+                        TextButton(onClick = { onIncrementDeleted(i) }) {
                             Text("Delete", fontWeight = FontWeight.Bold)
                         }
                     }

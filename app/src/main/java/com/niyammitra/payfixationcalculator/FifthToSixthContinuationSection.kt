@@ -40,9 +40,40 @@ fun FifthToSixthContinuationSection(
     var eventLatestDate by remember { mutableStateOf<Long?>(null) }
     var automaticSeventhPayInBand by remember { mutableStateOf<Int?>(null) }
     var hasSixthCpcEvent by remember { mutableStateOf(false) }
+    var hasReceivedSixthPosition by remember { mutableStateOf(false) }
     var gradePayText by remember(conversion.gradePay) { mutableStateOf(conversion.gradePay.toString()) }
+    var stateError by remember { mutableStateOf<String?>(null) }
+    var previousConversion by remember(restoredSnapshot) { mutableStateOf(conversion) }
 
-    val editedGradePay = gradePayText.toIntOrNull()?.takeIf { it > 0 } ?: conversion.gradePay
+    val requestedGradePay = gradePayText.toIntOrNull()
+    val selectedBand = SixthToSeventhCpcData.payBands.firstOrNull { it.title.substringBefore(":").trim() == conversion.scale.payBand.substringBefore(":").trim() }
+    val gradePayValid = requestedGradePay != null && requestedGradePay in (selectedBand?.gradePays ?: emptyList())
+    val editedGradePay = requestedGradePay?.takeIf { gradePayValid } ?: conversion.gradePay
+    LaunchedEffect(conversion) {
+        if (previousConversion != conversion) {
+            seventhHistorySnapshot = null
+            automaticSeventhPayInBand = null
+            previousConversion = conversion
+        }
+    }
+    fun updateInlineIncrements(updated: List<InlineSixthCpcIncrementStep>) {
+        if (incrementSteps == updated) return
+        val current = SixthCpcJourneyState(
+            SixthCpcJourneyStartingPosition(inlineSixthConversionDate(), conversion.scale.payBand, editedGradePay, conversion.payInPayBand),
+            incrementSteps.map { SixthCpcHistoricalIncrement(it.pay - editedGradePay, editedGradePay, it.date, it.sequence) },
+            acceptedEventChains,
+            sequenceIntegrity
+        )
+        val next = current.copy(increments = updated.map {
+            SixthCpcHistoricalIncrement(it.pay - editedGradePay, editedGradePay, it.date, it.sequence)
+        })
+        val continuation = SixthCpcContinuationMutationState(current, seventhHistorySnapshot).withSixthCpc(next)
+        if (continuation.sixthCpc != current) {
+            seventhHistorySnapshot = continuation.seventhCpc
+            automaticSeventhPayInBand = null
+        }
+        incrementSteps = updated
+    }
     val latest = incrementSteps.lastOrNull()
     val latestPayInBand = latest?.let { it.pay - editedGradePay } ?: conversion.payInPayBand
     val currentSixthBasicPay = latestPayInBand + editedGradePay
@@ -50,7 +81,7 @@ fun FifthToSixthContinuationSection(
     val continuityPayBand = eventLatestPayBand ?: conversion.scale.payBand
     val continuityGradePay = eventLatestGradePay ?: editedGradePay
     val continuityPayInBand = eventLatestPayInBand ?: automaticSeventhPayInBand ?: latestPayInBand
-    val reaches2016 = restoredSnapshot?.seventhContinuation != null || automaticSeventhPayInBand != null || eventLatestDate?.let { it >= inlineSixthJuly2015Date() } == true || reaches2015
+    val reaches2016 = seventhHistorySnapshot != null || automaticSeventhPayInBand != null || eventLatestDate?.let { it >= inlineSixthJuly2015Date() } == true || reaches2015
     SideEffect {
         onHistorySnapshot?.invoke(SixthCpcJourneySnapshot(
             startingDateMillis = inlineSixthConversionDate(),
@@ -78,13 +109,39 @@ fun FifthToSixthContinuationSection(
 
                 OutlinedTextField(
                     value = gradePayText,
-                    onValueChange = { value -> gradePayText = value.filter(Char::isDigit) },
+                    onValueChange = { value ->
+                        val digits = value.filter(Char::isDigit)
+                        gradePayText = digits
+                        val newGp = digits.toIntOrNull()
+                        if (newGp != null && selectedBand != null && newGp in selectedBand.gradePays) {
+                            val candidate = SixthCpcJourneyState(
+                                SixthCpcJourneyStartingPosition(inlineSixthConversionDate(), conversion.scale.payBand, newGp, conversion.payInPayBand),
+                                increments = incrementSteps.map { SixthCpcHistoricalIncrement(0, newGp, it.date, it.sequence) },
+                                events = acceptedEventChains,
+                                sequenceIntegrity = sequenceIntegrity
+                            )
+                            val mutation = replaySixthCpcJourneyFromStartingPosition(candidate, candidate.startingPosition)
+                            if (mutation.accepted) {
+                                val replayed = mutation.replay!!
+                                incrementSteps = replayed.increments.map { InlineSixthCpcIncrementStep(it.payInPayBand + it.gradePay, it.date, it.sequence) }
+                                acceptedEventChains = replayed.events
+                                eventLatestPayBand = null
+                                eventLatestGradePay = null
+                                eventLatestPayInBand = null
+                                eventLatestDate = null
+                                automaticSeventhPayInBand = null
+                                seventhHistorySnapshot = null
+                                stateError = null
+                            } else stateError = mutation.error ?: "The 6th CPC journey could not be recalculated."
+                        }
+                    },
                     label = { Text("Grade Pay") },
                     supportingText = { Text("Edit the Grade Pay if the applicable Grade Pay is different from the mapped value.") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (!gradePayValid) Text("Grade Pay must be valid for ${conversion.scale.payBand}.", color = Color(0xFFC62828), fontSize = 12.sp)
 
                 Surface(Modifier.fillMaxWidth(), color = ContinuationBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
                     Column(Modifier.padding(14.dp)) {
@@ -96,27 +153,7 @@ fun FifthToSixthContinuationSection(
                 }
             }
         }
-
-        if (incrementSteps.isNotEmpty()) {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
-                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("6th CPC Increment Progression", color = ContinuationBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                    incrementSteps.forEachIndexed { index, step ->
-                        val payInBand = step.pay - editedGradePay
-                        Surface(Modifier.fillMaxWidth(), color = ContinuationBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
-                            Row(Modifier.fillMaxWidth().padding(14.dp)) {
-                                Column(Modifier.weight(1f)) {
-                                    Text("Increment ${index + 1}", color = ContinuationSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                    Text("Date: ${formatInlineDate(step.date)}", color = ContinuationText, fontSize = 13.sp)
-                                    Text("Pay in Pay Band: ${formatInlineCurrency(payInBand)} + GP ${formatInlineCurrency(editedGradePay)} = ${formatInlineCurrency(step.pay)}", color = ContinuationBlue, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold)
-                                }
-                                TextButton(onClick = { incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) } }) { Text("Delete") }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        stateError?.let { Text(it, color = Color(0xFFC62828), fontSize = 12.sp) }
 
         if (!hasSixthCpcEvent) {
             Button(
@@ -125,11 +162,12 @@ fun FifthToSixthContinuationSection(
                     val nextPay = calculateSixthCpcNextIncrement(currentPayInBand, editedGradePay, conversion.scale.payBandMaximum) ?: return@Button
                     val nextDate = latest?.let { addInlineSixthYear(it.date) } ?: inlineSixthFirstIncrementDate()
                     if (nextDate <= inlineSixthJuly2015Date()) {
-                        incrementSteps = incrementSteps + InlineSixthCpcIncrementStep(nextPay, nextDate, (incrementSteps.maxOfOrNull { it.sequence } ?: 0) + 1)
+                        updateInlineIncrements(incrementSteps + InlineSixthCpcIncrementStep(nextPay, nextDate,
+                            nextSixthCpcApplicationSequence(incrementSteps.map { SixthCpcHistoricalIncrement(0, editedGradePay, it.date, it.sequence) }, acceptedEventChains)))
                         if (nextDate == inlineSixthJuly2015Date()) automaticSeventhPayInBand = nextPay - editedGradePay
                     }
                 },
-                enabled = !reaches2015 && gradePayText.toIntOrNull()?.let { it > 0 } == true,
+                enabled = !reaches2015 && gradePayValid,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = ContinuationBlue),
                 shape = RoundedCornerShape(12.dp)
@@ -143,21 +181,47 @@ fun FifthToSixthContinuationSection(
         }
 
         SixthCpcEventsSection(
-            startingPayInPayBand = latestPayInBand,
+            startingPayInPayBand = conversion.payInPayBand,
             startingGradePay = editedGradePay,
             startingPayBand = conversion.scale.payBand,
-            initialEventChains = restoredSnapshot?.eventChains.orEmpty(),
-            initialSequence = incrementSteps.maxOfOrNull { it.sequence } ?: incrementSteps.size,
+            startingPositionDate = inlineSixthConversionDate(),
+            latestAllowedEventDate = inlineSixthJuly2015Date(),
+            initialEventChains = acceptedEventChains,
+            initialIncrements = incrementSteps.map { SixthCpcHistoricalIncrement(0, editedGradePay, it.date, it.sequence) },
+            initialSequence = nextSixthCpcApplicationSequence(incrementSteps.map { SixthCpcHistoricalIncrement(0, editedGradePay, it.date, it.sequence) }, acceptedEventChains) - 1,
+            sequenceIntegrity = sequenceIntegrity,
             onContinueToSeventh = onContinueToSeventh,
+            onIncrementsStateChange = { updated ->
+                val mapped = updated.map { InlineSixthCpcIncrementStep(it.payInPayBand + it.gradePay, it.date, it.sequence) }
+                updateInlineIncrements(mapped)
+            },
             onLatestStateChange = { band, gp, payInBand, date ->
+                val changed = hasReceivedSixthPosition &&
+                    (eventLatestPayBand != band || eventLatestGradePay != gp || eventLatestPayInBand != payInBand || eventLatestDate != date)
+                if (changed) {
+                    seventhHistorySnapshot = null
+                    automaticSeventhPayInBand = null
+                }
                 eventLatestPayBand = band
                 eventLatestGradePay = gp
                 eventLatestPayInBand = payInBand
                 eventLatestDate = date
+                hasReceivedSixthPosition = true
                 if (date >= inlineSixthJuly2015Date()) automaticSeventhPayInBand = payInBand
             },
             onEventsStateChange = { hasSixthCpcEvent = it },
-            onAcceptedEventChainsChange = { acceptedEventChains = it }
+            onAcceptedEventChainsChange = {
+                if (acceptedEventChains != it) {
+                    acceptedEventChains = it
+                    seventhHistorySnapshot = null
+                    automaticSeventhPayInBand = null
+                    eventLatestPayBand = null
+                    eventLatestGradePay = null
+                    eventLatestPayInBand = null
+                    eventLatestDate = null
+                    hasReceivedSixthPosition = false
+                }
+            }
         )
 
         if (reaches2016) {
@@ -165,7 +229,7 @@ fun FifthToSixthContinuationSection(
                 payBand = continuityPayBand,
                 gradePay = continuityGradePay,
                 payInPayBand = continuityPayInBand,
-                restoredSnapshot = restoredSnapshot?.seventhContinuation,
+                restoredSnapshot = seventhHistorySnapshot,
                 sequenceIntegrity = sequenceIntegrity,
                 onHistorySnapshot = { seventhHistorySnapshot = it }
             )

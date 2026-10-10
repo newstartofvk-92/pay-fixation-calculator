@@ -31,7 +31,7 @@ class SixthCpcPromotionMacpUtilsTest {
     }
 
     @Test
-    fun eventDateFixationUsesOnePromotionIncrement() {
+    fun financialUpgradationFromEventDateUsesOneIncrement() {
         val result = calculateSixthCpcPromotionOrMacp(
             payInPayBand = 9300,
             currentGradePay = 4200,
@@ -41,6 +41,7 @@ class SixthCpcPromotionMacpUtilsTest {
             fixationOption = SixthCpcFixationOption.FROM_EVENT_DATE,
             financialUpgradation = SixthCpcFinancialUpgradation.ACP
         )
+        assertEquals(SixthCpcFixationOption.FROM_EVENT_DATE, result.fixationOption)
         assertEquals(410, result.increment)
         assertEquals(9710, result.newPayInPayBand)
         assertEquals(4600, result.newGradePay)
@@ -73,6 +74,7 @@ class SixthCpcPromotionMacpUtilsTest {
             fixationOption = SixthCpcFixationOption.FROM_DNI,
             financialUpgradation = SixthCpcFinancialUpgradation.ACP
         )
+        assertEquals(SixthCpcFixationOption.FROM_DNI, result.fixationOption)
         assertEquals(830, result.increment)
         assertEquals(10130, result.newPayInPayBand)
         assertEquals(4600, result.newGradePay)
