@@ -112,6 +112,29 @@ fun FourthToFifthCpcScreen(
         liveJourneySnapshot?.let { onJourneySnapshotChange?.invoke(it) }
     }
 
+    fun deleteTimelineIncrement(index: Int) {
+        incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) }
+        eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.CancelDraft)
+        conversionActivated = false
+        fifthHistorySnapshot = null
+    }
+
+    fun deleteTimelineEvent(index: Int) {
+        val reduced = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.Delete(index))
+        val timeline = if (basicPay != null && selectedScale != null) {
+            recalculateFourthCpcTimeline(basicPay, selectedScale!!, incrementSteps, reduced.acceptedEvents, sequenceIntegrity)
+        } else null
+        eventFlow = if (timeline != null) reduced.copy(acceptedEvents = timeline.events) else reduced
+        if (timeline != null) incrementSteps = timeline.increments
+        eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.CancelDraft)
+        val continuation = invalidateFourthCpcContinuation(
+            FourthCpcContinuationState(conversionActivated, fifthHistorySnapshot)
+        )
+        conversionActivated = continuation.conversionActivated
+        fifthHistorySnapshot = continuation.fifthSnapshot
+        showConversionPrompt = false
+    }
+
     Column(Modifier.fillMaxSize().imePadding().background(FourFiveBackground)) {
         PayFixationAppHeader(
             title = "4th CPC → 5th CPC",
@@ -224,27 +247,19 @@ fun FourthToFifthCpcScreen(
                     }
                 }
 
-                result?.let { calculation ->
-                    if (incrementSteps.isNotEmpty()) {
-                        FourthToFifthIncrementProgressionCard(calculation, incrementSteps) { index ->
-                            incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) }
-                            eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.CancelDraft)
-                            conversionActivated = false
-                            fifthHistorySnapshot = null
-                        }
-                    }
-                }
-
-                if (acceptedEvents.isNotEmpty() || incrementSteps.isNotEmpty()) {
-                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
-                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Current 4th CPC Position", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                            currentPay?.let { RowValue("Basic Pay", it) }
-                            currentScale?.let { Text("Scale: ${it.grade}: ${it.existingScale}", color = FourFiveTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Bold) }
-                            timelineDate?.let { Text("Effective Date: ${formatFourthFiveDate(it)}", color = FourFiveTextSecondary, fontSize = 13.sp) }
-                            Text("The next increment is calculated from this chronological pay position.", color = FourFiveTextSecondary, fontSize = 12.sp)
-                        }
-                    }
+                if (validStartingPosition && selectedScale != null && basicPay != null && payDate != null && replayedTimeline != null) {
+                    FourthToFifthChronologicalJourneyCard(
+                        startingPay = basicPay,
+                        startingScale = selectedScale!!,
+                        startingDateMillis = payDate,
+                        timeline = replayedTimeline,
+                        sequenceIntegrity = sequenceIntegrity,
+                        currentPay = currentPay ?: basicPay,
+                        currentScale = currentScale ?: selectedScale!!,
+                        currentDateMillis = timelineDate ?: payDate,
+                        onDeleteIncrement = ::deleteTimelineIncrement,
+                        onDeleteEvent = ::deleteTimelineEvent
+                    )
                 }
 
                 if (!eventFlow.showEventTypes && eventFlow.draftType == null) {
@@ -269,41 +284,6 @@ fun FourthToFifthCpcScreen(
                     TextButton(onClick = { eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.CancelDraft) }) { Text("Cancel") }
                 }
 
-                if (acceptedEvents.isNotEmpty()) {
-                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Accepted 4th CPC Events", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                            acceptedEvents.forEachIndexed { index, event ->
-                                val label = if (event.eventType == CpcJourneyEventKind.ACP) "ACP" else "Promotion"
-                                val target = FourthToFifthCpcData.scales.firstOrNull { it.existingScale == event.targetScaleId }
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                        Text("Event ${index + 1}: $label", fontWeight = FontWeight.Bold, color = FourFiveTextPrimary)
-                                        Text("Date: ${formatFourthFiveDate(event.eventDateMillis)}", color = FourFiveTextSecondary, fontSize = 12.sp)
-                                        Text("${target?.grade ?: event.targetScaleId} · Pay: ${formatFourFiveCurrency(event.resultingPay)}", color = FourFiveTextSecondary, fontSize = 12.sp)
-                                    }
-                                    TextButton(onClick = {
-                                        val reduced = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.Delete(index))
-                                        val timeline = if (basicPay != null && selectedScale != null) {
-                                            recalculateFourthCpcTimeline(basicPay, selectedScale!!, incrementSteps, reduced.acceptedEvents, sequenceIntegrity)
-                                        } else null
-                                        eventFlow = if (timeline != null) reduced.copy(acceptedEvents = timeline.events) else reduced
-                                        if (timeline != null) incrementSteps = timeline.increments
-                                        eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.CancelDraft)
-                                        val continuation = invalidateFourthCpcContinuation(
-                                            FourthCpcContinuationState(conversionActivated, fifthHistorySnapshot)
-                                        )
-                                        conversionActivated = continuation.conversionActivated
-                                        fifthHistorySnapshot = continuation.fifthSnapshot
-                                        showConversionPrompt = false
-                                    }) { Text("Delete Event") }
-                                }
-                                if (index < acceptedEvents.lastIndex) HorizontalDivider()
-                            }
-                        }
-                    }
-                }
-
                 if (eventFlow.draftType != null && currentScale != null && currentPay != null) {
                     FourthCpcEventSection(
                         currentPay = currentPay,
@@ -311,7 +291,6 @@ fun FourthToFifthCpcScreen(
                         currentDate = currentIncrementDate ?: payDate ?: fourthCpcStartDate(),
                         eventType = eventFlow.draftType!!,
                         onEventApplied = { _, _, newDate ->
-                            incrementSteps = incrementSteps.filter { it.date < newDate }
                             nextIncrementDateText = ""
                             val continuation = invalidateFourthCpcContinuation(
                                 FourthCpcContinuationState(conversionActivated, fifthHistorySnapshot)
@@ -524,23 +503,81 @@ fun FourthToFifthCpcScreen(
 }
 
 @Composable
-private fun FourthToFifthIncrementProgressionCard(calculation: FourthToFifthResult, steps: List<FourthToFifthIncrementStep>, onDelete: (Int) -> Unit) {
+private fun FourthToFifthChronologicalJourneyCard(
+    startingPay: Int,
+    startingScale: FourthCpcScale,
+    startingDateMillis: Long,
+    timeline: FourthCpcTimelineResult,
+    sequenceIntegrity: CpcSequenceIntegrity,
+    currentPay: Int,
+    currentScale: FourthCpcScale,
+    currentDateMillis: Long,
+    onDeleteIncrement: (Int) -> Unit,
+    onDeleteEvent: (Int) -> Unit
+) {
+    val entries = buildFourthCpcTimelineEntries(
+        startingPay = startingPay,
+        startingDateMillis = startingDateMillis,
+        timeline = timeline,
+        sequenceIntegrity = sequenceIntegrity
+    )
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("4th CPC Increment Progression", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-            Text("Starting 4th CPC pay: ${formatFourFiveCurrency(calculation.existingBasicPay)}", color = FourFiveTextSecondary, fontSize = 13.sp)
-            steps.forEachIndexed { index, step ->
-                Surface(Modifier.fillMaxWidth(), color = FourFiveBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
-                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Increment ${index + 1}", color = FourFiveTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text("Date: ${formatFourthFiveDate(step.date)}", color = FourFiveTextPrimary, fontSize = 13.sp)
-                            Text("4th CPC Basic Pay: ${formatFourFiveCurrency(step.pay)}", color = FourFiveBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("4th CPC Pay Journey", color = FourFiveBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+            entries.forEachIndexed { index, entry ->
+                if (index > 0) {
+                    Text("↓", Modifier.fillMaxWidth(), color = FourFiveBlue, fontWeight = FontWeight.Bold)
+                }
+                Surface(
+                    Modifier.fillMaxWidth(),
+                    color = if (entry.type == FourthCpcTimelineEntryType.EVENT) FourFiveBlue.copy(alpha = .09f) else FourFiveBlue.copy(alpha = .05f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            when (entry.type) {
+                                FourthCpcTimelineEntryType.STARTING_POSITION -> {
+                                    Text("Starting Position", color = FourFiveTextPrimary, fontWeight = FontWeight.Bold)
+                                    Text("${startingScale.grade}: ${startingScale.existingScale}", color = FourFiveTextSecondary, fontSize = 12.sp)
+                                }
+                                FourthCpcTimelineEntryType.INCREMENT ->
+                                    Text("Increment", color = FourFiveTextPrimary, fontWeight = FontWeight.Bold)
+                                FourthCpcTimelineEntryType.EVENT -> {
+                                    val label = if (entry.eventType == CpcJourneyEventKind.ACP) "ACP" else "Promotion"
+                                    val target = FourthToFifthCpcData.scales.firstOrNull { it.existingScale == entry.targetScaleId }
+                                    Text(label, color = FourFiveTextPrimary, fontWeight = FontWeight.Bold)
+                                    Text("${target?.grade ?: entry.targetScaleId}", color = FourFiveTextSecondary, fontSize = 12.sp)
+                                }
+                            }
+                            Text(formatFourthFiveDate(entry.effectiveDateMillis), color = FourFiveTextSecondary, fontSize = 12.sp)
+                            Text(
+                                "4th CPC Basic Pay: ${formatFourFiveCurrency(entry.basicPay)}",
+                                color = FourFiveBlue,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
                         }
-                        TextButton(onClick = { onDelete(index) }) { Text("Delete", fontWeight = FontWeight.Bold) }
+                        when (entry.type) {
+                            FourthCpcTimelineEntryType.INCREMENT -> TextButton(
+                                onClick = { entry.sourceIndex?.let(onDeleteIncrement) }
+                            ) { Text("Delete", fontWeight = FontWeight.Bold) }
+                            FourthCpcTimelineEntryType.EVENT -> TextButton(
+                                onClick = { entry.sourceIndex?.let(onDeleteEvent) }
+                            ) { Text("Delete Event", fontWeight = FontWeight.Bold) }
+                            FourthCpcTimelineEntryType.STARTING_POSITION -> Unit
+                        }
                     }
                 }
             }
+            HorizontalDivider()
+            Text("Current 4th CPC Position", color = FourFiveBlue, fontWeight = FontWeight.ExtraBold)
+            Text("Effective ${formatFourthFiveDate(currentDateMillis)} · ${currentScale.grade}: ${currentScale.existingScale}", color = FourFiveTextSecondary, fontSize = 12.sp)
+            Text("Basic Pay: ${formatFourFiveCurrency(currentPay)}", color = FourFiveTextPrimary, fontWeight = FontWeight.Bold)
+            Text("The next increment is calculated from this chronological pay position.", color = FourFiveTextSecondary, fontSize = 12.sp)
         }
     }
 }
