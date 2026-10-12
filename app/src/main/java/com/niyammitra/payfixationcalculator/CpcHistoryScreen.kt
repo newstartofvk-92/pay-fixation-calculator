@@ -217,6 +217,7 @@ private object PayJourneyReportPdf {
             report.replayWarnings.forEach { draw(it, heading) }
             report.sections.forEach { section ->
                 y += 8f; currentSection = section.heading; draw(section.heading, heading)
+                var precedingPosition: CpcPayPosition? = null
                 section.rows.forEach { row ->
                     val pos = row.position
                     val details = buildString {
@@ -229,11 +230,16 @@ private object PayJourneyReportPdf {
                         pos.gradePay?.let { append(" | GP $it") }; pos.payInPayBand?.let { append(" | Pay in band $it") }
                         append(" | Pay ${pos.basicPay}"); row.dniMillis?.let { append(" | DNI ${historyDate(it)}") }
                         if (row.fixationBasis != CpcFixationBasis.NOT_APPLICABLE) append(" | Fixation ${row.fixationBasis.name.replace('_', ' ')}")
-                        row.sourcePosition?.let { source -> append(" | From ${source.cpc} CPC pay ${source.basicPay}") }
+                        val eventRow = row.kind in setOf(CpcJourneyEventKind.PROMOTION, CpcJourneyEventKind.ACP,
+                            CpcJourneyEventKind.MACP, CpcJourneyEventKind.FINANCIAL_UPGRADATION,
+                            CpcJourneyEventKind.PAY_SCALE_UPGRADATION, CpcJourneyEventKind.OTHER)
+                        val before = row.sourcePosition ?: if (eventRow) precedingPosition else null
+                        before?.let { source -> append(" | Pay before ${source.cpc} CPC: ${source.basicPay}") }
                         row.implementationDateMillis?.let { append(" | Implementation date ${historyDate(it)}") }
                         row.remarks?.let { append(" | $it") }
                     }
                     draw(details, body, keepTogether = true)
+                    precedingPosition = row.position
                 }
             }
                     report.finalPosition?.let { position ->

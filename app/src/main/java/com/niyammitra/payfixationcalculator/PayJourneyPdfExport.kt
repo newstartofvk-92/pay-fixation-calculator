@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import java.io.IOException
@@ -32,6 +33,12 @@ fun ExportPayJourneyPdf(lines: List<String>, modifier: Modifier = Modifier) {
     OutlinedButton(onClick = { launcher.launch("Pay_Fixation_Journey_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())}.pdf") }, modifier = modifier) {
         Text("Export Complete Journey PDF")
     }
+}
+
+@Composable
+fun ExportCompleteJourneyPdf(snapshot: CompleteJourneySnapshot?, modifier: Modifier = Modifier) {
+    val report = remember(snapshot) { snapshot?.let(::completeJourneyReport) }
+    if (report != null) ExportPayJourneyPdf(payJourneyReportPdfLines(report), modifier)
 }
 
 private object PayJourneyPdf {

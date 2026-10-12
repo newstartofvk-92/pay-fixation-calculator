@@ -189,6 +189,9 @@ fun FifthToSixthCpcScreen(
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(16.dp)) {
                 Text("The existing 5th CPC increment and event calculation components are reused here. This screen does not duplicate or replace their calculation logic.", Modifier.padding(16.dp), color = FiveSixTextPrimary, fontSize = 12.sp)
             }
+            if (validStartingPosition) {
+                ExportCompleteJourneyPdf(liveJourneySnapshot, Modifier.fillMaxWidth())
+            }
             Spacer(Modifier.height(20.dp))
         }
     }

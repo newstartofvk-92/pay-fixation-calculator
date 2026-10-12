@@ -439,6 +439,15 @@ fun PayFixationCalculatorScreen(
                         ),
                         sequenceIntegrity = journeySequenceIntegrity
                     )
+                    ExportCompleteJourneyPdf(
+                        directSeventhCompleteJourneySnapshot(
+                            journeySnapshot,
+                            journeyIncrements,
+                            journeyPromotions,
+                            journeySequenceIntegrity
+                        ),
+                        Modifier.fillMaxWidth()
+                    )
                 }
             }
 

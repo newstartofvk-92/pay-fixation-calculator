@@ -496,6 +496,7 @@ fun FourthToFifthCpcScreen(
                     ),
                     fifth = fifthHistorySnapshot
                 ), sequenceIntegrity = sequenceIntegrity)
+                ExportCompleteJourneyPdf(liveJourneySnapshot, Modifier.fillMaxWidth())
             }
             Spacer(Modifier.height(20.dp))
         }

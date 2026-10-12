@@ -237,6 +237,38 @@ fun SixthToSeventhCpcScreen(
         calculateSixthToSeventhCpc(journeyPayInPayBand, journeyGradePay, eventPayBand)
     } else null
     val seventhStartingSnapshot = initialSeventhSnapshot ?: result?.let(::convertedSeventhStartingSnapshot)
+    val latestSeventhSnapshot = seventhStartingSnapshot?.copy(
+        increments = savePromotionPostSteps(incrementSteps),
+        promotions = promotionHistory
+    )
+    val latestSixthSnapshot = if (
+        startDate != null && selectedPayBand != null && selectedGradePay != null && payInPayBand != null
+    ) SixthCpcJourneySnapshot(
+        startingDateMillis = startDate!!,
+        payBandId = selectedPayBand!!.title.substringBefore(":").trim(),
+        gradePay = selectedGradePay!!,
+        startingPayInPayBand = payInPayBand!!,
+        increments = sixthIncrementSteps.mapIndexed { index, step ->
+            SixthCpcIncrementSnapshot(index + 1, step.payInPayBand, step.gradePay, step.date,
+                step.sequence.takeIf { it > 0 } ?: index + 1)
+        },
+        eventChains = acceptedEventChains,
+        seventhContinuation = latestSeventhSnapshot
+    ) else null
+    val liveJourneyPdfSnapshot = when {
+        initialSeventhSnapshot != null -> directSeventhCompleteJourneySnapshot(
+            initialSeventhSnapshot, incrementSteps, promotionHistory, sequenceIntegrity
+        )
+        latestSixthSnapshot == null -> null
+        initialCompleteJourneySnapshot != null -> replaceSixthInCompleteJourney(
+            initialCompleteJourneySnapshot, latestSixthSnapshot
+        ).copy(seventh = null)
+        continuationContext != null -> appendSixthContinuation(
+            continuationContext.journey, latestSixthSnapshot
+        ).copy(seventh = null)
+        else -> CompleteJourneySnapshot(CpcHistoryStage.SIXTH, latestSixthSnapshot.startingDateMillis,
+            sixth = latestSixthSnapshot)
+    }
 
     Column(Modifier.fillMaxSize().imePadding().background(SixSevenBackground)) {
         PayFixationAppHeader(
@@ -401,63 +433,7 @@ fun SixthToSeventhCpcScreen(
                     onDelete = { index -> incrementSteps = incrementSteps.toMutableList().also { it.removeAt(index) } }
                 )
 
-                ExportPayJourneyPdf(
-                    lines = buildList {
-                        if (initialSeventhSnapshot != null) {
-                            add("## 7th CPC Pay Journey")
-                            add("Starting date: ${formatSixSevenDate(seventhBase.conversionDateMillis)}")
-                            add("Starting position: Level ${seventhBase.startingLevel}, basic pay ${formatSixSevenCurrency(seventhBase.startingBasicPay)}")
-                            add("Starting DNI: ${seventhBase.startingDniMillis?.let(::formatSixSevenDate) ?: "Not specified"}")
-                        } else {
-                            add("## 6th CPC Pay Journey")
-                            if (journeyReplay == null) {
-                                add("The 6th CPC journey contains an entry that cannot be replayed from its saved inputs; conversion is unavailable until it is corrected.")
-                            } else {
-                                addAll(sixthCpcTimelineExportLines(journeyReplay, ::formatSixSevenDate, ::formatSixSevenCurrency))
-                            }
-                            add("## Final 6th CPC Position")
-                            add("Position date: ${journeyDate?.let(::formatSixSevenDate) ?: "—"}; ${journeyPayBandTitle ?: "—"}; pay in pay band ${formatSixSevenCurrency(journeyPayInPayBand ?: 0)} + grade pay ${formatSixSevenCurrency(journeyGradePay ?: 0)} = basic pay ${formatSixSevenCurrency((journeyPayInPayBand ?: 0) + (journeyGradePay ?: 0))}")
-                            add("## 7th CPC Conversion — 01 January 2016")
-                            result?.let { calculation ->
-                                add("Existing pay: ${formatSixSevenCurrency(calculation.existingPay)}; fitment factor ${calculation.fitmentFactor}; multiplied pay ${String.format(Locale.US, "%.2f", calculation.multipliedPay)}; rounded pay ${formatSixSevenCurrency(calculation.roundedPay)}")
-                                add("Pay matrix Level ${calculation.level}; revised basic pay ${formatSixSevenCurrency(calculation.revisedBasicPay)}; DNI ${seventhBase.startingDniMillis?.let(::formatSixSevenDate) ?: "01 July 2016"}")
-                                add("## Calculation Rule Basis")
-                                calculation.ruleBasis.forEachIndexed { index, rule -> add("${index + 1}. $rule") }
-                            }
-                        }
-                        add("## 7th CPC Increment Progression")
-                        if (incrementSteps.isEmpty()) add("No 7th CPC increments recorded.")
-                        incrementSteps.forEachIndexed { index, step -> add("Increment ${index + 1} — ${formatSixSevenDate(step.date)}: ${formatSixSevenCurrency(step.pay)}") }
-                        flattenSeventhPromotions(promotionHistory).forEach { promotion -> add("${promotion.eventKind}: Level ${promotion.currentLevel} → ${promotion.promotedLevel ?: "—"}; ${promotion.promotionDateMillis?.let(::formatSixSevenDate) ?: "date not specified"}") }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                val savedSeventh = seventhBase.copy(
-                    increments = savePromotionPostSteps(incrementSteps),
-                    promotions = promotionHistory
-                )
-                val completeSnapshot = if (initialSeventhSnapshot != null) {
-                    directSeventhCompleteJourneySnapshot(seventhBase, incrementSteps, promotionHistory, sequenceIntegrity)
-                } else {
-                    val calculation = result
-                    if (calculation == null || startDate == null) null else {
-                        val sixthSnapshot = SixthCpcJourneySnapshot(
-                            startingDateMillis = startDate!!,
-                            payBandId = selectedPayBand?.title?.substringBefore(":")?.trim() ?: basePayBand.orEmpty(),
-                            gradePay = selectedGradePay ?: baseGradePay ?: 0,
-                            startingPayInPayBand = payInPayBand ?: 0,
-                            increments = sixthIncrementSteps.mapIndexed { index, step -> SixthCpcIncrementSnapshot(index + 1, step.payInPayBand, step.gradePay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
-                            eventChains = acceptedEventChains,
-                            seventhContinuation = savedSeventh
-                        )
-                        when {
-                            initialCompleteJourneySnapshot != null -> replaceSixthInCompleteJourney(initialCompleteJourneySnapshot, sixthSnapshot)
-                            continuationContext != null -> appendSixthContinuation(continuationContext.journey, sixthSnapshot)
-                            else -> CompleteJourneySnapshot(CpcHistoryStage.SIXTH, startDate!!, sixth = sixthSnapshot)
-                        }
-                    }
-                }
+                val completeSnapshot = liveJourneyPdfSnapshot.takeIf { initialSeventhSnapshot != null || result != null }
                 LaunchedEffect(completeSnapshot) {
                     completeSnapshot?.let { onJourneySnapshotChange?.invoke(it) }
                 }
@@ -526,6 +502,7 @@ fun SixthToSeventhCpcScreen(
                 }
             }
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(16.dp)) { Text("This is an indicative conversion tool. Verify the result against the applicable CCS (RP) Rules, 2016, Government orders/clarifications and the employee's service/pay records before official use.", Modifier.padding(16.dp), color = SixSevenTextPrimary, fontSize = 12.sp) }
+            ExportCompleteJourneyPdf(liveJourneyPdfSnapshot, Modifier.fillMaxWidth())
             Spacer(Modifier.height(20.dp))
         }
     }
