@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Card
@@ -439,7 +440,9 @@ private fun PayFixationModeSelectionScreen(
     onLegacyCalculator: () -> Unit,
     onAbout: () -> Unit
 ) {
-        Column(
+    val context = LocalContext.current
+    var showAdFreeDialog by remember { mutableStateOf(false) }
+    Column(
             modifier = Modifier.fillMaxSize().background(HomeNiyamBackground),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -450,6 +453,51 @@ private fun PayFixationModeSelectionScreen(
                 .navigationBarsPadding().padding(horizontal = 20.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            when (BillingManager.entitlementState.entitlement) {
+                ProductEntitlement.UNVERIFIED -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        BillingManager.statusMessage ?: "Checking Google Play purchase status…",
+                        color = HomeNiyamTextSecondary,
+                        fontSize = 12.sp
+                    )
+                    androidx.compose.material3.TextButton(
+                        enabled = BillingManager.isBillingReady,
+                        onClick = { BillingManager.restorePurchases(context) }
+                    ) { Text("Restore Purchases") }
+                }
+                ProductEntitlement.VERIFIED_AD_FREE -> Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Ad-Free Access Active", color = HomeNiyamBlue, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                        Text("Google Play confirms the lifetime Remove Ads purchase for this account.", color = HomeNiyamTextSecondary, fontSize = 13.sp)
+                        androidx.compose.material3.TextButton(
+                            enabled = BillingManager.isBillingReady,
+                            onClick = { BillingManager.restorePurchases(context) }
+                        ) { Text("Restore Purchases") }
+                        BillingManager.statusMessage?.let { Text(it, color = HomeNiyamTextSecondary, fontSize = 12.sp) }
+                    }
+                }
+                ProductEntitlement.VERIFIED_FREE -> {
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Go Ad-Free", color = HomeNiyamBlue, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                        Text(
+                            BillingManager.getPrice()?.let { "Remove ads for $it one time." }
+                                ?: "One-time ad-free purchase; Google Play will show the current price.",
+                            color = HomeNiyamTextSecondary,
+                            fontSize = 13.sp
+                        )
+                        Button(onClick = { showAdFreeDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Remove Ads")
+                        }
+                        androidx.compose.material3.TextButton(
+                            enabled = BillingManager.isBillingReady,
+                            onClick = { BillingManager.restorePurchases(context) }
+                        ) { Text("Restore Purchases") }
+                        BillingManager.statusMessage?.let { Text(it, color = HomeNiyamTextSecondary, fontSize = 12.sp) }
+                    }
+                }
+            }
+            }
             androidx.compose.material3.OutlinedButton(onClick = onCpcHistory, modifier = Modifier.fillMaxWidth()) {
                 Text("Saved CPC Journeys & Conversions")
             }
@@ -486,6 +534,10 @@ private fun PayFixationModeSelectionScreen(
                 onClick = onLegacyCalculator
             )
         }
+        BannerAd(Modifier.fillMaxWidth().navigationBarsPadding())
+    }
+    if (showAdFreeDialog) {
+        AdFreePurchaseDialog(context = context, onClose = { showAdFreeDialog = false })
     }
 }
 

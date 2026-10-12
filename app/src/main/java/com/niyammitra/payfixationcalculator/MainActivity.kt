@@ -1,8 +1,6 @@
 package com.niyammitra.payfixationcalculator
 
-import android.app.Activity
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -28,11 +26,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import com.google.android.gms.ads.AdRequest
-import com.google.android.gms.ads.AdSize
-import com.google.android.gms.ads.AdView
-import com.google.android.gms.ads.MobileAds
 import com.niyammitra.payfixationcalculator.ui.theme.PayFixationCalculatorTheme
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -43,16 +36,18 @@ private val NiyamHeaderBlue = Color(0xFF1976B8)
 private val NiyamBackground = Color(0xFFF7FAFC)
 private val NiyamTextPrimary = Color(0xFF172B4D)
 private val NiyamTextSecondary = Color(0xFF5B6B7A)
-private const val BANNER_AD_UNIT_ID = "ca-app-pub-1512519890788753/1856516842"
-
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         BillingManager.initialize(this)
-        MobileAds.initialize(this)
-        HistoryInterstitialAd.load(this)
+        AdMobRuntime.initialize(this)
         setContent { PayFixationCalculatorTheme { V2AppScreen() } }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        BillingManager.refreshPurchases(this)
     }
 }
 
@@ -123,23 +118,18 @@ fun PayFixationCalculatorScreen(
                 TextButton(onClick = {
                     history = HistoryStore.getAll(context)
                     showHistoryHub = false
-                    val activity = context as? Activity
-                    if (activity != null) HistoryInterstitialAd.showIfDue(activity) { showHistory = true } else showHistory = true
+                    showHistory = true
                 }) { Text("7th CPC Pay Fixation History") }
             }
         )
     }
     if (showHistory) {
         androidx.activity.compose.BackHandler {
-            val activity = context as? Activity
-            if (activity != null) HistoryInterstitialAd.showOnHistoryBack(activity) { showHistory = false } else showHistory = false
+            showHistory = false
         }
         HistoryScreen(
             history = history,
-            onBack = {
-                val activity = context as? Activity
-                if (activity != null) HistoryInterstitialAd.showOnHistoryBack(activity) { showHistory = false } else showHistory = false
-            },
+            onBack = { showHistory = false },
             onDelete = { id -> HistoryStore.delete(context, id); history = HistoryStore.getAll(context) },
             onClear = { showClearHistoryDialog = true },
             onOpen = { selectedHistory = it },
@@ -209,13 +199,17 @@ fun PayFixationCalculatorScreen(
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())
             .then(if (BillingManager.isPremium) Modifier.navigationBarsPadding() else Modifier)
             .padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            if (!BillingManager.isPremium) {
+            if (!completeJourneyMode && BillingManager.entitlementState.entitlement == ProductEntitlement.VERIFIED_FREE) {
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(Color(0xFFEAF5FC))) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Go Ad-Free", color = NiyamBlue, fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
                             Spacer(Modifier.height(4.dp))
-                            Text("Remove all ads permanently for ${BillingManager.getPrice()} one time.", color = NiyamTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text(
+                                BillingManager.getPrice()?.let { "Remove all ads permanently for $it one time." }
+                                    ?: "One-time ad-free purchase; Google Play will show the current price.",
+                                color = NiyamTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium
+                            )
                         }
                         Spacer(Modifier.width(12.dp))
                         Button(onClick = { showAdFreeDialog = true }, shape = RoundedCornerShape(24.dp), colors = ButtonDefaults.buttonColors(containerColor = NiyamBlue), contentPadding = PaddingValues(horizontal = 18.dp, vertical = 11.dp)) { Text("Remove Ads", fontWeight = FontWeight.Bold) }
@@ -455,7 +449,7 @@ fun PayFixationCalculatorScreen(
             Spacer(Modifier.height(30.dp))
         }
 
-        if (!BillingManager.isPremium) BannerAd(Modifier.fillMaxWidth().navigationBarsPadding())
+        if (!completeJourneyMode && AdMobRuntime.canShowAds) BannerAd(Modifier.fillMaxWidth().navigationBarsPadding())
     }
 
     if (showDatePicker) {
@@ -471,7 +465,7 @@ fun PayFixationCalculatorScreen(
         }) { DatePicker(state) }
     }
     if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })
-    if (showAdFreeDialog && !BillingManager.isPremium) AdFreePurchaseDialog(context = context, onClose = { showAdFreeDialog = false })
+    if (showAdFreeDialog && !completeJourneyMode) AdFreePurchaseDialog(context = context, onClose = { showAdFreeDialog = false })
 }
 
 @Composable
@@ -483,17 +477,6 @@ private fun PayFixationDisclaimer() {
             Text("Users should verify the results with the applicable rules/orders and the competent administrative or accounts authority before using them for any official, service, or financial purpose. The developer does not assume responsibility for any decision, claim, loss, liability, or consequence arising from reliance solely on the calculations provided by this application.", color = NiyamTextSecondary, fontSize = 12.sp)
         }
     }
-}
-
-@Composable
-private fun AdFreePurchaseDialog(context: android.content.Context, onClose: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onClose,
-        title = { Text("NiyamMitra Ad-Free") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Remove all advertisements from Pay Fixation Calculator permanently."); Text("Lifetime ad-free access", fontWeight = FontWeight.Bold, color = NiyamBlue); Text("One-time purchase: ${BillingManager.getPrice()}", fontSize = 16.sp, fontWeight = FontWeight.Bold); Text("No subscription. Your purchase can be restored on this Google Play account.", color = NiyamTextSecondary, fontSize = 13.sp) } },
-        confirmButton = { Button(onClick = { val activity = context as? Activity; if (activity == null || BillingManager.launchPurchase(activity) == null) Toast.makeText(context, "Google Play purchase is not ready yet. Please try again in a moment.", Toast.LENGTH_SHORT).show() }) { Text("Buy Ad-Free") } },
-        dismissButton = { Row { TextButton(onClick = { BillingManager.restorePurchases(context) }) { Text("Restore Purchase") }; TextButton(onClick = onClose) { Text("Cancel") } } }
-    )
 }
 
 @Composable
@@ -562,21 +545,6 @@ fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) {
         } },
         confirmButton = { TextButton(onClick = onClose) { Text("Close") } }
     )
-}
-
-@Composable
-private fun BannerAd(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    if (BillingManager.isPremium) return
-    val adView = remember(context) { AdView(context).apply {
-        adUnitId = BANNER_AD_UNIT_ID
-        val displayMetrics = context.resources.displayMetrics
-        val adWidth = (displayMetrics.widthPixels / displayMetrics.density).toInt()
-        setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, adWidth))
-        loadAd(AdRequest.Builder().build())
-    } }
-    DisposableEffect(adView) { onDispose { adView.destroy() } }
-    AndroidView(modifier = modifier.wrapContentHeight(), factory = { adView })
 }
 
 @Composable

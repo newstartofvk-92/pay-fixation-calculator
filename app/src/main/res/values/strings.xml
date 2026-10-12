@@ -1,6 +1,4 @@
 <resources>
     <string name="app_name">Pay Fixation Calculator</string>
 
-    <!-- Production AdMob App ID created for the NiyamMitra Pay Fixation Calculator. -->
-    <string name="admob_app_id">ca-app-pub-1512519890788753~8159216641</string>
 </resources>

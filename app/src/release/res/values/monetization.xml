@@ -1,0 +1,6 @@
+<resources>
+    <!-- Repository-recorded production AdMob IDs; verify against the AdMob account before release. -->
+    <string name="admob_app_id">ca-app-pub-1512519890788753~8159216641</string>
+    <string name="admob_banner_ad_unit_id">ca-app-pub-1512519890788753/1856516842</string>
+    <string name="admob_interstitial_ad_unit_id">ca-app-pub-1512519890788753/3097446327</string>
+</resources>

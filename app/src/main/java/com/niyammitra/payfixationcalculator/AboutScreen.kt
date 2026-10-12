@@ -1,5 +1,6 @@
 package com.niyammitra.payfixationcalculator
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -86,6 +87,12 @@ fun AboutDialog(onClose: () -> Unit) {
                     )
                 }, modifier = Modifier.fillMaxWidth()) {
                     Text("Privacy Policy")
+                }
+
+                if (AdMobRuntime.privacyOptionsRequired) {
+                    Button(onClick = { (context as? Activity)?.let(AdMobRuntime::showPrivacyOptions) }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Privacy Options")
+                    }
                 }
             }
         },
