@@ -80,7 +80,10 @@ fun FifthToSixthCpcScreen(
             title = "5th CPC Pay Journey",
             subtitle = "Historical Pay Progression",
             onBack = onBack,
-            actions = { onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } } }
+            actions = {
+                ExportPayJourneyHeaderAction(snapshot = liveJourneySnapshot)
+                onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } }
+            }
         )
 
         Column(
@@ -179,6 +182,11 @@ fun FifthToSixthCpcScreen(
                         startingDateMillis = startDate,
                         fifth = historySnapshot ?: FifthCpcJourneySnapshot(startDate, selectedScale!!.title, basicPay, selectedDni)
                     ), sequenceIntegrity = sequenceIntegrity
+                )
+                ExportPayJourneyPdf(
+                    snapshot = liveJourneySnapshot,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = "Export Complete Journey PDF"
                 )
             } else {
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {

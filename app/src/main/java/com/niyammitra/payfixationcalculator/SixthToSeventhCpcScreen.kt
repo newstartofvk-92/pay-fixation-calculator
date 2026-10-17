@@ -270,12 +270,53 @@ fun SixthToSeventhCpcScreen(
             sixth = latestSixthSnapshot)
     }
 
+    val completeSnapshot = remember(
+        seventhStartingSnapshot, incrementSteps, promotionHistory, initialSeventhSnapshot,
+        startDate, selectedPayBand, selectedGradePay, payInPayBandText, sixthIncrementSteps,
+        acceptedEventChains, initialCompleteJourneySnapshot, continuationContext, sequenceIntegrity
+    ) {
+        val seventhBase = seventhStartingSnapshot
+        if (seventhBase != null) {
+            directSeventhCompleteJourneySnapshot(seventhBase, incrementSteps, promotionHistory, sequenceIntegrity)
+        } else {
+            val calculation = result
+            if (calculation == null || startDate == null) null else {
+                val sixthSnapshot = SixthCpcJourneySnapshot(
+                    startingDateMillis = startDate!!,
+                    payBandId = selectedPayBand?.title?.substringBefore(":")?.trim() ?: basePayBand.orEmpty(),
+                    gradePay = selectedGradePay ?: baseGradePay ?: 0,
+                    startingPayInPayBand = payInPayBand ?: 0,
+                    increments = sixthIncrementSteps.mapIndexed { index, step -> SixthCpcIncrementSnapshot(index + 1, step.payInPayBand, step.gradePay, step.date, step.sequence.takeIf { it > 0 } ?: index + 1) },
+                    eventChains = acceptedEventChains,
+                    seventhContinuation = seventhBase?.let { savedSeventh ->
+                        savedSeventh.copy(
+                            increments = savePromotionPostSteps(incrementSteps),
+                            promotions = promotionHistory
+                        )
+                    }
+                )
+                when {
+                    initialCompleteJourneySnapshot != null -> replaceSixthInCompleteJourney(initialCompleteJourneySnapshot, sixthSnapshot)
+                    continuationContext != null -> appendSixthContinuation(continuationContext.journey, sixthSnapshot)
+                    else -> CompleteJourneySnapshot(CpcHistoryStage.SIXTH, startDate!!, sixth = sixthSnapshot)
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(completeSnapshot) {
+        completeSnapshot?.let { onJourneySnapshotChange?.invoke(it) }
+    }
+
     Column(Modifier.fillMaxSize().imePadding().background(SixSevenBackground)) {
         PayFixationAppHeader(
             title = if (initialSeventhSnapshot == null) "6th CPC → 7th CPC" else "Complete Pay Fixation Journey — 7th CPC",
             subtitle = if (initialSeventhSnapshot == null) "Pay Conversion" else "7th CPC Starting Position",
             onBack = onBack,
-            actions = { onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } } }
+            actions = {
+                ExportPayJourneyHeaderAction(snapshot = completeSnapshot)
+                onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } }
+            }
         )
 
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -437,6 +478,7 @@ fun SixthToSeventhCpcScreen(
                 LaunchedEffect(completeSnapshot) {
                     completeSnapshot?.let { onJourneySnapshotChange?.invoke(it) }
                 }
+                ExportCompleteJourneyPdf(completeSnapshot, Modifier.fillMaxWidth())
                 completeSnapshot?.let { SaveCompleteJourneyButton(it, sequenceIntegrity = sequenceIntegrity) }
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

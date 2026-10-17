@@ -140,7 +140,10 @@ fun FourthToFifthCpcScreen(
             title = "4th CPC → 5th CPC",
             subtitle = "Pay Revision",
             onBack = onBack,
-            actions = { onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } } }
+            actions = {
+                ExportPayJourneyHeaderAction(snapshot = liveJourneySnapshot)
+                onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } }
+            }
         )
 
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {

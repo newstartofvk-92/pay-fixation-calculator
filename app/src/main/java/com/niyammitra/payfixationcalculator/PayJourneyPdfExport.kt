@@ -1,23 +1,112 @@
 package com.niyammitra.payfixationcalculator
 
 import android.graphics.Paint
+import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import java.io.IOException
+import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 @Composable
-fun ExportPayJourneyPdf(lines: List<String>, modifier: Modifier = Modifier) {
+fun ExportPayJourneyHeaderAction(
+    snapshot: CompleteJourneySnapshot?,
+    title: String = "Complete Pay Fixation Journey Report"
+) {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        if (uri != null && snapshot != null) {
+            try {
+                val record = CpcHistoryRecord(
+                    uniqueId = "live_export_${System.currentTimeMillis()}",
+                    workflowType = CpcHistoryWorkflow.COMPLETE_JOURNEY,
+                    title = title,
+                    savedAtMillis = System.currentTimeMillis(),
+                    startingCpc = snapshot.startingCpc,
+                    currentStage = CpcHistoryStage.SEVENTH,
+                    payload = CompleteJourneyPayload(snapshot)
+                )
+                val report = PayJourneyReportBuilder.build(record) ?: throw IllegalStateException("Could not generate report payload.")
+                context.contentResolver.openOutputStream(uri)?.use { PayJourneyReportPdf.write(it, report) }
+                    ?: throw IOException("Could not open the selected file.")
+                Toast.makeText(context, "Pay journey PDF saved", Toast.LENGTH_LONG).show()
+            } catch (error: Exception) {
+                Toast.makeText(context, "Could not save PDF: ${error.localizedMessage ?: "unknown error"}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    if (snapshot != null) {
+        TextButton(onClick = {
+            launcher.launch("Pay_Fixation_Journey_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())}.pdf")
+        }) {
+            Text("Export PDF", color = Color.White, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun ExportPayJourneyPdf(
+    snapshot: CompleteJourneySnapshot?,
+    title: String = "Complete Pay Fixation Journey Report",
+    modifier: Modifier = Modifier,
+    label: String = "Export Complete Journey PDF"
+) {
+    val context = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        if (uri != null && snapshot != null) {
+            try {
+                val record = CpcHistoryRecord(
+                    uniqueId = "live_export_${System.currentTimeMillis()}",
+                    workflowType = CpcHistoryWorkflow.COMPLETE_JOURNEY,
+                    title = title,
+                    savedAtMillis = System.currentTimeMillis(),
+                    startingCpc = snapshot.startingCpc,
+                    currentStage = CpcHistoryStage.SEVENTH,
+                    payload = CompleteJourneyPayload(snapshot)
+                )
+                val report = PayJourneyReportBuilder.build(record) ?: throw IllegalStateException("Could not generate report payload.")
+                context.contentResolver.openOutputStream(uri)?.use { PayJourneyReportPdf.write(it, report) }
+                    ?: throw IOException("Could not open the selected file.")
+                Toast.makeText(context, "Pay journey PDF saved", Toast.LENGTH_LONG).show()
+            } catch (error: Exception) {
+                Toast.makeText(context, "Could not save PDF: ${error.localizedMessage ?: "unknown error"}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    OutlinedButton(
+        onClick = {
+            if (snapshot != null) {
+                launcher.launch("Pay_Fixation_Journey_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())}.pdf")
+            } else {
+                Toast.makeText(context, "Complete journey data not yet available for export.", Toast.LENGTH_SHORT).show()
+            }
+        },
+        modifier = modifier,
+        enabled = snapshot != null
+    ) {
+        Text(label)
+    }
+}
+
+@Composable
+fun ExportPayJourneyPdf(
+    lines: List<String>,
+    modifier: Modifier = Modifier,
+    label: String = "Export Complete Journey PDF"
+) {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
         if (uri != null) {
@@ -31,7 +120,7 @@ fun ExportPayJourneyPdf(lines: List<String>, modifier: Modifier = Modifier) {
         }
     }
     OutlinedButton(onClick = { launcher.launch("Pay_Fixation_Journey_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())}.pdf") }, modifier = modifier) {
-        Text("Export Complete Journey PDF")
+        Text(label)
     }
 }
 
@@ -47,11 +136,13 @@ private object PayJourneyPdf {
     private const val LEFT = 42f
     private const val RIGHT = 553f
 
-    fun write(output: java.io.OutputStream, lines: List<String>) {
+    fun write(output: OutputStream, lines: List<String>) {
         val document = PdfDocument()
         val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.rgb(35, 49, 66); textSize = 10f }
-        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.rgb(23, 105, 170); textSize = 18f; typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD) }
-        val headingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.rgb(23, 43, 77); textSize = 12f; typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD) }
+        val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.rgb(23, 105, 170); textSize = 18f; typeface = Typeface.create(
+            Typeface.DEFAULT, Typeface.BOLD) }
+        val headingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.rgb(23, 43, 77); textSize = 12f; typeface = Typeface.create(
+            Typeface.DEFAULT, Typeface.BOLD) }
         val footerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.GRAY; textSize = 8f }
         var pageNumber = 0
         var page: PdfDocument.Page? = null

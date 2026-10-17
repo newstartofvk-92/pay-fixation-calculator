@@ -159,6 +159,25 @@ class SixthCpcPromotionMacpUtilsTest {
         assertEquals(calendarDateAtMidnight(2009, Calendar.JULY, 1), result.nextIncrementDate)
     }
 
+    @Test
+    fun sixthCpcThreePercentIncrementIgnoresDecimalFraction() {
+        // Test case where base * 0.03 produces a decimal fraction that should be floored (ignored)
+        // e.g., base = 19003.33 -> 19003.33 * 0.03 = 570.10 -> floor = 570 -> next multiple of 10 = 570
+        // Previously with ceil on product, 570.10 gave 580.
+        // We can test via calculateSixthCpcPromotionOrMacp with payInPayBand + gradePay = 19003 (or similar)
+        // Let's test with payInPayBand = 14803, gradePay = 4200 -> base = 19003
+        // 19003 * 0.03 = 570.09 -> floor = 570 -> 570
+        val result = calculateSixthCpcPromotionOrMacp(
+            payInPayBand = 14803,
+            currentGradePay = 4200,
+            targetGradePay = 4600,
+            eventDate = calendarDate(2008, Calendar.APRIL, 1),
+            eventType = "Promotion",
+            fixationOption = SixthCpcFixationOption.FROM_EVENT_DATE
+        )
+        assertEquals(570, result.increment)
+    }
+
     private fun calendarDateAtMidnight(year: Int, month: Int, day: Int): Long = Calendar.getInstance().apply {
         clear()
         set(year, month, day, 0, 0, 0)

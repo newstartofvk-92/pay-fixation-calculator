@@ -167,7 +167,7 @@ fun CpcHistoryScreen(
 
 private fun historyDate(millis: Long?): String = millis?.let { SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).format(Date(it)) } ?: "Date not recorded"
 
-private object PayJourneyReportPdf {
+internal object PayJourneyReportPdf {
     private const val PAGE_WIDTH = 595
     private const val PAGE_HEIGHT = 842
     fun write(output: java.io.OutputStream, report: PayJourneyReport) {
