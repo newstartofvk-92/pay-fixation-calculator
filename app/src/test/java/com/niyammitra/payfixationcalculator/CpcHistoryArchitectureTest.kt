@@ -64,34 +64,6 @@ class CpcHistoryArchitectureTest {
         assertEquals(replay.finalPosition.basicPay, reportForSixth(sixth).finalPosition!!.basicPay)
     }
 
-    @Test fun fromDniReportAndLivePdfShowPromotionAndLaterRefixAsSeparateRows() {
-        val starting = testSixthDate(2014, java.util.Calendar.JULY, 1)
-        val promotionDate = testSixthDate(2015, java.util.Calendar.FEBRUARY, 4)
-        val refixDate = testSixthDate(2015, java.util.Calendar.JULY, 1)
-        val result = calculateSixthCpcPromotionOrMacp(12_930, 4_200, 4_600, promotionDate, "Promotion", SixthCpcFixationOption.FROM_DNI)
-        val sixth = SixthCpcJourneySnapshot(
-            starting, "PB-2", 4_200, 12_930,
-            eventChains = listOf(SixthCpcEventChain(SixthCpcEventKind.PROMOTION, result = result, sequence = 1))
-        )
-        val state = SixthCpcJourneyState(
-            SixthCpcJourneyStartingPosition(starting, "PB-2", 4_200, 12_930),
-            events = sixth.eventChains,
-            sequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
-        )
-        val replay = replaySixthCpcJourney(state)
-        val report = reportForSixth(sixth)
-        val rows = report.sections.single { it.heading == "6th CPC Pay Journey" }.rows
-        val pdfLines = sixthCpcTimelineExportLines(replay, { it.toString() }, { it.toString() })
-
-        assertEquals(listOf(starting, promotionDate, refixDate), rows.map { it.dateMillis })
-        assertEquals(listOf(17_130, 17_530, 18_580), rows.map { it.position.basicPay })
-        assertTrue(rows.last().description.contains("From-DNI promotion refixation"))
-        assertEquals(replay.timeline.map { it.dateMillis }, rows.map { it.dateMillis })
-        assertEquals(replay.timeline.map { it.position.basicPay }, rows.map { it.position.basicPay })
-        assertTrue(pdfLines.last().contains("From-DNI promotion refixation"))
-        assertEquals(testSixthDate(2016, java.util.Calendar.JULY, 1), report.finalDniMillis)
-    }
-
     @Test fun unreplayableSixthReportLabelsSavedRowsAndFinalPositionAsUnvalidated() {
         val starting = testSixthDate(2006, java.util.Calendar.JANUARY, 1)
         val eventDate = testSixthDate(2008, java.util.Calendar.APRIL, 1)

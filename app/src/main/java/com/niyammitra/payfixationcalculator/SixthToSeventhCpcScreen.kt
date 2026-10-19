@@ -229,7 +229,7 @@ fun SixthToSeventhCpcScreen(
     val journeyGradePay = finalSixthPosition?.gradePay
     val journeyPayBandTitle = finalSixthPosition?.payBand
     val journeyDate = finalSixthPosition?.dateMillis
-    val journeyReady = finalSixthPosition != null && sixthCpcPositionValidThrough(finalSixthPosition, sixthCpcEndOfPeriodDate())
+    val journeyReady = journeyDate != null && journeyDate >= sixthCpcLastIncrementDate()
     val eventPayBand = journeyPayBandTitle?.let { title ->
         SixthToSeventhCpcData.payBands.firstOrNull { it.title.substringBefore(":").trim() == title.substringBefore(":").trim() }
     }

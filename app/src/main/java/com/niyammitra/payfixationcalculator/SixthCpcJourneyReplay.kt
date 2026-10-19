@@ -34,7 +34,7 @@ data class SixthCpcJourneyReplay(
     val timeline: List<SixthCpcTimelineEntry>
 )
 
-enum class SixthCpcTimelineKind { STARTING_POSITION, ANNUAL_INCREMENT, EVENT, EVENT_INCREMENT, DNI_REFIXATION }
+enum class SixthCpcTimelineKind { STARTING_POSITION, ANNUAL_INCREMENT, EVENT, EVENT_INCREMENT }
 data class SixthCpcTimelineEntry(
     val kind: SixthCpcTimelineKind,
     val dateMillis: Long,
@@ -155,25 +155,9 @@ fun sixthCpcPositionBeforeEvent(state: SixthCpcJourneyState, eventId: String): S
     val targetAction = actions.firstOrNull { it.kind == ActionKind.EVENT && it.eventIndex == targetIndex } ?: return null
     val prefix = actions.take(actions.indexOf(targetAction))
     return runCatching {
-        replaySixthCpcJourneyWithActions(state, prefix, throughDateMillis = targetAction.dateMillis).finalPosition
+        replaySixthCpcJourneyWithActions(state, prefix).finalPosition
     }.getOrNull()
 }
-
-/** Position valid just before a newly entered event on the selected date. */
-fun sixthCpcPositionBeforeDate(state: SixthCpcJourneyState, eventDateMillis: Long): SixthCpcJourneyPosition? {
-    val prefix = orderedSixthCpcActions(state).filter { it.dateMillis <= eventDateMillis }
-    return runCatching {
-        replaySixthCpcJourneyWithActions(state, prefix, throughDateMillis = eventDateMillis).finalPosition
-    }.getOrNull()
-}
-
-/** True when the current position remains valid through a date before its next DNI. */
-fun sixthCpcPositionValidThrough(position: SixthCpcJourneyPosition, dateMillis: Long): Boolean =
-    position.dateMillis >= dateMillis || position.nextDniMillis > dateMillis
-
-fun sixthCpcEndOfPeriodDate(): Long = java.util.Calendar.getInstance().apply {
-    clear(); set(2015, java.util.Calendar.DECEMBER, 31, 23, 59, 59); set(java.util.Calendar.MILLISECOND, 999)
-}.timeInMillis
 
 /** Latest replayed position belonging to an event and its nested increment chain. */
 fun latestSixthCpcEventChainPosition(
@@ -307,11 +291,7 @@ fun sixthCpcPayBandForPosition(payBand: String, gradePay: Int): SixthCpcPayBand 
     return band
 }
 
-private fun replaySixthCpcJourneyWithActions(
-    state: SixthCpcJourneyState,
-    actions: List<Action>,
-    throughDateMillis: Long? = null
-): SixthCpcJourneyReplay {
+private fun replaySixthCpcJourneyWithActions(state: SixthCpcJourneyState, actions: List<Action>): SixthCpcJourneyReplay {
     val start = state.startingPosition
     require(start.payInPayBand > 0) { "Pay in Pay Band must be positive." }
     val startingBand = sixthCpcPayBandForPosition(start.payBand, start.gradePay)
@@ -326,32 +306,7 @@ private fun replaySixthCpcJourneyWithActions(
     ))
     val increments = state.increments.toMutableList()
     val events = state.events.toMutableList()
-    data class PendingDniRefix(val dateMillis: Long, val sequence: Int, val eventId: String, val payIncrease: Int)
-    val pendingDniRefixes = mutableListOf<PendingDniRefix>()
-
-    fun applyDueDniRefixes(cutoffMillis: Long) {
-        val due = pendingDniRefixes.filter { it.dateMillis <= cutoffMillis }
-            .sortedWith(compareBy<PendingDniRefix> { it.dateMillis }.thenBy { it.sequence })
-        due.forEach { refix ->
-            require(refix.dateMillis >= position.dateMillis) { "A 6th CPC DNI refixation is not chronological." }
-            val band = sixthCpcPayBandForPosition(position.payBand, position.gradePay)
-            val refixedPayInBand = minOf(position.payInPayBand + refix.payIncrease, sixthCpcPayBandMaximum(band))
-            position = SixthCpcJourneyPosition(
-                refix.dateMillis, band.title, position.gradePay, refixedPayInBand, refix.sequence,
-                sixthCpcNextAnnualIncrementDate(refix.dateMillis)
-            )
-            positions += position
-            timeline += SixthCpcTimelineEntry(
-                SixthCpcTimelineKind.DNI_REFIXATION, refix.dateMillis, refix.sequence, position,
-                "From-DNI promotion refixation (annual and promotion increments)",
-                position.nextDniMillis, refix.eventId
-            )
-            pendingDniRefixes.remove(refix)
-        }
-    }
-
     actions.forEach { action ->
-        applyDueDniRefixes(action.dateMillis)
         require(action.dateMillis >= position.dateMillis) { "Saved 6th CPC actions are not chronological." }
         when (action.kind) {
             ActionKind.INCREMENT -> {
@@ -393,20 +348,7 @@ private fun replaySixthCpcJourneyWithActions(
                 val result = updated.result
                 val upgrade = updated.scaleUpgrade
                 position = if (result != null) {
-                    val isFromDni = result.fixationOption == SixthCpcFixationOption.FROM_DNI
-                    val targetBand = bandForGradePay(result.newGradePay)
-                    val eventPayInBand = if (isFromDni) {
-                        minOf(maxOf(result.oldPayInPayBand, sixthCpcPayBandMinimum(targetBand)), sixthCpcPayBandMaximum(targetBand))
-                    } else result.newPayInPayBand
-                    val refixationDate = if (isFromDni) addSixthCpcYears(result.nextIncrementDate, -1) else result.nextIncrementDate
-                    SixthCpcJourneyPosition(result.eventDate, result.newPayBand, result.newGradePay, eventPayInBand, updated.sequence, refixationDate).also {
-                        if (isFromDni) {
-                            pendingDniRefixes += PendingDniRefix(
-                                refixationDate, updated.sequence, updated.localId,
-                                result.newPayInPayBand - eventPayInBand
-                            )
-                        }
-                    }
+                    SixthCpcJourneyPosition(result.eventDate, result.newPayBand, result.newGradePay, result.newPayInPayBand, updated.sequence, result.nextIncrementDate)
                 } else {
                     SixthCpcJourneyPosition(upgrade!!.eventDate, upgrade.newPayBand, upgrade.newGradePay, upgrade.newPayInPayBand, updated.sequence, upgrade.nextIncrementDate)
                 }
@@ -415,8 +357,7 @@ private fun replaySixthCpcJourneyWithActions(
                         SixthCpcEventKind.PROMOTION -> "Promotion"
                         SixthCpcEventKind.FINANCIAL_UPGRADATION -> "Financial upgradation"
                         SixthCpcEventKind.PAY_SCALE_UPGRADATION -> "Pay-scale upgradation / revision"
-                    }, result?.let { if (it.fixationOption == SixthCpcFixationOption.FROM_DNI) position.nextDniMillis else it.nextIncrementDate }
-                        ?: upgrade?.nextIncrementDate, updated.localId)
+                    }, result?.nextIncrementDate ?: upgrade?.nextIncrementDate, updated.localId)
             }
             ActionKind.EVENT_INCREMENT -> {
                 val eventIndex = action.eventIndex!!
@@ -440,7 +381,6 @@ private fun replaySixthCpcJourneyWithActions(
         }
         positions += position
     }
-    applyDueDniRefixes(throughDateMillis ?: Long.MAX_VALUE)
     return SixthCpcJourneyReplay(increments, events, positions, position, timeline)
 }
 
@@ -469,11 +409,6 @@ private fun isSixthCpcJulyFirst(dateMillis: Long): Boolean {
     return date.get(java.util.Calendar.MONTH) == java.util.Calendar.JULY &&
         date.get(java.util.Calendar.DAY_OF_MONTH) == 1
 }
-
-private fun addSixthCpcYears(dateMillis: Long, years: Int): Long = java.util.Calendar.getInstance().apply {
-    timeInMillis = dateMillis
-    add(java.util.Calendar.YEAR, years)
-}.timeInMillis
 
 private fun sixthCpcDefaultStartingDate(): Long = java.util.Calendar.getInstance().apply {
     clear(); set(2006, java.util.Calendar.JANUARY, 1, 0, 0, 0)

@@ -61,7 +61,6 @@ object BillingManager : PurchasesUpdatedListener {
 
     /** Initializes BillingClient and restores any existing purchase. */
     fun initialize(context: Context) {
-        AdMobRuntime.configureDebugLogging(context.applicationContext)
         if (initialized) return
         initialized = true
 
@@ -84,31 +83,18 @@ object BillingManager : PurchasesUpdatedListener {
     private fun startConnection() {
         val client = billingClient ?: return
         if (client.isReady) {
-            AdMobRuntime.debugLog("Billing connection already ready")
             handleBillingReady()
             return
         }
-        if (connectionState.connecting) {
-            AdMobRuntime.debugLog("Billing connection attempt already in progress")
-            return
-        }
+        if (connectionState.connecting) return
         connectionState = connectionState.connectionStarted()
-        AdMobRuntime.debugLog("Billing connection started")
         try {
             client.startConnection(object : BillingClientStateListener {
                 override fun onBillingSetupFinished(billingResult: BillingResult) {
                     if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
-                        AdMobRuntime.debugLog(
-                            "Billing connection succeeded: code=${billingResult.responseCode}, " +
-                                "message=${billingResult.debugMessage}"
-                        )
                         handleBillingReady()
                     } else {
                         connectionState = connectionState.connectionFailed()
-                        AdMobRuntime.debugLog(
-                            "Billing connection failed: code=${billingResult.responseCode}, " +
-                                "message=${billingResult.debugMessage}"
-                        )
                         statusMessage = "Google Play Billing is temporarily unavailable. Please try again later."
                     }
                 }
@@ -116,7 +102,6 @@ object BillingManager : PurchasesUpdatedListener {
                 override fun onBillingServiceDisconnected() {
                     // BillingClient handles reconnection automatically. The UI remains usable,
                     // while a later successful connection will restore the billing state.
-                    AdMobRuntime.debugLog("Billing service disconnected")
                     connectionState = connectionState.disconnected()
                     productDetails = null
                     productPrice = null
@@ -125,7 +110,6 @@ object BillingManager : PurchasesUpdatedListener {
             })
         } catch (exception: RuntimeException) {
             connectionState = connectionState.connectionFailed()
-            AdMobRuntime.debugLog("Billing connection threw ${exception.javaClass.simpleName}")
             statusMessage = "Google Play Billing is temporarily unavailable. Please try again later."
         }
     }
@@ -187,7 +171,6 @@ object BillingManager : PurchasesUpdatedListener {
      */
     private fun queryExistingPurchase(showRestoreMessage: Boolean) {
         if (purchaseQueryInProgress) {
-            AdMobRuntime.debugLog("Billing ownership query not started: another query is in progress")
             if (showRestoreMessage) {
                 restoreMessageRequested = true
                 statusMessage = "Checking Google Play for your purchase..."
@@ -202,7 +185,6 @@ object BillingManager : PurchasesUpdatedListener {
 
         val client = billingClient
         if (client == null) {
-            AdMobRuntime.debugLog("Billing ownership query inconclusive: BillingClient is unavailable")
             purchaseQueryInProgress = false
             return
         }
@@ -213,10 +195,6 @@ object BillingManager : PurchasesUpdatedListener {
                 val shouldShowRestoreMessage = showRestoreMessage || restoreMessageRequested
                 restoreMessageRequested = false
                 if (billingResult.responseCode != BillingClient.BillingResponseCode.OK) {
-                    AdMobRuntime.debugLog(
-                        "Billing ownership query inconclusive: code=${billingResult.responseCode}, " +
-                            "message=${billingResult.debugMessage}"
-                    )
                     statusMessage = "Google Play could not verify your purchase right now. Please try again."
                     return@queryPurchasesAsync
                 }
@@ -230,16 +208,6 @@ object BillingManager : PurchasesUpdatedListener {
                     it.products.contains(PRODUCT_ID) && it.purchaseState == Purchase.PurchaseState.PENDING
                 }
                 entitlementState = resolveOwnershipQuery(entitlementState, owned, pending, stale)
-                val ownershipOutcome = when {
-                    stale && !owned -> "inconclusive_stale_negative"
-                    owned -> "verified_ad_free"
-                    pending -> "no_owned_purchase_pending"
-                    else -> "verified_free"
-                }
-                AdMobRuntime.debugLog(
-                    "Billing ownership query completed: result=$ownershipOutcome " +
-                        "entitlement=${entitlementState.entitlement} purchaseFlow=${entitlementState.purchaseFlow}"
-                )
 
                 if (shouldShowRestoreMessage) {
                     if (owned) {
@@ -262,7 +230,6 @@ object BillingManager : PurchasesUpdatedListener {
             }
         } catch (exception: RuntimeException) {
             purchaseQueryInProgress = false
-            AdMobRuntime.debugLog("Billing ownership query threw ${exception.javaClass.simpleName}")
             restoreMessageRequested = false
             statusMessage = "Google Play could not verify your purchase right now. Please try again."
         }

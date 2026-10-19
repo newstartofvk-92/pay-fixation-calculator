@@ -2,7 +2,6 @@ package com.niyammitra.payfixationcalculator
 
 import android.content.Context
 import android.widget.Toast
-import com.google.android.gms.ads.AdListener
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,7 +15,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -24,74 +22,24 @@ import androidx.compose.ui.unit.dp
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
-import com.google.android.gms.ads.LoadAdError
 
 @Composable
 fun BannerAd(modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val eligible = AdMobRuntime.canShowAds
-    val billing = BillingManager.entitlementState
-    remember(
-        eligible,
-        AdMobRuntime.consentAllowsAds,
-        AdMobRuntime.sdkReady,
-        billing.entitlement,
-        billing.purchaseFlow
-    ) {
-        if (!eligible) {
-            AdMobRuntime.debugLog(
-                "BannerAd returns early: consentAllowed=${AdMobRuntime.consentAllowsAds} " +
-                    "sdkReady=${AdMobRuntime.sdkReady} entitlement=${billing.entitlement} " +
-                    "purchaseFlow=${billing.purchaseFlow}"
-            )
-        } else {
-            AdMobRuntime.debugLog("BannerAd eligible to create/request an AdView")
-        }
-    }
-    if (!eligible) return
+    if (!AdMobRuntime.canShowAds) return
 
     val unitId = context.getString(R.string.admob_banner_ad_unit_id)
     val adView = remember(context, unitId) {
-        AdMobRuntime.debugLog("Banner AdView created")
         AdView(context).apply {
             adUnitId = unitId
             val displayMetrics = context.resources.displayMetrics
             val adWidth = (displayMetrics.widthPixels / displayMetrics.density).toInt()
             setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, adWidth))
-            AdMobRuntime.debugLog("Banner size configured for $adWidth dp width")
-            adListener = object : AdListener() {
-                override fun onAdLoaded() {
-                    AdMobRuntime.debugLog("Banner onAdLoaded: AdView size=${width}x$height px")
-                }
-
-                override fun onAdFailedToLoad(error: LoadAdError) {
-                    val responseInfo = error.responseInfo
-                    val adapterResponses = responseInfo?.adapterResponses
-                        ?.joinToString { "${it.adapterClassName}:${it.latencyMillis}ms" }
-                        ?: "unavailable"
-                    AdMobRuntime.debugLog(
-                        "Banner onAdFailedToLoad: code=${error.code}, domain=${error.domain}, " +
-                            "message=${error.message}, mediationAdapter=${responseInfo?.mediationAdapterClassName}, " +
-                            "adapterResponses=$adapterResponses"
-                    )
-                }
-            }
-            AdMobRuntime.debugLog("Banner ad request started")
             loadAd(AdRequest.Builder().build())
         }
     }
-    DisposableEffect(adView) {
-        onDispose {
-            AdMobRuntime.debugLog("Banner AdView disposed: size=${adView.width}x${adView.height} px")
-            adView.destroy()
-        }
-    }
-    AndroidView(
-        modifier = modifier.wrapContentHeight().onSizeChanged { size ->
-            AdMobRuntime.debugLog("Banner Compose host measured: ${size.width}x${size.height} px")
-        },
-        factory = { adView }
-    )
+    DisposableEffect(adView) { onDispose { adView.destroy() } }
+    AndroidView(modifier = modifier.wrapContentHeight(), factory = { adView })
 }
 
 @Composable

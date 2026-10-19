@@ -550,7 +550,7 @@ object PayJourneyReportBuilder {
                             if (isConversion) "5th to 6th CPC conversion" else "Starting position",
                             sixthPosition(entry.position.payBand, entry.position.gradePay, entry.position.payInPayBand), entry.position.nextDniMillis,
                             sourcePosition = snapshot.fifth?.let(::finalFifth), sequence = rowSequence))
-                        SixthCpcTimelineKind.ANNUAL_INCREMENT, SixthCpcTimelineKind.EVENT_INCREMENT, SixthCpcTimelineKind.DNI_REFIXATION -> add(PayJourneyReportRow(
+                        SixthCpcTimelineKind.ANNUAL_INCREMENT, SixthCpcTimelineKind.EVENT_INCREMENT -> add(PayJourneyReportRow(
                             entry.dateMillis, index, CpcHistoryStage.SIXTH, CpcJourneyEventKind.ANNUAL_INCREMENT,
                             entry.description, sixthPosition(entry.position.payBand, entry.position.gradePay, entry.position.payInPayBand),
                             entry.dniMillis, sequence = rowSequence))
