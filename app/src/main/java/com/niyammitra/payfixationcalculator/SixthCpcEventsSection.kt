@@ -67,6 +67,39 @@ data class SixthCpcEventChain(
     }
 }
 
+internal data class SixthCpcDniPromotionDisplay(
+    val promotionDateMillis: Long,
+    val promotionPosition: SixthCpcJourneyPosition,
+    val dniEffectiveDateMillis: Long,
+    val postDniPosition: SixthCpcJourneyPosition,
+    val totalFixationIncrement: Int
+)
+
+/** Builds presentation data from the two positions already produced by journey replay. */
+internal fun sixthCpcDniPromotionDisplay(
+    eventRow: SixthCpcTimelineEntry,
+    result: SixthCpcEventResult,
+    timeline: List<SixthCpcTimelineEntry>
+): SixthCpcDniPromotionDisplay? {
+    if (eventRow.kind != SixthCpcTimelineKind.EVENT ||
+        eventRow.description != "Promotion" ||
+        result.fixationOption != SixthCpcFixationOption.FROM_DNI ||
+        eventRow.eventId == null
+    ) return null
+
+    val refixRow = timeline.firstOrNull {
+        it.kind == SixthCpcTimelineKind.DNI_REFIXATION && it.eventId == eventRow.eventId
+    } ?: return null
+
+    return SixthCpcDniPromotionDisplay(
+        promotionDateMillis = eventRow.dateMillis,
+        promotionPosition = eventRow.position,
+        dniEffectiveDateMillis = refixRow.dateMillis,
+        postDniPosition = refixRow.position,
+        totalFixationIncrement = result.increment
+    )
+}
+
 private val EventBlue = Color(0xFF1769AA)
 private val EventPrimary = Color(0xFF172B4D)
 private val EventSecondary = Color(0xFF5B6B7A)
@@ -155,13 +188,14 @@ fun SixthCpcEventsSection(
     val payBand = replay?.finalPosition?.payBand ?: latest?.let(::currentPayBand) ?: startingPayBand
     val basicPay = payInBand + gradePay
     val currentPositionDate = replay?.finalPosition?.dateMillis ?: latest?.let(::currentDate) ?: startingPositionDate
-    val editingPosition = editingEventId?.let { sixthCpcPositionBeforeEvent(journeyState, it) }
-    val formPayInBand = editingPosition?.payInPayBand ?: payInBand
-    val formGradePay = editingPosition?.gradePay ?: gradePay
-    val formPayBand = editingPosition?.payBand ?: payBand
-    val formPositionDate = editingPosition?.dateMillis ?: currentPositionDate
+    val eventEntryPosition = editingEventId?.let { sixthCpcPositionBeforeEvent(journeyState, it) }
+        ?: eventDate?.takeIf { editingEventId == null }?.let { sixthCpcPositionBeforeDate(journeyState, it) }
+    val formPayInBand = eventEntryPosition?.payInPayBand ?: payInBand
+    val formGradePay = eventEntryPosition?.gradePay ?: gradePay
+    val formPayBand = eventEntryPosition?.payBand ?: payBand
+    val formPositionDate = eventEntryPosition?.dateMillis ?: currentPositionDate
     val finalTimelineEntry = replay?.timeline?.lastOrNull()
-    val nextRequiredDni = editingPosition?.nextDniMillis
+    val nextRequiredDni = eventEntryPosition?.nextDniMillis
         ?: finalTimelineEntry?.dniMillis
         ?: currentPositionDate?.let(::sixthCpcNextAnnualIncrementDate)
     val eventMaximumDate = listOfNotNull(latestAllowedEventDate, nextRequiredDni).minOrNull()
@@ -247,26 +281,57 @@ fun SixthCpcEventsSection(
         if (sequenceIntegrity == CpcSequenceIntegrity.INFERRED) {
             Text("Older saved 6th CPC ordering is reconstructed; same-date event order may not match the original application order.", color = EventSecondary, fontSize = 12.sp)
         }
+        val timeline = replay?.timeline.orEmpty()
+        val embeddedDniEventIds = timeline.mapNotNull { eventRow ->
+            if (eventRow.kind != SixthCpcTimelineKind.EVENT || eventRow.eventId == null) return@mapNotNull null
+            val result = journeyEvents.firstOrNull { it.localId == eventRow.eventId }?.result ?: return@mapNotNull null
+            eventRow.eventId.takeIf { sixthCpcDniPromotionDisplay(eventRow, result, timeline) != null }
+        }.toSet()
+        val visibleTimelineRows = timeline.withIndex().filterNot { (_, row) ->
+            row.kind == SixthCpcTimelineKind.DNI_REFIXATION && row.eventId != null && row.eventId in embeddedDniEventIds
+        }
         Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("6th CPC Pay Journey", color = EventBlue, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
-                replay?.timeline.orEmpty().forEachIndexed { rowIndex, row ->
+                visibleTimelineRows.forEachIndexed { visibleRowIndex, indexedRow ->
+                    val rowIndex = indexedRow.index
+                    val row = indexedRow.value
+                    val eventChain = row.eventId?.let { id -> journeyEvents.firstOrNull { it.localId == id } }
+                    val dniDisplay = if (row.kind == SixthCpcTimelineKind.EVENT) {
+                        eventChain?.result?.let { sixthCpcDniPromotionDisplay(row, it, timeline) }
+                    } else null
                     Surface(Modifier.fillMaxWidth(), color = if (row.kind == SixthCpcTimelineKind.STARTING_POSITION) Color(0xFFF2F6FA) else EventBlue.copy(alpha = .045f), shape = RoundedCornerShape(12.dp)) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text("${rowIndex + 1}. ${row.description}", color = EventPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            Text("${dateText(row.dateMillis)} · ${row.position.payBand}", color = EventSecondary, fontSize = 12.sp)
-                            Text("Pay in Pay Band ${money(row.position.payInPayBand)} + Grade Pay ${money(row.position.gradePay)} = Basic Pay ${money(row.position.basicPay)}", color = EventBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            if (row.eventId != null && row.dniMillis != null) Text("Next DNI: ${dateText(row.dniMillis)}", color = EventSecondary, fontSize = 12.sp)
+                            Text("${visibleRowIndex + 1}. ${row.description}", color = EventPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            if (dniDisplay == null) {
+                                Text("${dateText(row.dateMillis)} · ${row.position.payBand}", color = EventSecondary, fontSize = 12.sp)
+                                Text("Pay in Pay Band ${money(row.position.payInPayBand)} + Grade Pay ${money(row.position.gradePay)} = Basic Pay ${money(row.position.basicPay)}", color = EventBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                if (row.dniMillis != null) Text("Next DNI: ${dateText(row.dniMillis)}", color = EventSecondary, fontSize = 12.sp)
+                            } else {
+                                Text("A. Pay from promotion date until DNI", color = EventBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Promotion effective date: ${dateText(dniDisplay.promotionDateMillis)} · ${dniDisplay.promotionPosition.payBand}", color = EventSecondary, fontSize = 12.sp)
+                                Text("Pay in Pay Band ${money(dniDisplay.promotionPosition.payInPayBand)} + Grade Pay ${money(dniDisplay.promotionPosition.gradePay)} = Basic Pay ${money(dniDisplay.promotionPosition.basicPay)}", color = EventBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("This position applies until the DNI refixation effective ${dateText(dniDisplay.dniEffectiveDateMillis)}.", color = EventSecondary, fontSize = 11.sp)
+                                Text("B. Pay after DNI fixation", color = EventBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("DNI / annual increment effective date: ${dateText(dniDisplay.dniEffectiveDateMillis)} · ${dniDisplay.postDniPosition.payBand}", color = EventSecondary, fontSize = 12.sp)
+                                Text("Pay in Pay Band ${money(dniDisplay.postDniPosition.payInPayBand)} + Grade Pay ${money(dniDisplay.postDniPosition.gradePay)} = Basic Pay ${money(dniDisplay.postDniPosition.basicPay)}", color = EventBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Text("Annual and promotion fixation increments (combined amount from calculation): ${money(dniDisplay.totalFixationIncrement)}", color = EventSecondary, fontSize = 11.sp)
+                                Text("Next DNI: ${dateText(dniDisplay.postDniPosition.nextDniMillis)}", color = EventSecondary, fontSize = 12.sp)
+                            }
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 when (row.kind) {
                                     SixthCpcTimelineKind.ANNUAL_INCREMENT -> TextButton(onClick = {
                                         val mutation = deleteSixthCpcIncrement(journeyState, row.incrementIndex ?: return@TextButton)
                                         applyMutation(mutation)
                                     }) { Text("Delete") }
-                                    SixthCpcTimelineKind.EVENT -> journeyEvents.firstOrNull { it.localId == row.eventId }?.let { chain ->
+                                    SixthCpcTimelineKind.EVENT -> eventChain?.let { chain ->
                                         chain.result?.let { result ->
                                             Text("${result.eventType} · ${result.financialUpgradation ?: "Promotion"} · ${if (result.fixationOption == SixthCpcFixationOption.FROM_DNI) "From DNI" else "From event date"}", color = EventSecondary, fontSize = 11.sp)
-                                            Text("Previous pay: ${money(result.oldPayInPayBand)} + GP ${money(result.oldGradePay)}; fixation increment(s): ${money(result.increment)}", color = EventSecondary, fontSize = 11.sp)
+                                            if (dniDisplay == null) {
+                                                Text("Previous pay: ${money(result.oldPayInPayBand)} + GP ${money(result.oldGradePay)}; fixation increment(s): ${money(result.increment)}", color = EventSecondary, fontSize = 11.sp)
+                                            } else {
+                                                Text("Previous pay before promotion: ${money(result.oldPayInPayBand)} + GP ${money(result.oldGradePay)}", color = EventSecondary, fontSize = 11.sp)
+                                            }
                                         }
                                         chain.scaleUpgrade?.let { upgrade ->
                                             Text("Route: ${upgrade.historicalRoute ?: "Saved scale-upgrade route unavailable"}", color = EventSecondary, fontSize = 11.sp)
@@ -288,6 +353,7 @@ fun SixthCpcEventsSection(
                                         val nested = row.nestedIncrementIndex ?: return@TextButton
                                         applyMutation(deleteSixthCpcEventIncrement(journeyState, id, nested))
                                     }) { Text("Delete") }
+                                    SixthCpcTimelineKind.DNI_REFIXATION -> Unit
                                     SixthCpcTimelineKind.STARTING_POSITION -> Unit
                                 }
                                 if (rowIndex == replay?.timeline?.lastIndex && row.eventId != null &&
@@ -306,7 +372,8 @@ fun SixthCpcEventsSection(
         }
 
         Button(onClick = { editingEventId = null; showForm = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(12.dp)) { Text("Add Event", fontWeight = FontWeight.Bold) }
-        if (latest != null && latestDate != null && latestDate >= july2015Date() && onContinueToSeventh != null) {
+        val finalPosition = replay?.finalPosition
+        if (latest != null && latestDate != null && finalPosition != null && sixthCpcPositionValidThrough(finalPosition, sixthCpcEndOfPeriodDate()) && onContinueToSeventh != null) {
             Button(onClick = { onContinueToSeventh(payBand, gradePay, payInBand, latestDate) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(12.dp)) { Text("Continue to 7th CPC", fontWeight = FontWeight.Bold) }
         }
 
