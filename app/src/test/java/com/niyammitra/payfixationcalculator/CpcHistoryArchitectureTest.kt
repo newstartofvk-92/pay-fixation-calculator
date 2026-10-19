@@ -54,6 +54,25 @@ class CpcHistoryArchitectureTest {
         assertTrue(sixthEventRow.remarks!!.contains("From-DNI option"))
     }
 
+    @Test fun oldFromDniHistoryWithoutFixationEffectiveDateRemainsReadableAndDerivesDate() {
+        val encoded = JSONObject(CpcHistoryStore.encode(completeRecord()))
+        val resultJson = encoded.getJSONObject("payload").getJSONObject("sixth")
+            .getJSONArray("eventChains").getJSONObject(0).getJSONObject("result")
+        resultJson.remove("fixationEffectiveDate")
+
+        val restored = CpcHistoryStore.decode(encoded.toString())!!
+        val result = (restored.payload as CompleteJourneyPayload).snapshot.sixth!!
+            .eventChains.single().result!!
+
+        assertEquals(sixthCpcFixationEffectiveDate(result.eventDate, result.fixationOption), result.fixationEffectiveDate)
+        assertEquals(result.eventDate, 1_200_000L)
+        assertEquals(SixthCpcFixationOption.FROM_DNI, result.fixationOption)
+        val reportRow = PayJourneyReportBuilder.build(restored)!!.sections
+            .single { it.heading == "6th CPC Pay Journey" }.rows.single { it.description == "Promotion" }
+        assertEquals(result.fixationEffectiveDate, reportRow.dateMillis)
+        assertEquals(result.eventDate, reportRow.eventDateMillis)
+    }
+
     @Test fun scaleUpgradeHistoryRemainsSeparateFromPromotionFixationOption() {
         val original = completeRecord()
         val snapshot = (original.payload as CompleteJourneyPayload).snapshot

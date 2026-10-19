@@ -140,7 +140,7 @@ fun SixthToSeventhCpcScreen(
             restoredChainResult?.newPayBand ?: restoredChainUpgrade?.newPayBand ?: initialPayBand.orEmpty(),
             restoredChainIncrement.gradePay, restoredChainIncrement.payInPayBand, restoredChainIncrement.date
         )
-        restoredChainResult != null -> SixthCpcCurrentPosition(restoredChainResult.newPayBand, restoredChainResult.newGradePay, restoredChainResult.newPayInPayBand, restoredChainResult.eventDate)
+        restoredChainResult != null -> SixthCpcCurrentPosition(restoredChainResult.newPayBand, restoredChainResult.newGradePay, restoredChainResult.newPayInPayBand, restoredChainResult.fixationEffectiveDate)
         restoredChainUpgrade != null -> SixthCpcCurrentPosition(restoredChainUpgrade.newPayBand, restoredChainUpgrade.newGradePay, restoredChainUpgrade.newPayInPayBand, restoredChainUpgrade.eventDate)
         else -> null
     }
@@ -181,7 +181,7 @@ fun SixthToSeventhCpcScreen(
     val journeyGradePay = eventCurrentPosition?.gradePay ?: baseGradePay
     val journeyPayBandTitle = eventCurrentPosition?.payBand ?: basePayBand
     val journeyDate = eventCurrentPosition?.date ?: basePositionDate
-    val journeyReady = journeyDate != null && journeyDate >= sixthCpcLastIncrementDate()
+    val journeyReady = isSixthCpcJourneyReady(journeyDate, sixthCpcLastIncrementDate())
     val eventPayBand = journeyPayBandTitle?.let { title ->
         SixthToSeventhCpcData.payBands.firstOrNull { it.title.substringBefore(":").trim() == title.substringBefore(":").trim() }
     }
@@ -634,6 +634,7 @@ internal fun julyFirst2016(): Long = Calendar.getInstance().apply { set(2016, Ca
 private fun sixthCpcPeriodStart(): Long = Calendar.getInstance().apply { clear(); set(2006, Calendar.JANUARY, 1, 0, 0, 0) }.timeInMillis
 private fun sixthCpcPeriodEnd(): Long = Calendar.getInstance().apply { clear(); set(2015, Calendar.DECEMBER, 31, 23, 59, 59); set(Calendar.MILLISECOND, 999) }.timeInMillis
 private fun sixthCpcLastIncrementDate(): Long = Calendar.getInstance().apply { clear(); set(2015, Calendar.JULY, 1, 0, 0, 0) }.timeInMillis
+internal fun isSixthCpcJourneyReady(positionDate: Long?, cutoffDate: Long): Boolean = positionDate != null && positionDate >= cutoffDate
 private fun nextSixthCpcIncrementDate(date: Long): Long {
     val calendar = Calendar.getInstance().apply { timeInMillis = date }
     val currentYear = calendar.get(Calendar.YEAR)

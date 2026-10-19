@@ -19,7 +19,9 @@ data class SixthCpcEventResult(
     val newPayBand: String,
     val revisedBasicPay: Int,
     val nextIncrementDate: Long,
-    val ruleBasis: List<String>
+    val ruleBasis: List<String>,
+    /** Date the result's fixed pay position becomes effective (distinct from a deferred promotion date). */
+    val fixationEffectiveDate: Long = eventDate
 )
 
 private const val ACP_CUTOFF_YEAR = 2008
@@ -71,6 +73,7 @@ fun calculateSixthCpcPromotionOrMacp(
         targetGradePay
     }
     val annualIncrementDate = nextSixthCpcIncrementDate(eventDate)
+    val fixationEffectiveDate = if (fixationOption == SixthCpcFixationOption.FROM_DNI) annualIncrementDate else eventDate
     var fixationPayInBand = payInPayBand
     var totalIncrement = calculateSixthCpcIncrement(payInPayBand, currentGradePay)
     if (fixationOption == SixthCpcFixationOption.FROM_DNI) {
@@ -109,11 +112,12 @@ fun calculateSixthCpcPromotionOrMacp(
         newPayBand = targetBand.title,
         revisedBasicPay = newPayInBand + effectiveTargetGradePay,
         nextIncrementDate = if (fixationOption == SixthCpcFixationOption.FROM_DNI) {
-            addSixthYears(annualIncrementDate, 1)
+            addSixthYears(fixationEffectiveDate, 1)
         } else {
             nextSixthCpcPromotionIncrementDate(eventDate)
         },
-        ruleBasis = basis
+        ruleBasis = basis,
+        fixationEffectiveDate = fixationEffectiveDate
     )
 }
 
@@ -151,6 +155,10 @@ private fun nextSixthCpcIncrementDate(eventDate: Long): Long {
     val july = java.util.Calendar.getInstance().apply { clear(); set(year, java.util.Calendar.JULY, 1, 0, 0, 0) }
     return if (eventDate <= july.timeInMillis) july.timeInMillis else addSixthYears(july.timeInMillis, 1)
 }
+
+/** Effective date of the fixed pay result, separate from the promotion/event date for From-DNI cases. */
+fun sixthCpcFixationEffectiveDate(eventDate: Long, fixationOption: SixthCpcFixationOption): Long =
+    if (fixationOption == SixthCpcFixationOption.FROM_DNI) nextSixthCpcIncrementDate(eventDate) else eventDate
 
 private fun nextSixthCpcPromotionIncrementDate(eventDate: Long): Long {
     val event = java.util.Calendar.getInstance().apply { timeInMillis = eventDate }

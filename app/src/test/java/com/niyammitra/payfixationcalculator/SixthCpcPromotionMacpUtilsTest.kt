@@ -154,7 +154,28 @@ class SixthCpcPromotionMacpUtilsTest {
         assertEquals(830, result.increment)
         assertEquals(10_130, result.newPayInPayBand)
         assertEquals(14_730, result.revisedBasicPay)
+        assertEquals(calendarDateAtMidnight(2008, Calendar.JULY, 1), result.fixationEffectiveDate)
         assertEquals(calendarDateAtMidnight(2009, Calendar.JULY, 1), result.nextIncrementDate)
+    }
+
+    @Test
+    fun februaryFromDniPromotionSeparatesEventAndDniEffectiveDates() {
+        val result = calculateSixthCpcPromotionOrMacp(
+            payInPayBand = 17_450,
+            currentGradePay = 4_600,
+            targetGradePay = 4_800,
+            eventDate = calendarDate(2015, Calendar.FEBRUARY, 3),
+            eventType = "Promotion",
+            fixationOption = SixthCpcFixationOption.FROM_DNI
+        )
+
+        assertEquals(calendarDate(2015, Calendar.FEBRUARY, 3), result.eventDate)
+        assertEquals(calendarDateAtMidnight(2015, Calendar.JULY, 1), result.fixationEffectiveDate)
+        assertEquals(1_360, result.increment)
+        assertEquals(18_810, result.newPayInPayBand)
+        assertEquals(4_800, result.newGradePay)
+        assertEquals(23_610, result.revisedBasicPay)
+        assertEquals(calendarDateAtMidnight(2016, Calendar.JULY, 1), result.nextIncrementDate)
     }
 
     private fun calendarDateAtMidnight(year: Int, month: Int, day: Int): Long = Calendar.getInstance().apply {

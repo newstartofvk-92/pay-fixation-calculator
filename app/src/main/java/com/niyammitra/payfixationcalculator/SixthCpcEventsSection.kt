@@ -85,7 +85,7 @@ private fun currentGradePay(chain: SixthCpcEventChain) = chain.increments.lastOr
     ?: chain.result?.newGradePay ?: chain.scaleUpgrade?.newGradePay
 private fun currentPayBand(chain: SixthCpcEventChain) = chain.result?.newPayBand ?: chain.scaleUpgrade?.newPayBand
 private fun currentDate(chain: SixthCpcEventChain) = chain.increments.lastOrNull()?.date
-    ?: chain.result?.eventDate ?: chain.scaleUpgrade?.eventDate
+    ?: chain.result?.fixationEffectiveDate ?: chain.scaleUpgrade?.eventDate
 
 private fun nextIncrementDate(chain: SixthCpcEventChain) = chain.increments.lastOrNull()?.let {
     Calendar.getInstance().apply { timeInMillis = it.date; add(Calendar.YEAR, 1) }.timeInMillis
@@ -154,7 +154,7 @@ fun SixthCpcEventsSection(
                 }
                 add("## 6th CPC Event ${index + 1}: $label")
                 chain.result?.let { r ->
-                    add("Event date: ${dateText(r.eventDate)}; fixation option: ${r.fixationOption}")
+                    add("Event date: ${dateText(r.eventDate)}; fixed pay effective date: ${dateText(r.fixationEffectiveDate)}; fixation option: ${r.fixationOption}")
                     r.financialUpgradation?.let { add("Scheme: $it") }
                     add("Old pay: pay in pay band ${money(r.oldPayInPayBand)} + grade pay ${money(r.oldGradePay)}")
                     add("Fixation increment: ${money(r.increment)}; new pay in pay band ${money(r.newPayInPayBand)} + grade pay ${money(r.newGradePay)} = basic pay ${money(r.revisedBasicPay)}")
@@ -176,13 +176,11 @@ fun SixthCpcEventsSection(
         Text("Add promotion, financial-upgradation or pay-scale events chronologically. The latest result becomes the input for the next event.", color = EventSecondary, fontSize = 12.sp)
 
         events.forEachIndexed { index, chain ->
-            EventCard(chain, index, onDelete = { events = events.take(index) }, onIncrementDeleted = { updatedIncrements -> events = events.toMutableList().also { it[index] = chain.copy(increments = updatedIncrements) } }, onNextIncrement = {
-                val pb = currentPayInBand(chain) ?: return@EventCard
-                val gp = currentGradePay(chain) ?: return@EventCard
-                val next = calculateSixthCpcNextIncrement(pb, gp, bandForGradePay(gp).payBandMaximum) ?: return@EventCard
-                val nextPb = next - gp
-                val nextDate = nextIncrementDate(chain) ?: return@EventCard
-                if (nextDate <= july2015Date()) events = events.toMutableList().also { it[index] = chain.copy(increments = chain.increments + SixthCpcEventIncrement(nextPb, gp, nextDate, chain.sequence + chain.increments.size + 1)) }
+            val nextIncrement = planNextSixthCpcEventIncrement(chain, july2015Date())
+            EventCard(chain, index, nextIncrement, onDelete = { events = events.take(index) }, onIncrementDeleted = { updatedIncrements -> events = events.toMutableList().also { it[index] = chain.copy(increments = updatedIncrements) } }, onNextIncrement = {
+                nextIncrement.increment?.let { increment ->
+                    events = events.toMutableList().also { it[index] = chain.copy(increments = chain.increments + increment) }
+                }
             }, onAddEvent = { showForm = true })
         }
 
@@ -330,8 +328,28 @@ fun SixthCpcEventsSection(
     }
 }
 
+internal data class SixthCpcNextIncrementPlan(
+    val increment: SixthCpcEventIncrement?,
+    val unavailableReason: String? = null
+)
+
+internal fun planNextSixthCpcEventIncrement(chain: SixthCpcEventChain, cutoffDate: Long): SixthCpcNextIncrementPlan {
+    val payInBand = currentPayInBand(chain)
+        ?: return SixthCpcNextIncrementPlan(null, "A current event pay position is not available.")
+    val gradePay = currentGradePay(chain)
+        ?: return SixthCpcNextIncrementPlan(null, "A current Grade Pay is not available.")
+    val nextDate = nextIncrementDate(chain)
+        ?: return SixthCpcNextIncrementPlan(null, "The next increment date is not available.")
+    if (nextDate > cutoffDate) {
+        return SixthCpcNextIncrementPlan(null, "Next increment is due ${dateText(nextDate)}, after the 6th CPC journey cutoff ${dateText(cutoffDate)}.")
+    }
+    val next = calculateSixthCpcNextIncrement(payInBand, gradePay, bandForGradePay(gradePay).payBandMaximum)
+        ?: return SixthCpcNextIncrementPlan(null, "Pay has reached the applicable Pay Band maximum.")
+    return SixthCpcNextIncrementPlan(SixthCpcEventIncrement(next - gradePay, gradePay, nextDate, chain.sequence + chain.increments.size + 1))
+}
+
 @Composable
-private fun EventCard(chain: SixthCpcEventChain, index: Int, onDelete: () -> Unit, onIncrementDeleted: (List<SixthCpcEventIncrement>) -> Unit, onNextIncrement: () -> Unit, onAddEvent: () -> Unit) {
+private fun EventCard(chain: SixthCpcEventChain, index: Int, nextIncrement: SixthCpcNextIncrementPlan, onDelete: () -> Unit, onIncrementDeleted: (List<SixthCpcEventIncrement>) -> Unit, onNextIncrement: () -> Unit, onAddEvent: () -> Unit) {
     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -340,7 +358,11 @@ private fun EventCard(chain: SixthCpcEventChain, index: Int, onDelete: () -> Uni
             }
             chain.result?.let { r ->
                 Text("Date: ${dateText(r.eventDate)}", color = EventPrimary, fontWeight = FontWeight.Bold)
-                RowValue("Old Pay in Pay Band", r.oldPayInPayBand); RowValue("Old Grade Pay", r.oldGradePay); RowValue("Fixation Increment(s)", r.increment); RowValue("New Pay in Pay Band", r.newPayInPayBand); RowValue("New Grade Pay", r.newGradePay); RowValue("New Basic Pay", r.revisedBasicPay)
+                if (r.fixationOption == SixthCpcFixationOption.FROM_DNI && r.fixationEffectiveDate != r.eventDate) {
+                    Text("DNI fixation effective: ${dateText(r.fixationEffectiveDate)}", color = EventPrimary, fontWeight = FontWeight.Bold)
+                }
+                RowValue("Old Pay in Pay Band", r.oldPayInPayBand); RowValue("Old Grade Pay", r.oldGradePay); RowValue("Fixation Increment(s)", r.increment)
+                RowValue(if (r.fixationEffectiveDate == r.eventDate) "New Pay in Pay Band" else "Pay in Pay Band after DNI fixation", r.newPayInPayBand); RowValue("New Grade Pay", r.newGradePay); RowValue("New Basic Pay", r.revisedBasicPay)
                 Text("Pay Band: ${r.newPayBand}", color = EventSecondary, fontSize = 12.sp); Text("Next DNI: ${dateText(r.nextIncrementDate)}", color = EventSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             chain.scaleUpgrade?.let { r ->
@@ -395,12 +417,14 @@ private fun EventCard(chain: SixthCpcEventChain, index: Int, onDelete: () -> Uni
             // separately below it.
             Button(
                 onClick = onNextIncrement,
+                enabled = nextIncrement.increment != null,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = EventBlue),
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Text("Next Increment", fontWeight = FontWeight.Bold)
             }
+            nextIncrement.unavailableReason?.let { Text(it, color = EventSecondary, fontSize = 12.sp) }
             Button(
                 onClick = onAddEvent,
                 modifier = Modifier.fillMaxWidth(),
