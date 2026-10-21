@@ -315,7 +315,8 @@ data class PayJourneyReport(
     val sections: List<PayJourneyReportSection>,
     val finalPosition: CpcPayPosition?,
     val finalDniMillis: Long? = null,
-    val chronologyNote: String? = null
+    val chronologyNote: String? = null,
+    val validationNote: String? = null
 )
 
 internal data class FifthCpcReportPositionResolution(
@@ -406,6 +407,18 @@ object PayJourneyReportBuilder {
         val effectiveSeventh = snapshot.seventh ?: effectiveSixth?.seventhContinuation
         val allRows = mutableListOf<PayJourneyReportRow>()
         val sections = mutableListOf<PayJourneyReportSection>()
+        val unverifiedFourthScales = buildList {
+            snapshot.fourth?.let { fourth ->
+                add(fourth.scaleId)
+                addAll(fourth.events.map { it.targetScaleId })
+            }
+        }.distinct().mapNotNull { scaleId ->
+            FourthToFifthCpcData.scales.firstOrNull { it.existingScale == scaleId }
+                ?.takeIf { it.progression != FourthCpcScaleProgression.KNOWN_STAGES }
+        }
+        val fourthValidationNote = unverifiedFourthScales.takeIf { it.isNotEmpty() }?.joinToString("; ") { scale ->
+            "${scale.grade}: ${scale.progressionNote}"
+        }?.let { "4th CPC saved pay values are shown as stored and are not validated against a complete increment schedule. $it" }
         fun finalFourth(s: FourthCpcJourneySnapshot): CpcPayPosition {
             val lastIncrement = s.increments.maxWithOrNull(compareBy<CpcIncrementSnapshot> { it.dateMillis }.thenBy { it.order })
             val lastEvent = s.events.maxWithOrNull(compareBy<FourthCpcEventSnapshot> { it.eventDateMillis }.thenBy { it.order })
@@ -575,7 +588,8 @@ object PayJourneyReportBuilder {
             snapshot.startingDateMillis, sections, final, finalDni,
             chronologyNote = if (snapshot.sequenceIntegrity == CpcSequenceIntegrity.INFERRED)
                 "Note: This saved calculation predates chronological event sequencing. Where multiple events share the same date, their original application order could not be determined."
-            else null)
+            else null,
+            validationNote = fourthValidationNote)
     }
 
     private fun addOneYear(date: Long): Long = java.util.Calendar.getInstance().apply { timeInMillis = date; add(java.util.Calendar.YEAR, 1) }.timeInMillis
@@ -603,6 +617,15 @@ object PayJourneyReportBuilder {
         val row = when (snapshot) {
             is StandaloneCpcConversionSnapshot.FourthToFifth -> {
                 val scale = FourthToFifthCpcData.scales.firstOrNull { it.existingScale == snapshot.scaleId } ?: return null
+                if (!isKnownFourthCpcStage(snapshot.existingBasicPay, scale)) {
+                    val note = "This older saved conversion contains a 4th CPC pay value that cannot be validated against a documented stage schedule. The saved source value is shown without recalculating the conversion. ${fourthCpcPayValidationMessage(snapshot.existingBasicPay, scale)}"
+                    val source = CpcPayPosition(CpcHistoryStage.FOURTH, snapshot.existingBasicPay, scaleId = scale.existingScale, scaleTitle = scale.grade)
+                    val savedRow = PayJourneyReportRow(record.savedAtMillis, 0, CpcHistoryStage.FOURTH, CpcJourneyEventKind.OTHER,
+                        "Saved 4th CPC source pay (conversion not recalculated)", source, remarks = note)
+                    return PayJourneyReport(record.title ?: "CPC Conversion Report", record.savedAtMillis, record.startingCpc,
+                        record.savedAtMillis, listOf(PayJourneyReportSection("Saved CPC Conversion", listOf(savedRow))), source,
+                        validationNote = note)
+                }
                 val result = runCatching { calculateFourthToFifthCpc(snapshot.existingBasicPay, scale) }.getOrNull() ?: return null
                 PayJourneyReportRow(conversionDate(result.conversionDate), 0, CpcHistoryStage.FIFTH, CpcJourneyEventKind.CPC_CONVERSION,
                     "4th to 5th CPC conversion", CpcPayPosition(CpcHistoryStage.FIFTH, result.revisedBasicPay, scaleTitle = scale.revisedScale),

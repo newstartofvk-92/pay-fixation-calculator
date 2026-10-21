@@ -38,8 +38,41 @@ data class FourthCpcTimelineResult(
     val events: List<FourthCpcEventSnapshot>,
     val pay: Int,
     val scale: FourthCpcScale,
-    val lastEffectiveDate: Long?
+    val lastEffectiveDate: Long?,
+    val failure: FourthCpcTimelineFailure? = null
 )
+
+data class FourthCpcTimelineFailure(val dateMillis: Long, val action: String, val message: String)
+
+sealed interface FourthCpcEventPositionResolution {
+    data class Available(val position: FourthCpcEventPosition) : FourthCpcEventPositionResolution
+    data class Unresolved(val message: String) : FourthCpcEventPositionResolution
+}
+
+fun calculateFourthCpcEventPosition(
+    currentPay: Int,
+    currentScale: FourthCpcScale,
+    targetScale: FourthCpcScale
+): FourthCpcEventPositionResolution {
+    if (!isKnownFourthCpcStage(currentPay, currentScale)) {
+        return FourthCpcEventPositionResolution.Unresolved(fourthCpcPayValidationMessage(currentPay, currentScale))
+    }
+    if (targetScale.existingStages.isEmpty()) {
+        return FourthCpcEventPositionResolution.Unresolved(
+            "${targetScale.grade} has no verified 4th CPC increment stages, so an event position cannot be calculated."
+        )
+    }
+    val oneIncrement = when (val next = resolveFourthCpcNextIncrement(currentPay, currentScale)) {
+        is FourthCpcNextIncrementResolution.Available -> next.pay
+        FourthCpcNextIncrementResolution.MaximumReached -> currentPay
+        is FourthCpcNextIncrementResolution.ProgressionUnknown -> return FourthCpcEventPositionResolution.Unresolved(next.message)
+        is FourthCpcNextIncrementResolution.InvalidPosition -> return FourthCpcEventPositionResolution.Unresolved(next.message)
+    }
+    val fixedPay = targetScale.existingStages.firstOrNull { it >= oneIncrement }
+        ?: targetScale.existingStages.lastOrNull()
+        ?: return FourthCpcEventPositionResolution.Unresolved("The target scale has no verified pay stage for this event.")
+    return FourthCpcEventPositionResolution.Available(FourthCpcEventPosition(targetScale, fixedPay))
+}
 
 /** Replays the saved 4th CPC timeline so removing an event recalculates every later position. */
 fun recalculateFourthCpcTimeline(
@@ -66,22 +99,43 @@ fun recalculateFourthCpcTimeline(
         .thenBy { it.kind }
         .thenBy { it.index })
 
-    entries.forEach { entry ->
+    var failure: FourthCpcTimelineFailure? = null
+    for (entry in entries) {
         if (entry.kind == 0) {
-            pay = calculateFourthCpcNextIncrement(pay, scale) ?: pay
+            when (val resolution = resolveFourthCpcNextIncrement(pay, scale)) {
+                is FourthCpcNextIncrementResolution.Available -> pay = resolution.pay
+                FourthCpcNextIncrementResolution.MaximumReached -> {
+                    failure = FourthCpcTimelineFailure(entry.date, "increment", "The current pay is already at the maximum verified stage of ${scale.grade}.")
+                }
+                is FourthCpcNextIncrementResolution.ProgressionUnknown -> {
+                    failure = FourthCpcTimelineFailure(entry.date, "increment", resolution.message)
+                }
+                is FourthCpcNextIncrementResolution.InvalidPosition -> {
+                    failure = FourthCpcTimelineFailure(entry.date, "increment", resolution.message)
+                }
+            }
+            if (failure != null) break
             replayedIncrements[entry.index] = replayedIncrements[entry.index].copy(pay = pay)
         } else {
             val event = replayedEvents[entry.index]
             val target = FourthToFifthCpcData.scales.firstOrNull { it.existingScale == event.targetScaleId }
-                ?: return@forEach
-            val fixed = calculateFourthCpcEventPosition(pay, scale, target)
+            if (target == null) {
+                failure = FourthCpcTimelineFailure(entry.date, "event", "The saved target scale is not available in the current 4th CPC scale data.")
+                break
+            }
+            val resolution = calculateFourthCpcEventPosition(pay, scale, target)
+            if (resolution is FourthCpcEventPositionResolution.Unresolved) {
+                failure = FourthCpcTimelineFailure(entry.date, "event", resolution.message)
+                break
+            }
+            val fixed = (resolution as FourthCpcEventPositionResolution.Available).position
             pay = fixed.pay
             scale = fixed.scale
             replayedEvents[entry.index] = event.copy(resultingPay = pay)
         }
         lastDate = entry.date
     }
-    return FourthCpcTimelineResult(replayedIncrements, replayedEvents, pay, scale, lastDate)
+    return FourthCpcTimelineResult(replayedIncrements, replayedEvents, pay, scale, lastDate, failure)
 }
 
 data class FourthCpcEventPosition(val scale: FourthCpcScale, val pay: Int)

@@ -1,5 +1,7 @@
 package com.niyammitra.payfixationcalculator
 
+enum class FourthCpcScaleProgression { KNOWN_STAGES, RANGE_ONLY, PARTIALLY_KNOWN }
+
 data class FourthCpcScale(
     val grade: String,
     val existingScale: String,
@@ -7,11 +9,35 @@ data class FourthCpcScale(
     val revisedMinimum: Int,
     val revisedMaximum: Int,
     val revisedIncrement: Int,
-    val fixed: Boolean = false
+    val fixed: Boolean = false,
+    val progression: FourthCpcScaleProgression = FourthCpcScaleProgression.KNOWN_STAGES,
+    val knownStagesNotation: String? = null,
+    val declaredMinimum: Int? = null,
+    val declaredMaximum: Int? = null
 ) {
-    /** Every valid stage of the 4th CPC scale, including stepped increment portions. */
+    /** Stages supported by a complete schedule or the documented portion of a partial schedule. */
     val existingStages: List<Int>
-        get() = parsePayScaleStages(existingScale)
+        get() = when (progression) {
+            FourthCpcScaleProgression.KNOWN_STAGES -> parsePayScaleStages(existingScale)
+            FourthCpcScaleProgression.RANGE_ONLY -> emptyList()
+            FourthCpcScaleProgression.PARTIALLY_KNOWN -> parsePayScaleStages(
+                requireNotNull(knownStagesNotation) { "A partial scale must identify its documented stages." }
+            )
+        }
+
+    val declaredPayRange: IntRange?
+        get() {
+            val minimum = declaredMinimum ?: existingStages.firstOrNull() ?: return null
+            val maximum = declaredMaximum ?: existingStages.lastOrNull() ?: return null
+            return minimum..maximum
+        }
+
+    val progressionNote: String?
+        get() = when (progression) {
+            FourthCpcScaleProgression.KNOWN_STAGES -> null
+            FourthCpcScaleProgression.RANGE_ONLY -> "The pay range is documented, but its annual increment stages are not available in this calculator."
+            FourthCpcScaleProgression.PARTIALLY_KNOWN -> "Increment stages are documented only through ₹${existingStages.lastOrNull() ?: "—"}; progression above that point is unresolved."
+        }
 }
 
 data class FourthToFifthResult(
@@ -48,10 +74,13 @@ object FourthToFifthCpcData {
         FourthCpcScale("S-10", "1640-60-2600-75-2900", "5500-175-9000", 5500, 9000, 175),
         FourthCpcScale("S-11", "2000-60-2120", "6500-200-6900", 6500, 6900, 200),
         FourthCpcScale("S-12 (I)", "2000-60-2300-75-3200", "6500-200-10500", 6500, 10500, 200),
-        FourthCpcScale("S-12 (II)", "2000-60-2300-75-3200-3500", "6500-200-10500", 6500, 10500, 200),
+        FourthCpcScale("S-12 (II)", "2000-60-2300-75-3200-3500", "6500-200-10500", 6500, 10500, 200,
+            progression = FourthCpcScaleProgression.PARTIALLY_KNOWN,
+            knownStagesNotation = "2000-60-2300-75-3200", declaredMinimum = 2000, declaredMaximum = 3500),
         FourthCpcScale("S-13 (I)", "2375-75-3200-100-3500", "7450-225-11500", 7450, 11500, 225),
         FourthCpcScale("S-13 (II)", "2375-75-3200-100-3500-125-3750", "7450-225-11500", 7450, 11500, 225),
-        FourthCpcScale("S-14", "2500-4000", "7500-250-12000", 7500, 12000, 250),
+        FourthCpcScale("S-14", "2500-4000", "7500-250-12000", 7500, 12000, 250,
+            progression = FourthCpcScaleProgression.RANGE_ONLY, declaredMinimum = 2500, declaredMaximum = 4000),
         FourthCpcScale("S-15 (I)", "2200-75-2800-100-4000", "8000-275-13500", 8000, 13500, 275),
         FourthCpcScale("S-15 (II)", "2300-100-2800", "8000-275-13500", 8000, 13500, 275),
         FourthCpcScale("NEW SCALE", "2200-75-2800-100-4000", "8000-275-13500 (Group A Entry)", 8000, 13500, 275),
@@ -86,7 +115,7 @@ object FourthToFifthCpcData {
 
 /** Standard Rule 7 replacement-scale calculation. */
 fun calculateFourthToFifthCpc(existingBasicPay: Int, scale: FourthCpcScale): FourthToFifthResult {
-    require(existingBasicPay in scale.existingStages) { "Basic pay must be a valid stage of the selected 4th CPC scale." }
+    require(isKnownFourthCpcStage(existingBasicPay, scale)) { fourthCpcPayValidationMessage(existingBasicPay, scale) }
     val da = (existingBasicPay * 1.48).toInt()
     val firstIr = 100
     val secondIr = maxOf(100, (existingBasicPay * 0.10).toInt())
@@ -112,16 +141,20 @@ fun parsePayScaleStages(notation: String): List<Int> {
     val alternatives = notation.split("/")
     return alternatives.flatMap { part ->
         val numbers = Regex("\\d+").findAll(part).map { it.value.toInt() }.toList()
+        require(numbers.isNotEmpty()) { "Pay-scale notation contains no numeric stages: $notation" }
         if (numbers.size == 1) numbers
-        else if (numbers.size >= 3) {
+        else {
+            require(numbers.size >= 3 && numbers.size % 2 == 1) {
+                "Pay-scale notation has an incomplete increment segment: $notation"
+            }
             val result = mutableListOf<Int>()
             var current = numbers[0]
             result += current
             var i = 1
-            while (i + 1 < numbers.size) {
+            while (i < numbers.size) {
                 val increment = numbers[i]
                 val end = numbers[i + 1]
-                if (increment <= 0 || end < current) break
+                require(increment > 0 && end >= current) { "Pay-scale notation contains an invalid increment segment: $notation" }
                 while (current + increment <= end) {
                     current += increment
                     result += current
@@ -133,10 +166,45 @@ fun parsePayScaleStages(notation: String): List<Int> {
                 i += 2
             }
             result
-        } else emptyList()
+        }
     }.distinct().sorted()
 }
 
-fun calculateFourthCpcNextIncrement(currentPay: Int, scale: FourthCpcScale): Int? {
-    return scale.existingStages.firstOrNull { it > currentPay }
+sealed interface FourthCpcNextIncrementResolution {
+    data class Available(val pay: Int) : FourthCpcNextIncrementResolution
+    data object MaximumReached : FourthCpcNextIncrementResolution
+    data class ProgressionUnknown(val message: String) : FourthCpcNextIncrementResolution
+    data class InvalidPosition(val message: String) : FourthCpcNextIncrementResolution
+}
+
+fun isKnownFourthCpcStage(pay: Int, scale: FourthCpcScale): Boolean = pay in scale.existingStages
+
+fun fourthCpcPayValidationMessage(pay: Int, scale: FourthCpcScale): String = when {
+    scale.progression == FourthCpcScaleProgression.RANGE_ONLY ->
+        "${scale.grade} covers ₹${scale.declaredMinimum}–₹${scale.declaredMaximum}, but its valid increment stages are not documented here; this pay cannot be verified for calculation."
+    scale.progression == FourthCpcScaleProgression.PARTIALLY_KNOWN && pay > (scale.existingStages.lastOrNull() ?: Int.MIN_VALUE) ->
+        "${scale.grade} stages are documented only through ₹${scale.existingStages.last()}; ₹$pay is not a verified stage."
+    else -> "Basic pay must be a verified stage of the selected 4th CPC scale."
+}
+
+fun resolveFourthCpcNextIncrement(currentPay: Int, scale: FourthCpcScale): FourthCpcNextIncrementResolution {
+    val stages = scale.existingStages
+    if (currentPay !in stages) {
+        val range = scale.declaredPayRange
+        val progressionIsUnknownAtPay = when (scale.progression) {
+            FourthCpcScaleProgression.KNOWN_STAGES -> false
+            FourthCpcScaleProgression.RANGE_ONLY -> range != null && currentPay in range
+            FourthCpcScaleProgression.PARTIALLY_KNOWN ->
+                range != null && currentPay > (stages.lastOrNull() ?: Int.MAX_VALUE) && currentPay in range
+        }
+        if (progressionIsUnknownAtPay) {
+            return FourthCpcNextIncrementResolution.ProgressionUnknown(fourthCpcPayValidationMessage(currentPay, scale))
+        }
+        return FourthCpcNextIncrementResolution.InvalidPosition(fourthCpcPayValidationMessage(currentPay, scale))
+    }
+    stages.firstOrNull { it > currentPay }?.let { return FourthCpcNextIncrementResolution.Available(it) }
+    if (scale.progression == FourthCpcScaleProgression.PARTIALLY_KNOWN) {
+        return FourthCpcNextIncrementResolution.ProgressionUnknown(scale.progressionNote!!)
+    }
+    return FourthCpcNextIncrementResolution.MaximumReached
 }

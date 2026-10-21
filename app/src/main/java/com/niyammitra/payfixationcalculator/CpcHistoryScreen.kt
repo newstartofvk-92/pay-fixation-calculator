@@ -134,6 +134,7 @@ fun CpcHistoryScreen(
                 ) {
                     Text(report?.title ?: "Saved CPC conversion")
                     report?.chronologyNote?.let { Text(it, color = Color(0xFF8A5A00), fontSize = 12.sp) }
+                    report?.validationNote?.let { Text(it, color = Color(0xFF8A5A00), fontSize = 12.sp) }
                     val allReportRows = report?.sections?.flatMap { it.rows }.orEmpty()
                     val previewRows = allReportRows.take(8)
                     val omRowsNotInPreview = allReportRows.filter { it.kind == CpcJourneyEventKind.OM_SPECIAL_INCREMENT && it !in previewRows }
@@ -211,6 +212,7 @@ private object PayJourneyReportPdf {
             draw("Starting CPC: ${report.startingCpc}    Starting date: ${historyDate(report.startingDateMillis)}", body)
             draw("Saved: ${historyDate(report.savedAtMillis)}", body)
             report.chronologyNote?.let { draw(it, body) }
+            report.validationNote?.let { draw(it, body) }
             report.sections.forEach { section ->
                 y += 8f; currentSection = section.heading; draw(section.heading, heading)
                 section.rows.forEach { row ->

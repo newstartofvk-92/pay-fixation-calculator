@@ -179,6 +179,7 @@ fun CpcConversionOnlyScreen(
                                     })
                                 }
                             }
+                            fourthScale?.progressionNote?.let { Text(it, color = Color(0xFF8A5A00), fontSize = 12.sp) }
                             OutlinedTextField(
                                 value = fourthPayText,
                                 onValueChange = { fourthPayText = it.filter(Char::isDigit); clearResult() },
@@ -188,7 +189,7 @@ fun CpcConversionOnlyScreen(
                                 modifier = Modifier.fillMaxWidth()
                             )
                             if (fourthPayText.isNotBlank() && fourthPay != null && fourthScale != null && !fourthPayValid) {
-                                ValidationText("Enter a pay stage available in the selected 4th CPC scale.")
+                                ValidationText(fourthCpcPayValidationMessage(fourthPay, fourthScale!!))
                             } else if (fourthPayText.isNotBlank() && fourthPay == null) {
                                 ValidationText("Enter a valid whole-rupee basic pay.")
                             }

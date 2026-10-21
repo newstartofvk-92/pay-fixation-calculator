@@ -8,7 +8,7 @@ class FourthCpcTimelinePresentationTest {
     private val scales = FourthToFifthCpcData.scales
     private val startingScale = scales.first { it.grade == "S-1" }
     private val promotedScale = scales.first { it.grade == "S-13 (I)" }
-    private val laterScale = scales.first { it.grade == "S-14" }
+    private val laterScale = scales.first { it.grade == "S-15 (I)" }
     private val startDate = 50L
 
     private fun increment(date: Long, sequence: Int, pay: Int = 0) =

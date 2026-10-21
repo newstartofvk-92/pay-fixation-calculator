@@ -64,7 +64,7 @@ fun FourthToFifthCpcScreen(
 
     val basicPay = basicPayText.toIntOrNull()
     val payDate = parseFourthFiveDate(formatFourthFiveDateInput(payDateText))
-    val validStartingPosition = selectedScale != null && basicPay != null && payDate != null && payDate >= fourthCpcStartDate() && payDate <= fourthFiveConversionDate() && basicPay in selectedScale!!.existingStages
+    val validStartingPosition = selectedScale != null && basicPay != null && payDate != null && payDate >= fourthCpcStartDate() && payDate <= fourthFiveConversionDate() && isKnownFourthCpcStage(basicPay, selectedScale!!)
     val formattedNextIncrementDate = formatFourthFiveDateInput(nextIncrementDateText)
     val parsedNextIncrementDate = parseFourthFiveDate(formattedNextIncrementDate)
     val result = if (selectedScale != null && basicPay != null) {
@@ -75,22 +75,28 @@ fun FourthToFifthCpcScreen(
     val replayedTimeline = if (validStartingPosition && selectedScale != null && basicPay != null) {
         recalculateFourthCpcTimeline(basicPay, selectedScale!!, incrementSteps, acceptedEvents, sequenceIntegrity)
     } else null
+    val journeyReplaySucceeded = replayedTimeline != null && replayedTimeline.failure == null
     val currentPay = replayedTimeline?.pay ?: basicPay
     val currentIncrementDate = replayedTimeline?.lastEffectiveDate
     val currentScale = replayedTimeline?.scale ?: selectedScale
     val conversionPay = currentPay
     val conversionScale = currentScale
     val timelineDate = currentIncrementDate ?: payDate
-    val conversionReached = conversionPay != null && conversionScale != null &&
+    val conversionReached = journeyReplaySucceeded && conversionPay != null && conversionScale != null && isKnownFourthCpcStage(conversionPay, conversionScale) &&
         timelineDate != null && timelineDate <= fourthFiveConversionDate()
     val conversionResult = if (conversionActivated && conversionReached && conversionPay != null && conversionScale != null) {
         runCatching { calculateFourthToFifthCpc(conversionPay, conversionScale) }.getOrNull()
     } else null
-    val canAddIncrement = validStartingPosition && currentPay != null &&
+    val nextIncrementResolution = if (currentPay != null && currentScale != null) resolveFourthCpcNextIncrement(currentPay, currentScale) else null
+    val canAddIncrement = validStartingPosition && journeyReplaySucceeded && currentPay != null &&
         (currentIncrementDate == null || currentIncrementDate < fourthFiveConversionEndDate()) &&
         (currentIncrementDate != null || validNextIncrementDate != null) &&
-        currentScale != null && calculateFourthCpcNextIncrement(currentPay, currentScale) != null
-    val liveJourneySnapshot = if (validStartingPosition && selectedScale != null && basicPay != null && payDate != null) {
+        nextIncrementResolution is FourthCpcNextIncrementResolution.Available
+    val canStartEvent = validStartingPosition && journeyReplaySucceeded && when (nextIncrementResolution) {
+        is FourthCpcNextIncrementResolution.Available, FourthCpcNextIncrementResolution.MaximumReached -> true
+        else -> false
+    }
+    val liveJourneySnapshot = if (validStartingPosition && journeyReplaySucceeded && selectedScale != null && basicPay != null && payDate != null) {
         CompleteJourneySnapshot(
             startingCpc = CpcHistoryStage.FOURTH,
             startingDateMillis = payDate,
@@ -209,12 +215,24 @@ fun FourthToFifthCpcScreen(
                         modifier = Modifier.fillMaxWidth()
                     )
                     if (selectedScale != null && basicPay != null && result == null) {
-                        Text("Enter a basic pay within the selected 4th CPC scale.", color = Color(0xFFC62828), fontSize = 12.sp)
+                        Text(fourthCpcPayValidationMessage(basicPay, selectedScale!!), color = Color(0xFFC62828), fontSize = 12.sp)
+                    } else if (selectedScale?.progressionNote != null) {
+                        Text(selectedScale!!.progressionNote!!, color = Color(0xFF8A5A00), fontSize = 12.sp)
                     }
                 }
             }
 
-            if (validStartingPosition) {
+            if (replayedTimeline?.failure != null) {
+                val failure = replayedTimeline!!.failure!!
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFEBEE)), shape = RoundedCornerShape(16.dp)) {
+                    Text(
+                        "The 4th CPC journey cannot be continued because the ${failure.action} on ${formatFourthFiveDate(failure.dateMillis)} cannot be validated: ${failure.message}",
+                        Modifier.padding(16.dp), color = Color(0xFFC62828), fontSize = 13.sp
+                    )
+                }
+            }
+
+            if (validStartingPosition && journeyReplaySucceeded) {
                 result?.let { calculation ->
                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
                         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -265,14 +283,14 @@ fun FourthToFifthCpcScreen(
                 if (!eventFlow.showEventTypes && eventFlow.draftType == null) {
                     Button(
                         onClick = { eventFlow = reduceFourthCpcEventState(eventFlow, FourthCpcEventAction.OpenEventTypes) },
-                        enabled = currentPay != null,
+                        enabled = canStartEvent,
                         modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.buttonColors(containerColor = FourFiveBlue),
                         shape = RoundedCornerShape(12.dp)
                     ) { Text("Add 4th CPC Event", fontWeight = FontWeight.Bold) }
                 }
 
-                if (eventFlow.showEventTypes) {
+                if (eventFlow.showEventTypes && journeyReplaySucceeded) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FourthCpcEventType.values().forEach { type ->
                             OutlinedButton(
@@ -311,7 +329,7 @@ fun FourthToFifthCpcScreen(
                     onClick = {
                         val scale = currentScale ?: return@Button
                         val pay = currentPay ?: return@Button
-                        val nextPay = calculateFourthCpcNextIncrement(pay, scale) ?: return@Button
+                        val nextPay = (resolveFourthCpcNextIncrement(pay, scale) as? FourthCpcNextIncrementResolution.Available)?.pay ?: return@Button
                         val nextDate = currentIncrementDate?.let { addFourthFiveYear(it) } ?: validNextIncrementDate ?: return@Button
                         if (nextDate <= fourthFiveConversionEndDate()) {
                             incrementSteps = incrementSteps + FourthToFifthIncrementStep(nextPay, nextDate, (incrementSteps.maxOfOrNull { it.sequence } ?: 0).coerceAtLeast(acceptedEvents.maxOfOrNull { it.sequence } ?: 0) + 1)
@@ -327,6 +345,10 @@ fun FourthToFifthCpcScreen(
                     colors = ButtonDefaults.buttonColors(containerColor = FourFiveBlue),
                     shape = RoundedCornerShape(12.dp)
                 ) { Text("4th CPC Next Increment", fontWeight = FontWeight.Bold) }
+
+                (nextIncrementResolution as? FourthCpcNextIncrementResolution.ProgressionUnknown)?.let {
+                    Text(it.message, color = Color(0xFF8A5A00), fontSize = 12.sp)
+                }
 
                 if (incrementSteps.isEmpty() && validNextIncrementDate != null) {
                     Text("The first added increment will be shown on ${formatFourthFiveDate(validNextIncrementDate)}. Subsequent increments advance by one year.", color = FourFiveTextSecondary, fontSize = 12.sp)
@@ -480,7 +502,7 @@ fun FourthToFifthCpcScreen(
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFFFF8E1)), shape = RoundedCornerShape(16.dp)) {
                 Text("This calculator implements the standard Rule 7 replacement-scale calculation. Special pay, NPA, personal pay, bunching, stagnation increments and post-01.01.1996 fixation require case-specific verification.", Modifier.padding(16.dp), color = FourFiveTextPrimary, fontSize = 12.sp)
             }
-            if (validStartingPosition && selectedScale != null && basicPay != null && payDate != null) {
+            if (validStartingPosition && journeyReplaySucceeded && selectedScale != null && basicPay != null && payDate != null) {
                 SaveCompleteJourneyButton(CompleteJourneySnapshot(
                     startingCpc = CpcHistoryStage.FOURTH,
                     startingDateMillis = payDate,
