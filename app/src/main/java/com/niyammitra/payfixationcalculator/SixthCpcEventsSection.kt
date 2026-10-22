@@ -1,6 +1,7 @@
 package com.niyammitra.payfixationcalculator
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
@@ -10,6 +11,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.text.NumberFormat
@@ -87,9 +89,35 @@ private fun currentPayBand(chain: SixthCpcEventChain) = chain.result?.newPayBand
 private fun currentDate(chain: SixthCpcEventChain) = chain.increments.lastOrNull()?.date
     ?: chain.result?.fixationEffectiveDate ?: chain.scaleUpgrade?.eventDate
 
-private fun nextIncrementDate(chain: SixthCpcEventChain) = chain.increments.lastOrNull()?.let {
+internal fun sixthCpcEventNextIncrementDate(chain: SixthCpcEventChain) = chain.increments.lastOrNull()?.let {
     Calendar.getInstance().apply { timeInMillis = it.date; add(Calendar.YEAR, 1) }.timeInMillis
 } ?: chain.result?.nextIncrementDate ?: chain.scaleUpgrade?.nextIncrementDate
+
+internal data class SixthCpcJourneyPosition(
+    val payBand: String?,
+    val gradePay: Int?,
+    val payInPayBand: Int?,
+    val date: Long?
+)
+
+/** Resolves the displayed/conversion position from the same latest accepted event chain. */
+internal fun resolveSixthCpcJourneyPosition(
+    startingPayInPayBand: Int?,
+    startingGradePay: Int?,
+    startingPayBand: String?,
+    startingPositionDate: Long?,
+    eventChains: List<SixthCpcEventChain>
+): SixthCpcJourneyPosition {
+    val latest = eventChains.lastOrNull() ?: return SixthCpcJourneyPosition(
+        startingPayBand, startingGradePay, startingPayInPayBand, startingPositionDate
+    )
+    return SixthCpcJourneyPosition(
+        payBand = currentPayBand(latest) ?: startingPayBand,
+        gradePay = currentGradePay(latest) ?: startingGradePay,
+        payInPayBand = currentPayInBand(latest) ?: startingPayInPayBand,
+        date = currentDate(latest) ?: startingPositionDate
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,11 +149,14 @@ fun SixthCpcEventsSection(
     var fixationOption by remember { mutableStateOf(SixthCpcFixationOption.FROM_EVENT_DATE) }
 
     val latest = events.lastOrNull()
-    val payInBand = latest?.let(::currentPayInBand) ?: startingPayInPayBand
-    val gradePay = latest?.let(::currentGradePay) ?: startingGradePay
-    val payBand = latest?.let(::currentPayBand) ?: startingPayBand
+    val latestPosition = resolveSixthCpcJourneyPosition(
+        startingPayInPayBand, startingGradePay, startingPayBand, startingPositionDate, events
+    )
+    val payInBand = latestPosition.payInPayBand ?: startingPayInPayBand
+    val gradePay = latestPosition.gradePay ?: startingGradePay
+    val payBand = latestPosition.payBand ?: startingPayBand
     val basicPay = payInBand + gradePay
-    val currentPositionDate = latest?.let(::currentDate) ?: startingPositionDate
+    val currentPositionDate = latestPosition.date ?: startingPositionDate
     val eventDateInRange = eventDate?.let { date ->
         (currentPositionDate == null || date >= currentPositionDate) &&
             (latestAllowedEventDate == null || date <= latestAllowedEventDate)
@@ -338,7 +369,7 @@ internal fun planNextSixthCpcEventIncrement(chain: SixthCpcEventChain, cutoffDat
         ?: return SixthCpcNextIncrementPlan(null, "A current event pay position is not available.")
     val gradePay = currentGradePay(chain)
         ?: return SixthCpcNextIncrementPlan(null, "A current Grade Pay is not available.")
-    val nextDate = nextIncrementDate(chain)
+    val nextDate = sixthCpcEventNextIncrementDate(chain)
         ?: return SixthCpcNextIncrementPlan(null, "The next increment date is not available.")
     if (nextDate > cutoffDate) {
         return SixthCpcNextIncrementPlan(null, "Next increment is due ${dateText(nextDate)}, after the 6th CPC journey cutoff ${dateText(cutoffDate)}.")
@@ -358,6 +389,7 @@ private fun EventCard(chain: SixthCpcEventChain, index: Int, nextIncrement: Sixt
             }
             chain.result?.let { r ->
                 Text("Date: ${dateText(r.eventDate)}", color = EventPrimary, fontWeight = FontWeight.Bold)
+                Text("Fixation option: ${if (r.fixationOption == SixthCpcFixationOption.FROM_DNI) "From DNI" else "From event date"}", color = EventSecondary, fontSize = 12.sp)
                 if (r.fixationOption == SixthCpcFixationOption.FROM_DNI && r.fixationEffectiveDate != r.eventDate) {
                     Text("DNI fixation effective: ${dateText(r.fixationEffectiveDate)}", color = EventPrimary, fontWeight = FontWeight.Bold)
                 }
@@ -437,7 +469,15 @@ private fun EventCard(chain: SixthCpcEventChain, index: Int, nextIncrement: Sixt
     }
 }
 
-@Composable private fun EventRadio(label: String, selected: Boolean, onClick: () -> Unit) { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) { RadioButton(selected = selected, onClick = onClick); Text(label, Modifier.padding(top = 12.dp), color = EventPrimary, fontSize = 13.sp) } }
+@Composable private fun EventRadio(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().selectable(selected = selected, onClick = onClick, role = Role.RadioButton),
+        verticalAlignment = Alignment.Top
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Text(label, Modifier.padding(top = 12.dp), color = EventPrimary, fontSize = 13.sp)
+    }
+}
 @Composable private fun RowValue(label: String, value: Int) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(label, color = EventSecondary, fontSize = 12.sp); Text(money(value), color = EventPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp) } }
 private fun money(value: Int): String = NumberFormat.getIntegerInstance(Locale("en", "IN")).format(value).let { "₹$it" }
 private fun dateText(value: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))

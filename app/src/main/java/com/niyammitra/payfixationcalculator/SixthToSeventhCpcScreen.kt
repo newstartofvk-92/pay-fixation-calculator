@@ -107,8 +107,6 @@ internal fun convertedSeventhStartingSnapshot(calculation: SixthToSeventhResult)
         startingDniMillis = julyFirst2016()
     )
 
-private data class SixthCpcCurrentPosition(val payBand: String, val gradePay: Int, val payInPayBand: Int, val date: Long)
-
 @Composable
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 fun SixthToSeventhCpcScreen(
@@ -131,19 +129,6 @@ fun SixthToSeventhCpcScreen(
             it.title.substringBefore(":").trim() == bandPrefix
         }
     }
-    val restoredLastChain = restoredSnapshot?.eventChains?.lastOrNull()
-    val restoredChainIncrement = restoredLastChain?.increments?.lastOrNull()
-    val restoredChainResult = restoredLastChain?.result
-    val restoredChainUpgrade = restoredLastChain?.scaleUpgrade
-    val restoredEventPosition = when {
-        restoredChainIncrement != null -> SixthCpcCurrentPosition(
-            restoredChainResult?.newPayBand ?: restoredChainUpgrade?.newPayBand ?: initialPayBand.orEmpty(),
-            restoredChainIncrement.gradePay, restoredChainIncrement.payInPayBand, restoredChainIncrement.date
-        )
-        restoredChainResult != null -> SixthCpcCurrentPosition(restoredChainResult.newPayBand, restoredChainResult.newGradePay, restoredChainResult.newPayInPayBand, restoredChainResult.fixationEffectiveDate)
-        restoredChainUpgrade != null -> SixthCpcCurrentPosition(restoredChainUpgrade.newPayBand, restoredChainUpgrade.newGradePay, restoredChainUpgrade.newPayInPayBand, restoredChainUpgrade.eventDate)
-        else -> null
-    }
     var selectedPayBand by remember(initialPayBand) { mutableStateOf<SixthCpcPayBand?>(initialBand) }
     var selectedGradePay by remember(initialGradePay) { mutableStateOf<Int?>(initialGradePay) }
     var payInPayBandText by remember(initialPayInPayBand) { mutableStateOf(initialPayInPayBand?.toString() ?: "") }
@@ -158,16 +143,15 @@ fun SixthToSeventhCpcScreen(
     var sixthIncrementSteps by remember(selectedPayBand, selectedGradePay, payInPayBandText, startDate, restoredSnapshot) {
         mutableStateOf(restoredSnapshot?.increments.orEmpty().map { SixthCpcHistoricalIncrement(it.payInPayBand, it.gradePay, it.dateMillis, it.sequence) })
     }
-    var eventCurrentPosition by remember(selectedPayBand, selectedGradePay, payInPayBandText, startDate, sixthIncrementSteps, restoredSnapshot) { mutableStateOf(restoredEventPosition) }
-    var hasSixthCpcEvents by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.eventChains?.isNotEmpty() == true) }
     var acceptedEventChains by remember(restoredSnapshot) { mutableStateOf(restoredSnapshot?.eventChains.orEmpty()) }
+    val hasSixthCpcEvents = acceptedEventChains.isNotEmpty()
     var promotionHistory by remember(restoredSnapshot, initialSeventhSnapshot) { mutableStateOf(restoredSeventh?.promotions.orEmpty()) }
     var editingPromotionIndex by remember(restoredSnapshot, initialSeventhSnapshot) {
         mutableStateOf(restoredSeventh?.promotions?.lastIndex?.takeIf { it >= 0 })
     }
     val currentPromotion = editingPromotionIndex?.let(promotionHistory::getOrNull)
     var sixthEventReport by remember { mutableStateOf(emptyList<String>()) }
-    var incrementSteps by remember(selectedPayBand, selectedGradePay, payInPayBandText, startDate, eventCurrentPosition, restoredSnapshot, initialSeventhSnapshot) {
+    var incrementSteps by remember(selectedPayBand, selectedGradePay, payInPayBandText, startDate, restoredSnapshot, initialSeventhSnapshot) {
         mutableStateOf(restoredSeventh?.increments.orEmpty().map { SeventhCpcIncrementStep(it.pay, it.dateMillis, it.sequence) })
     }
 
@@ -177,11 +161,16 @@ fun SixthToSeventhCpcScreen(
     val baseGradePay = sixthIncrementSteps.lastOrNull()?.gradePay ?: selectedGradePay
     val basePayBand = selectedPayBand?.title?.substringBefore(":")?.trim()
     val basePositionDate = sixthIncrementSteps.lastOrNull()?.date ?: startDate
-    val journeyPayInPayBand = eventCurrentPosition?.payInPayBand ?: basePayInPayBand
-    val journeyGradePay = eventCurrentPosition?.gradePay ?: baseGradePay
-    val journeyPayBandTitle = eventCurrentPosition?.payBand ?: basePayBand
-    val journeyDate = eventCurrentPosition?.date ?: basePositionDate
-    val journeyReady = isSixthCpcJourneyReady(journeyDate, sixthCpcLastIncrementDate())
+    val journeyPosition = resolveSixthCpcJourneyPosition(
+        basePayInPayBand, baseGradePay, basePayBand, basePositionDate, acceptedEventChains
+    )
+    val journeyPayInPayBand = journeyPosition.payInPayBand
+    val journeyGradePay = journeyPosition.gradePay
+    val journeyPayBandTitle = journeyPosition.payBand
+    val journeyDate = journeyPosition.date
+    val nextSixthIncrementDate = acceptedEventChains.lastOrNull()?.let(::sixthCpcEventNextIncrementDate)
+        ?: journeyDate?.let(::nextSixthCpcIncrementDate)
+    val journeyReady = isSixthCpcJourneyReady(journeyDate, nextSixthIncrementDate, sixthCpcLastIncrementDate())
     val eventPayBand = journeyPayBandTitle?.let { title ->
         SixthToSeventhCpcData.payBands.firstOrNull { it.title.substringBefore(":").trim() == title.substringBefore(":").trim() }
     }
@@ -234,10 +223,11 @@ fun SixthToSeventhCpcScreen(
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("6th CPC Pay Journey", color = SixSevenBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                         Text("Starting basic pay is Pay in Pay Band plus Grade Pay. Add each 1 July increment up to 2015, then record promotion, ACP / MACP, or pay-scale events in date order.", color = SixSevenTextSecondary, fontSize = 13.sp)
+                        Text("Position before event chain", color = SixSevenTextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         ConversionRow("Pay in Pay Band", basePayInPayBand ?: 0)
                         ConversionRow("Grade Pay", baseGradePay ?: 0)
-                        ConversionRow("Basic Pay at current position", (basePayInPayBand ?: 0) + (baseGradePay ?: 0))
-                        Text("Current position date: ${basePositionDate?.let(::formatSixSevenDate) ?: "—"}", color = SixSevenTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                        ConversionRow("Basic Pay", (basePayInPayBand ?: 0) + (baseGradePay ?: 0))
+                        Text("Position date: ${basePositionDate?.let(::formatSixSevenDate) ?: "—"}", color = SixSevenTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         if (sixthIncrementSteps.isNotEmpty()) {
                             sixthIncrementSteps.forEachIndexed { index, step ->
                                 Surface(Modifier.fillMaxWidth(), color = SixSevenBlue.copy(alpha = .06f), shape = RoundedCornerShape(12.dp)) {
@@ -272,7 +262,10 @@ fun SixthToSeventhCpcScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = SixSevenBlue),
                             shape = RoundedCornerShape(12.dp)
                         ) { Text(if (nextSixthDate != null && nextSixthDate > sixthCpcLastIncrementDate()) "6th CPC increment period complete" else "Add Next 6th CPC Increment", fontWeight = FontWeight.Bold) }
-                        if (hasSixthCpcEvents) Text("Continue the current event chain before adding more annual increments.", color = SixSevenTextSecondary, fontSize = 12.sp)
+                        if (hasSixthCpcEvents) Text(
+                            "Add any increment due before 01 July 2015 from the latest event card. If its next DNI is after the cutoff, no further 6th CPC increment is due before conversion.",
+                            color = SixSevenTextSecondary, fontSize = 12.sp
+                        )
                     }
                 }
 
@@ -285,24 +278,41 @@ fun SixthToSeventhCpcScreen(
                         latestAllowedEventDate = sixthCpcPeriodEnd(),
                         initialEventChains = acceptedEventChains,
                         initialSequence = sixthIncrementSteps.maxOfOrNull { it.sequence } ?: sixthIncrementSteps.size,
-                        onLatestStateChange = { band, gp, pb, date ->
-                            val updated = SixthCpcCurrentPosition(band, gp, pb, date)
-                            if (eventCurrentPosition != updated) {
-                                eventCurrentPosition = updated
+                        onJourneyLinesChange = { sixthEventReport = it },
+                        onAcceptedEventChainsChange = {
+                            if (acceptedEventChains != it) {
+                                acceptedEventChains = it
+                                // 7th CPC events/increments were derived from the previous 6th CPC position.
+                                // Keep restored continuation on initial load, but invalidate it after a real edit.
+                                incrementSteps = emptyList()
+                                promotionHistory = emptyList()
+                                editingPromotionIndex = null
                                 nextAction = null
                             }
-                        },
-                        onEventsStateChange = { hasSixthCpcEvents = it },
-                        onJourneyLinesChange = { sixthEventReport = it },
-                        onAcceptedEventChainsChange = { acceptedEventChains = it }
+                        }
                     )
+                }
+                if (acceptedEventChains.isNotEmpty()) {
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+                        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Current 6th CPC Position", color = SixSevenBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                            Text("Effective date: ${journeyDate?.let(::formatSixSevenDate) ?: "—"}", color = SixSevenTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            Text("Pay Band: ${journeyPayBandTitle ?: "—"}", color = SixSevenTextSecondary, fontSize = 13.sp)
+                            ConversionRow("Pay in Pay Band", journeyPayInPayBand ?: 0)
+                            ConversionRow("Grade Pay", journeyGradePay ?: 0)
+                            ConversionRow("Basic Pay", (journeyPayInPayBand ?: 0) + (journeyGradePay ?: 0))
+                            acceptedEventChains.lastOrNull()?.result?.let { result ->
+                                Text("Fixation: ${if (result.fixationOption == SixthCpcFixationOption.FROM_DNI) "From DNI" else "From event date"}; next DNI: ${formatSixSevenDate(result.nextIncrementDate)}", color = SixSevenTextSecondary, fontSize = 12.sp)
+                            }
+                        }
+                    }
                 }
                 if (journeyReady) {
                     Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFEAF5FC)), shape = RoundedCornerShape(16.dp)) {
                         Text("6th CPC position is ready for conversion to the 7th CPC. The position above is carried forward automatically.", Modifier.padding(16.dp), color = SixSevenBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                     }
                 } else {
-                    Text("Continue the pay journey through the 01 July 2015 increment or a later 6th CPC event before converting to the 7th CPC.", color = SixSevenTextSecondary, fontSize = 12.sp)
+                    Text("Record any 6th CPC increment due on or before 01 July 2015. If the current pay position remains valid through that date with no increment due, it can be converted.", color = SixSevenTextSecondary, fontSize = 12.sp)
                 }
             }
             }
@@ -634,7 +644,8 @@ internal fun julyFirst2016(): Long = Calendar.getInstance().apply { set(2016, Ca
 private fun sixthCpcPeriodStart(): Long = Calendar.getInstance().apply { clear(); set(2006, Calendar.JANUARY, 1, 0, 0, 0) }.timeInMillis
 private fun sixthCpcPeriodEnd(): Long = Calendar.getInstance().apply { clear(); set(2015, Calendar.DECEMBER, 31, 23, 59, 59); set(Calendar.MILLISECOND, 999) }.timeInMillis
 private fun sixthCpcLastIncrementDate(): Long = Calendar.getInstance().apply { clear(); set(2015, Calendar.JULY, 1, 0, 0, 0) }.timeInMillis
-internal fun isSixthCpcJourneyReady(positionDate: Long?, cutoffDate: Long): Boolean = positionDate != null && positionDate >= cutoffDate
+internal fun isSixthCpcJourneyReady(positionDate: Long?, nextIncrementDate: Long?, cutoffDate: Long): Boolean =
+    positionDate != null && (positionDate >= cutoffDate || (nextIncrementDate != null && nextIncrementDate > cutoffDate))
 private fun nextSixthCpcIncrementDate(date: Long): Long {
     val calendar = Calendar.getInstance().apply { timeInMillis = date }
     val currentYear = calendar.get(Calendar.YEAR)
