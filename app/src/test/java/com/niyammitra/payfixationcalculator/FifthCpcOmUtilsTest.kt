@@ -72,6 +72,44 @@ class FifthCpcOmUtilsTest {
         assertEquals(8_300, result.existingBasicPay)
     }
 
+    @Test fun lowerScaleWithoutPlacementStageIsIneligibleForEventSelection() {
+        val feederScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 8000-275-13500 (PB-2)" }
+        val lowerScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 2550-55-2660-60-3200" }
+        val fixation = calculateFifthCpcEventFixation(
+            currentPay = 8_300,
+            currentScale = feederScale,
+            targetScale = lowerScale,
+            eventType = "Promotion",
+            placementMethod = "Next Higher After Increment",
+            implementationOption = "From Event Date",
+            eventDate = date(Calendar.MAY, 1),
+            currentDni = null,
+            omAdjustment = null
+        )
+
+        assertFalse(isEligibleFifthCpcEventTargetScale(lowerScale, fixation.placementBasePay))
+        assertNull(fixation.fixedPay)
+    }
+
+    @Test fun targetScaleWithoutStageAtOrAbovePlacementPayDoesNotFallBackToLastStage() {
+        val feederScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 8000-275-13500 (PB-2)" }
+        val targetScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 2550-55-2660-60-3200" }
+        val fixation = calculateFifthCpcEventFixation(
+            currentPay = 8_300,
+            currentScale = feederScale,
+            targetScale = targetScale,
+            eventType = "Promotion",
+            placementMethod = "Next Higher After Increment",
+            implementationOption = "From Event Date",
+            eventDate = date(Calendar.MAY, 1),
+            currentDni = null,
+            omAdjustment = null
+        )
+
+        assertEquals(8_550, fixation.placementBasePay)
+        assertNull(fixation.fixedPay)
+    }
+
     @Test fun completeJourneyOmDataSurvivesRestoreResaveWithoutChangingSequenceIntegrity() {
         val original = omEligibleJourney()
         val originalSnapshot = (original.payload as CompleteJourneyPayload).snapshot

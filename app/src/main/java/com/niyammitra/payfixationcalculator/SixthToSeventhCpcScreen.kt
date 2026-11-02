@@ -111,6 +111,7 @@ internal fun convertedSeventhStartingSnapshot(calculation: SixthToSeventhResult)
 @OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 fun SixthToSeventhCpcScreen(
     onBack: () -> Unit,
+    onHome: (() -> Unit)? = null,
     initialPayBand: String? = null,
     initialGradePay: Int? = null,
     initialPayInPayBand: Int? = null,
@@ -184,7 +185,8 @@ fun SixthToSeventhCpcScreen(
             title = if (initialSeventhSnapshot == null) "6th CPC → 7th CPC" else "Complete Pay Fixation Journey — 7th CPC",
             subtitle = if (initialSeventhSnapshot == null) "Pay Conversion" else "7th CPC Starting Position",
             onBack = onBack,
-            actions = { onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } } }
+            onHome = onHome,
+            onHistory = onHistory
         )
 
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -388,6 +390,9 @@ fun SixthToSeventhCpcScreen(
                         incrementSteps.forEachIndexed { index, step -> add("Increment ${index + 1} — ${formatSixSevenDate(step.date)}: ${formatSixSevenCurrency(step.pay)}") }
                         flattenSeventhPromotions(promotionHistory).forEach { promotion -> add("${promotion.eventKind}: Level ${promotion.currentLevel} → ${promotion.promotedLevel ?: "—"}; ${promotion.promotionDateMillis?.let(::formatSixSevenDate) ?: "date not specified"}") }
                     },
+                    buttonText = "Export to PDF",
+                    title = "6th to 7th CPC Pay Fixation",
+                    fileNamePrefix = "6th_to_7th_CPC_Fixation",
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -619,6 +624,7 @@ internal fun PromotionMacpFromConversion(
                 )
             }
         }
+        PayFixationBannerAd()
     }
 
     if (showDatePicker) {

@@ -66,6 +66,7 @@ fun PayFixationStartingPositionScreen(
     initialPosition: PayFixationStartingPosition? = null,
     onBack: () -> Unit,
     onHome: () -> Unit,
+    onHistory: (() -> Unit)? = null,
     onContinue: (PayFixationStartingPosition) -> Unit
 ) {
     val seventhMatrix = remember { PayMatrixSelection.forCategory(EmployeeCategory.ORDINARY) }
@@ -116,6 +117,7 @@ fun PayFixationStartingPositionScreen(
             subtitle = "NiyamMitra",
             onBack = onBack,
             onHome = onHome,
+            onHistory = onHistory,
             branded = true
         )
 
@@ -265,6 +267,7 @@ fun PayFixationStartingPositionScreen(
             }
             Spacer(Modifier.height(20.dp))
         }
+        PayFixationBannerAd()
     }
 }
 

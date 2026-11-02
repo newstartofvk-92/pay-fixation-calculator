@@ -37,6 +37,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -59,7 +62,10 @@ fun SaveCompleteJourneyButton(
     sequenceIntegrity: CpcSequenceIntegrity = snapshot.sequenceIntegrity
 ) {
     val context = LocalContext.current
-    OutlinedButton(onClick = {
+    var showDialog by remember { mutableStateOf(false) }
+    var employeeName by remember { mutableStateOf("") }
+
+    fun doSave(name: String?) {
         val now = System.currentTimeMillis()
         val currentStage = when {
             snapshot.seventh != null || snapshot.sixth?.seventhContinuation != null || snapshot.fifth?.sixthContinuation?.seventhContinuation != null -> CpcHistoryStage.SEVENTH
@@ -67,17 +73,85 @@ fun SaveCompleteJourneyButton(
             snapshot.fifth != null -> CpcHistoryStage.FIFTH
             else -> CpcHistoryStage.FOURTH
         }
+        val cleanName = name?.trim()?.takeIf { it.isNotBlank() }
+        val recordTitle = if (cleanName != null) "$cleanName — $title" else title
         CpcHistoryStore.save(context, CpcHistoryRecord(
             uniqueId = java.util.UUID.randomUUID().toString(),
             workflowType = CpcHistoryWorkflow.COMPLETE_JOURNEY,
-            title = title,
+            title = recordTitle,
+            officialName = cleanName,
             savedAtMillis = now,
             startingCpc = snapshot.startingCpc,
             currentStage = currentStage,
             payload = CompleteJourneyPayload(assignJourneyApplicationSequence(snapshot.copy(sequenceIntegrity = sequenceIntegrity)))
         ))
-        android.widget.Toast.makeText(context, "Pay journey saved", android.widget.Toast.LENGTH_SHORT).show()
-    }, modifier = Modifier.fillMaxWidth()) { Text("Save Journey to CPC History") }
+        android.widget.Toast.makeText(context, "Pay fixation saved to history", android.widget.Toast.LENGTH_SHORT).show()
+        (context as? android.app.Activity)?.let { HistoryInterstitialAd.showIfDue(it) {} }
+        showDialog = false
+    }
+
+    Button(
+        onClick = {
+            employeeName = ""
+            showDialog = true
+        },
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Text("Save to History", fontWeight = FontWeight.Bold)
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Save Pay Fixation") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("Enter employee name to identify this calculation in History, or save without a name.")
+                    OutlinedTextField(
+                        value = employeeName,
+                        onValueChange = { employeeName = it },
+                        label = { Text("Employee Name (optional)") },
+                        placeholder = { Text("Enter name, if required") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = { doSave(employeeName) }) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { doSave(null) }) {
+                        Text("Save Without Name")
+                    }
+                    TextButton(onClick = { showDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            }
+        )
+    }
+}
+
+internal fun recordFixationDateMillis(record: CpcHistoryRecord): Long? {
+    return when (val p = record.payload) {
+        is CompleteJourneyPayload -> p.snapshot.startingDateMillis
+        is StandaloneConversionPayload -> when (val s = p.snapshot) {
+            is StandaloneCpcConversionSnapshot.FourthToFifth -> {
+                Calendar.getInstance().apply { set(1996, Calendar.JANUARY, 1, 0, 0, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
+            }
+            is StandaloneCpcConversionSnapshot.FifthToSixth -> {
+                s.omAdjustment?.incrementDateMillis ?: s.normalDniMillis ?: Calendar.getInstance().apply { set(2006, Calendar.JANUARY, 1, 0, 0, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
+            }
+            is StandaloneCpcConversionSnapshot.SixthToSeventh -> {
+                Calendar.getInstance().apply { set(2016, Calendar.JANUARY, 1, 0, 0, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
+            }
+        }
+    }
 }
 
 @Composable
@@ -85,19 +159,28 @@ fun CpcHistoryScreen(
     records: List<CpcHistoryRecord>,
     onBack: () -> Unit,
     onDelete: (String) -> Unit,
-    onRestore: (CpcHistoryRecord) -> Unit
+    onRestore: (CpcHistoryRecord) -> Unit,
+    onHome: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     var selected by remember { mutableStateOf<CpcHistoryRecord?>(null) }
     var pendingDelete by remember { mutableStateOf<CpcHistoryRecord?>(null) }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
         val report = selected?.let(PayJourneyReportBuilder::build)
-        if (uri != null && report != null) runCatching {
-            context.contentResolver.openOutputStream(uri)?.use { PayJourneyReportPdf.write(it, report) }
+        if (uri != null && report != null) {
+            val result = runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { PayJourneyReportPdf.write(it, report) }
+            }
+            if (result.isSuccess) {
+                android.widget.Toast.makeText(context, "PDF saved successfully", android.widget.Toast.LENGTH_SHORT).show()
+                (context as? android.app.Activity)?.let { HistoryInterstitialAd.showIfDue(it) {} }
+            } else {
+                android.widget.Toast.makeText(context, "Could not save PDF: ${result.exceptionOrNull()?.localizedMessage ?: "unknown error"}", android.widget.Toast.LENGTH_LONG).show()
+            }
         }
     }
     Column(Modifier.fillMaxSize()) {
-        PayFixationAppHeader("CPC Journey History", onBack = onBack)
+        PayFixationAppHeader("CPC Journey History", onBack = onBack, onHome = onHome)
         if (records.isEmpty()) {
             androidx.compose.foundation.layout.Box(Modifier.weight(1f).fillMaxWidth().navigationBarsPadding(), contentAlignment = androidx.compose.ui.Alignment.Center) {
                 Text("No CPC history saved yet.", Modifier.padding(24.dp), color = Color(0xFF5B6B7A))
@@ -106,8 +189,20 @@ fun CpcHistoryScreen(
             items(records, key = { it.uniqueId }) { record ->
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(record.title ?: record.workflowType.name.replace('_', ' '), fontWeight = FontWeight.Bold, color = Color(0xFF172B4D))
-                        Text("${record.startingCpc.name} CPC • through ${record.currentStage.name} CPC • ${historyDate(record.savedAtMillis)}", color = Color(0xFF5B6B7A), fontSize = 12.sp)
+                        val displayName = record.officialName?.takeIf { it.isNotBlank() }
+                            ?: parseCpcConversionTitle(record.title)?.first
+                            ?: record.title?.substringBefore(" — ")?.takeIf { it != record.title && it.isNotBlank() }
+                            ?: "Unnamed Employee"
+                        Text(displayName, fontWeight = FontWeight.Bold, color = Color(0xFF172B4D), fontSize = 16.sp)
+                        val designation = record.designation?.takeIf { it.isNotBlank() }
+                            ?: parseCpcConversionTitle(record.title)?.second
+                        if (designation != null) {
+                            Text(designation, color = Color(0xFF5B6B7A), fontSize = 13.sp)
+                        }
+                        Text(record.title ?: record.workflowType.name.replace('_', ' '), color = Color(0xFF1769AA), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        val fixationDate = recordFixationDateMillis(record)
+                        Text("Fixation Date: ${historyDate(fixationDate)}", color = Color(0xFF263238), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("${record.startingCpc.name} CPC • through ${record.currentStage.name} CPC • Saved: ${historyDate(record.savedAtMillis)}", color = Color(0xFF5B6B7A), fontSize = 12.sp)
                         val journey = (record.payload as? CompleteJourneyPayload)?.snapshot
                         if (journey?.sequenceIntegrity == CpcSequenceIntegrity.INFERRED) {
                             Text("Same-date event order inferred for this older record", color = Color(0xFF8A5A00), fontSize = 12.sp)
@@ -121,6 +216,7 @@ fun CpcHistoryScreen(
                 }
             }
         }
+        PayFixationBannerAd()
     }
     selected?.let { record ->
         val report = PayJourneyReportBuilder.build(record)

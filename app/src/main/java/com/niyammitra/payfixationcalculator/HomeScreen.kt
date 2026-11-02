@@ -190,12 +190,40 @@ fun V2AppScreen() {
         cpcHistoryOverlay = true
         showCpcHistory = true
     }
-    
+
+    val goToHome: () -> Unit = {
+        showCalculator = false
+        showStartDateScreen = false
+        showStartingPositionScreen = false
+        showFourthToFifth = false
+        showFifthToSixth = false
+        showSixthToSeventh = false
+        showHistory = false
+        showCpcHistory = false
+        cpcHistoryOverlay = false
+        showHistoryHub = false
+        showAboutDialog = false
+        selectedMode = null
+        selectedFixationType = null
+        selectedStartDate = null
+        detectedCommission = null
+        restoreJourney = null
+        latestJourneySnapshot = null
+        sixthContinuation = null
+        directSeventhPosition = null
+        directSeventhSnapshot = null
+        restoreStandalone = null
+        restoreStandaloneId = null
+        restoreStandaloneOfficialName = null
+        restoreStandaloneDesignation = null
+    }
+
     if (showCpcHistory && !cpcHistoryOverlay) {
         BackHandler { showCpcHistory = false }
         CpcHistoryScreen(
             records = cpcHistory,
             onBack = { showCpcHistory = false },
+            onHome = goToHome,
             onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) },
             onRestore = ::restoreCpcRecord
         )
@@ -203,7 +231,12 @@ fun V2AppScreen() {
     }
     if (showHistoryHub) {
         BackHandler { showHistoryHub = false }
-        HistoryHubScreen(onBack = { showHistoryHub = false }, onLegacy = { history = HistoryStore.getAll(context); showHistory = true; showHistoryHub = false }, onCpc = { cpcHistory = CpcHistoryStore.getAll(context); showCpcHistory = true; cpcHistoryOverlay = false; showHistoryHub = false })
+        HistoryHubScreen(
+            onBack = { showHistoryHub = false },
+            onHome = goToHome,
+            onLegacy = { history = HistoryStore.getAll(context); showHistory = true; showHistoryHub = false },
+            onCpc = { cpcHistory = CpcHistoryStore.getAll(context); showCpcHistory = true; cpcHistoryOverlay = false; showHistoryHub = false }
+        )
         return
     }
     if (showCalculator) {
@@ -217,25 +250,20 @@ fun V2AppScreen() {
                 showCalculator = false
                 if (completeSeventhJourney) showStartDateScreen = true
             },
-            onHome = {
-                showCalculator = false
-                selectedMode = null
-                selectedStartDate = null
-                detectedCommission = null
-                restoreJourney = null
-            },
+            onHome = goToHome,
             onOpenCpcHistory = openCpcHistoryOverlay,
             completeJourneyStartDateMillis = selectedStartDate.takeIf { completeSeventhJourney },
             restoredCompleteJourney = restoreJourney.takeIf { completeSeventhJourney },
             journeySequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL
         ) }
-        if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord)
+        if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord, onHome = goToHome)
         return
     }
     if (showStartDateScreen) {
         PayFixationStartDateScreen(
             onBack = { showStartDateScreen = false },
-            onHome = { showStartDateScreen = false; selectedMode = null; selectedStartDate = null; detectedCommission = null; restoreJourney = null; latestJourneySnapshot = null; sixthContinuation = null; directSeventhPosition = null; directSeventhSnapshot = null },
+            onHome = goToHome,
+            onHistory = { showHistoryHub = true },
             initialStartDateMillis = selectedStartDate,
             onContinue = { date, commission ->
                 if (selectedStartDate != date) {
@@ -271,17 +299,8 @@ fun V2AppScreen() {
             startDateMillis = startDate,
             initialPosition = directSeventhPosition ?: directSeventhSnapshot?.let(::positionFromSeventhJourney),
             onBack = { showStartingPositionScreen = false; showStartDateScreen = true },
-            onHome = {
-                showStartingPositionScreen = false
-                selectedMode = null
-                selectedStartDate = null
-                detectedCommission = null
-                restoreJourney = null
-                latestJourneySnapshot = null
-                sixthContinuation = null
-                directSeventhPosition = null
-                directSeventhSnapshot = null
-            },
+            onHome = goToHome,
+            onHistory = { showHistoryHub = true },
             onContinue = { position ->
                 directSeventhPosition = position
                 directSeventhSnapshot = preserveSeventhJourneyForStartingPosition(directSeventhSnapshot, startDate, position)
@@ -296,6 +315,7 @@ fun V2AppScreen() {
     if (showFourthToFifth) {
         key(restoreVersion) { FourthToFifthCpcScreen(
             onBack = { showFourthToFifth = false; restoreJourney = latestJourneySnapshot ?: restoreJourney; showStartDateScreen = true },
+            onHome = goToHome,
             restoredSnapshot = restoreJourney?.fourth,
             restoredFifthSnapshot = restoreJourney?.fifth,
             sequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL,
@@ -319,12 +339,12 @@ fun V2AppScreen() {
                 showSixthToSeventh = true
             }
         ) }
-        if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord)
+        if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord, onHome = goToHome)
         return
     }
     if (showFifthToSixth) {
-        key(restoreVersion) { FifthToSixthCpcScreen(onBack = { showFifthToSixth = false; restoreJourney = latestJourneySnapshot ?: restoreJourney; showStartDateScreen = true }, onContinueToSeventh = { payBand, gradePay, payInPayBand, effectiveDate, journey -> carriedPayBand = payBand; carriedPayInPayBand = payInPayBand; carriedGradePay = gradePay; val resumable = matchingSixthContinuation(latestJourneySnapshot, journey, payBand, gradePay, payInPayBand, effectiveDate); if (resumable != null) { sixthContinuation = null; restoreJourney = resumable } else { val cleanJourney = withoutSixthContinuation(journey); sixthContinuation = SixthCpcContinuationContext(payBand, gradePay, payInPayBand, effectiveDate, cleanJourney); restoreJourney = cleanJourney }; selectedStartDate = effectiveDate; showFifthToSixth = false; showSixthToSeventh = true }, initialScaleTitle = restoreJourney?.fifth?.scaleId ?: carriedFifthScaleTitle, initialBasicPay = restoreJourney?.fifth?.startingBasicPay ?: carriedFifthBasicPay, initialStartDate = restoreJourney?.fifth?.startingDateMillis ?: selectedStartDate, initialDni = restoreJourney?.fifth?.startingDniMillis, restoredSnapshot = restoreJourney?.fifth, sequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL, onHistory = openCpcHistoryOverlay, onJourneySnapshotChange = { latestJourneySnapshot = it }) }
-        if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord)
+        key(restoreVersion) { FifthToSixthCpcScreen(onBack = { showFifthToSixth = false; restoreJourney = latestJourneySnapshot ?: restoreJourney; showStartDateScreen = true }, onHome = goToHome, onContinueToSeventh = { payBand, gradePay, payInPayBand, effectiveDate, journey -> carriedPayBand = payBand; carriedPayInPayBand = payInPayBand; carriedGradePay = gradePay; val resumable = matchingSixthContinuation(latestJourneySnapshot, journey, payBand, gradePay, payInPayBand, effectiveDate); if (resumable != null) { sixthContinuation = null; restoreJourney = resumable } else { val cleanJourney = withoutSixthContinuation(journey); sixthContinuation = SixthCpcContinuationContext(payBand, gradePay, payInPayBand, effectiveDate, cleanJourney); restoreJourney = cleanJourney }; selectedStartDate = effectiveDate; showFifthToSixth = false; showSixthToSeventh = true }, initialScaleTitle = restoreJourney?.fifth?.scaleId ?: carriedFifthScaleTitle, initialBasicPay = restoreJourney?.fifth?.startingBasicPay ?: carriedFifthBasicPay, initialStartDate = restoreJourney?.fifth?.startingDateMillis ?: selectedStartDate, initialDni = restoreJourney?.fifth?.startingDniMillis, restoredSnapshot = restoreJourney?.fifth, sequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL, onHistory = openCpcHistoryOverlay, onJourneySnapshotChange = { latestJourneySnapshot = it }) }
+        if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord, onHome = goToHome)
         return
     }
     if (showSixthToSeventh) {
@@ -356,13 +376,13 @@ fun V2AppScreen() {
                 }
             }
             sixthContinuation = null
-        }, initialPayBand = sixthContinuation?.payBandId ?: initialSixthSnapshot?.payBandId ?: carriedPayBand, initialGradePay = sixthContinuation?.gradePay ?: initialSixthSnapshot?.gradePay ?: carriedGradePay, initialPayInPayBand = sixthContinuation?.payInPayBand ?: initialSixthSnapshot?.startingPayInPayBand ?: carriedPayInPayBand, initialStartDate = sixthContinuation?.effectiveDateMillis ?: initialSixthSnapshot?.startingDateMillis ?: selectedStartDate, restoredSnapshot = if (sixthContinuation != null) null else initialSixthSnapshot, continuationContext = sixthContinuation, initialSeventhSnapshot = directSeventhSnapshot, initialCompleteJourneySnapshot = resumableJourney, sequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL, onHistory = openCpcHistoryOverlay, onJourneySnapshotChange = { snapshot -> latestJourneySnapshot = snapshot; if (snapshot.startingCpc == CpcHistoryStage.SEVENTH) directSeventhSnapshot = snapshot.seventh }) }
-        if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord)
+        }, onHome = goToHome, initialPayBand = sixthContinuation?.payBandId ?: initialSixthSnapshot?.payBandId ?: carriedPayBand, initialGradePay = sixthContinuation?.gradePay ?: initialSixthSnapshot?.gradePay ?: carriedGradePay, initialPayInPayBand = sixthContinuation?.payInPayBand ?: initialSixthSnapshot?.startingPayInPayBand ?: carriedPayInPayBand, initialStartDate = sixthContinuation?.effectiveDateMillis ?: initialSixthSnapshot?.startingDateMillis ?: selectedStartDate, restoredSnapshot = if (sixthContinuation != null) null else initialSixthSnapshot, continuationContext = sixthContinuation, initialSeventhSnapshot = directSeventhSnapshot, initialCompleteJourneySnapshot = resumableJourney, sequenceIntegrity = restoreJourney?.sequenceIntegrity ?: CpcSequenceIntegrity.ORIGINAL, onHistory = openCpcHistoryOverlay, onJourneySnapshotChange = { snapshot -> latestJourneySnapshot = snapshot; if (snapshot.startingCpc == CpcHistoryStage.SEVENTH) directSeventhSnapshot = snapshot.seventh }) }
+        if (showCpcHistory && cpcHistoryOverlay) CpcHistoryOverlay(cpcHistory, onBack = { showCpcHistory = false; cpcHistoryOverlay = false }, onDelete = { id -> CpcHistoryStore.delete(context, id); cpcHistory = CpcHistoryStore.getAll(context) }, onRestore = ::restoreCpcRecord, onHome = goToHome)
         return
     }
     if (showHistory) {
         BackHandler { showHistory = false }
-        HistoryScreen(history = history, onBack = { showHistory = false }, onDelete = { id -> HistoryStore.delete(context, id); history = HistoryStore.getAll(context) }, onClear = { showClearHistoryDialog = true }, onOpen = { selectedHistory = it }, onAbout = { showAboutDialog = true })
+        HistoryScreen(history = history, onBack = { showHistory = false }, onHome = goToHome, onDelete = { id -> HistoryStore.delete(context, id); history = HistoryStore.getAll(context) }, onClear = { showClearHistoryDialog = true }, onOpen = { selectedHistory = it }, onAbout = { showAboutDialog = true })
         if (showClearHistoryDialog) AlertDialog(onDismissRequest = { showClearHistoryDialog = false }, title = { Text("Clear History?") }, text = { Text("All saved calculations will be permanently removed from this device.") }, confirmButton = { TextButton(onClick = { HistoryStore.clear(context); history = emptyList(); showClearHistoryDialog = false }) { Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold) } }, dismissButton = { TextButton(onClick = { showClearHistoryDialog = false }) { Text("Cancel") } })
         selectedHistory?.let { entry -> HistoryDetailDialog(entry) { selectedHistory = null } }
         if (showAboutDialog) AboutDialog(onClose = { showAboutDialog = false })
@@ -420,7 +440,8 @@ fun V2AppScreen() {
                         designation = designation
                     ))
                     cpcHistory = CpcHistoryStore.getAll(context)
-                    android.widget.Toast.makeText(context, "CPC conversion saved", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(context, "Pay fixation saved to history", android.widget.Toast.LENGTH_SHORT).show()
+                    (context as? android.app.Activity)?.let { HistoryInterstitialAd.showIfDue(it) {} }
                 }
             ) }
         }
@@ -486,6 +507,7 @@ private fun PayFixationModeSelectionScreen(
                 onClick = onLegacyCalculator
             )
         }
+        PayFixationBannerAd()
     }
 }
 
@@ -584,18 +606,20 @@ private fun PayFixationModeJourneyEntryScreen(
                 }
             }
         }
+        PayFixationBannerAd()
     }
 }
 
 @Composable
-private fun HomeFixationSelectionScreen(onSelected: (FixationType) -> Unit, onHistory: () -> Unit, onAbout: () -> Unit) {
+private fun HomeFixationSelectionScreen(onSelected: (FixationType) -> Unit, onHistory: () -> Unit, onAbout: () -> Unit, onHome: (() -> Unit)? = null) {
     Column(modifier = Modifier.fillMaxSize().background(HomeNiyamBackground), horizontalAlignment = Alignment.CenterHorizontally) {
-        HomeHeader(onHistory = onHistory, onAbout = onAbout)
+        HomeHeader(onHistory = onHistory, onAbout = onAbout, onHome = onHome)
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Select Fixation Type", color = HomeNiyamTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
             Text("Choose the pay-revision or pay-fixation workflow you want to work out.", color = HomeNiyamTextSecondary, fontSize = 14.sp)
             FixationType.values().forEach { type -> FixationTypeCard(type = type, enabled = true, onClick = { onSelected(type) }) }
         }
+        PayFixationBannerAd()
     }
 }
 
@@ -616,23 +640,24 @@ private fun HomeHeader(onHistory: (() -> Unit)? = null, onAbout: (() -> Unit)? =
         title = "Pay Fixation Calculator",
         subtitle = "NiyamMitra",
         onHome = onHome,
+        onHistory = onHistory,
         branded = true,
         actions = {
-            if (onHistory != null) PayFixationHeaderIconAction("History", Icons.Default.History, onHistory)
             if (onAbout != null) PayFixationHeaderIconAction("About", Icons.Default.Info, onAbout)
         }
     )
 }
 
 @Composable
-private fun HistoryHubScreen(onBack: () -> Unit, onLegacy: () -> Unit, onCpc: () -> Unit) {
+private fun HistoryHubScreen(onBack: () -> Unit, onLegacy: () -> Unit, onCpc: () -> Unit, onHome: (() -> Unit)? = null) {
     Column(Modifier.fillMaxSize().background(HomeNiyamBackground)) {
-        PayFixationAppHeader("History", onBack = onBack)
+        PayFixationAppHeader("History", onBack = onBack, onHome = onHome)
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text("Choose saved calculations", color = HomeNiyamTextSecondary)
             androidx.compose.material3.OutlinedButton(onClick = onLegacy, modifier = Modifier.fillMaxWidth()) { Text("7th CPC Pay Fixation History") }
             androidx.compose.material3.OutlinedButton(onClick = onCpc, modifier = Modifier.fillMaxWidth()) { Text("CPC Journeys & Conversions") }
         }
+        PayFixationBannerAd()
     }
 }
 
@@ -641,11 +666,12 @@ private fun CpcHistoryOverlay(
     records: List<CpcHistoryRecord>,
     onBack: () -> Unit,
     onDelete: (String) -> Unit,
-    onRestore: (CpcHistoryRecord) -> Unit
+    onRestore: (CpcHistoryRecord) -> Unit,
+    onHome: (() -> Unit)? = null
 ) {
     Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(Modifier.fillMaxSize(), color = Color.White) {
-            CpcHistoryScreen(records = records, onBack = onBack, onDelete = onDelete, onRestore = onRestore)
+            CpcHistoryScreen(records = records, onBack = onBack, onDelete = onDelete, onRestore = onRestore, onHome = onHome)
         }
     }
 }

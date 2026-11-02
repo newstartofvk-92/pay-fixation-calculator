@@ -84,6 +84,19 @@ class FifthCpcJourneyReplayTest {
     }
 
     @Test
+    fun fromDniEventCannotBeImplementedBeforeItsEventDate() {
+        val eventDate = date(1988, Calendar.AUGUST, 1)
+        val earlierDni = date(1988, Calendar.JULY, 1)
+        val fromDni = event(eventDate, earlierDni, 1).copy(implementationOption = "From DNI")
+
+        val replay = replay(emptyList(), listOf(fromDni))
+
+        assertEquals(eventDate, replay.events.single().implementationDate)
+        assertTrue(replay.events.single().implementationDate >= replay.events.single().eventDate)
+        assertEquals(calculateNextFifthCpcDni(eventDate), replay.events.single().dniDate)
+    }
+
+    @Test
     fun editingEventThroughStateUpdaterPersistsFieldsWithoutDuplicateAndReplaysFollowingIncrement() {
         val thirdScale = FifthToSixthCpcData.scales.first { it.title != feeder.title && it.title != target.title }
         val old = event(dni, dni, 4)

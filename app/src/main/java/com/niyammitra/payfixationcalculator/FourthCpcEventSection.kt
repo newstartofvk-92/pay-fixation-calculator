@@ -39,7 +39,7 @@ fun FourthCpcEventSection(
                 FourthToFifthCpcData.scales.filter { it.grade != currentScale.grade }.forEach { s ->
                     DropdownMenuItem(
                         text = { Text(s.grade + ": " + s.existingScale + if (s.existingStages.isEmpty()) " (progression unavailable)" else "") },
-                        enabled = s.existingStages.isNotEmpty(),
+                        enabled = calculateFourthCpcEventPosition(currentPay, currentScale, s) is FourthCpcEventPositionResolution.Available,
                         onClick = { target = s; result = null; menu = false }
                     )
                 }

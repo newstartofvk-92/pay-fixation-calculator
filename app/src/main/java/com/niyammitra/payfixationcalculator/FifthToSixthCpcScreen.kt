@@ -28,6 +28,7 @@ private val FiveSixTextSecondary = Color(0xFF5B6B7A)
 @Composable
 fun FifthToSixthCpcScreen(
     onBack: () -> Unit,
+    onHome: (() -> Unit)? = null,
     onContinueToSeventh: ((String, Int, Int, Long, CompleteJourneySnapshot) -> Unit)? = null,
     initialScaleTitle: String? = null,
     initialBasicPay: Int? = null,
@@ -80,7 +81,8 @@ fun FifthToSixthCpcScreen(
             title = "5th CPC Pay Journey",
             subtitle = "Historical Pay Progression",
             onBack = onBack,
-            actions = { onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } } }
+            onHome = onHome,
+            onHistory = onHistory
         )
 
         Column(
@@ -173,6 +175,47 @@ fun FifthToSixthCpcScreen(
                     restoredSnapshot = activeRestoredSnapshot,
                     sequenceIntegrity = sequenceIntegrity
                 )
+                ExportPayJourneyPdf(
+                    lines = buildList {
+                        add("## 5th CPC Initial Position")
+                        add("Starting scale: ${selectedScale!!.title}")
+                        add("Starting basic pay: ₹$basicPay")
+                        add("Starting date: ${formatFifthSixScreenDate(startDate)}")
+                        selectedDni?.let { add("Starting DNI: ${formatFifthSixScreenDate(it)}") }
+                        historySnapshot?.omAdjustment?.let { om ->
+                            add("## Special 5th CPC Increment (O.M. 19.03.2012)")
+                            add("Basic pay before OM: ₹${om.basicPayBefore}; special increment: ₹${om.incrementAmount}; adjusted basic pay: ₹${om.adjustedBasicPay}")
+                            add("Effective increment date: ${formatFifthSixScreenDate(om.incrementDateMillis)}")
+                            add("Next revised increment date: ${formatFifthSixScreenDate(om.nextRevisedIncrementDateMillis)}")
+                        }
+                        val fifthIncrements = historySnapshot?.increments.orEmpty()
+                        if (fifthIncrements.isNotEmpty()) {
+                            add("## 5th CPC Annual Increments")
+                            fifthIncrements.forEachIndexed { index, step ->
+                                add("Increment ${index + 1} — ${formatFifthSixScreenDate(step.dateMillis)}: ₹${step.pay}")
+                            }
+                        }
+                        val fifthEvents = historySnapshot?.events.orEmpty()
+                        if (fifthEvents.isNotEmpty()) {
+                            add("## 5th CPC Promotion / Upgradation Events")
+                            fifthEvents.forEachIndexed { index, event ->
+                                add("Event ${index + 1} — ${formatFifthSixScreenDate(event.eventDateMillis)}: ${event.eventType.name.replace('_', ' ')} to ${event.targetScaleId}, resulting pay ₹${event.resultingPay}")
+                            }
+                        }
+                        val sixthCont = historySnapshot?.sixthContinuation
+                        if (sixthCont != null) {
+                            add("## 6th CPC Conversion & Progression")
+                            add("Pay Band: ${sixthCont.payBandId}; Grade Pay: ₹${sixthCont.gradePay}; Starting pay in pay band: ₹${sixthCont.startingPayInPayBand}")
+                            sixthCont.increments.forEachIndexed { index, inc ->
+                                add("6th CPC Increment ${index + 1} — ${formatFifthSixScreenDate(inc.dateMillis)}: pay in band ₹${inc.payInPayBand} + GP ₹${inc.gradePay} = ₹${inc.payInPayBand + inc.gradePay}")
+                            }
+                        }
+                    },
+                    buttonText = "Export to PDF",
+                    title = "5th to 6th CPC Pay Fixation",
+                    fileNamePrefix = "5th_to_6th_CPC_Fixation",
+                    modifier = Modifier.fillMaxWidth()
+                )
                 SaveCompleteJourneyButton(
                     CompleteJourneySnapshot(
                         startingCpc = CpcHistoryStage.FIFTH,
@@ -191,6 +234,7 @@ fun FifthToSixthCpcScreen(
             }
             Spacer(Modifier.height(20.dp))
         }
+        PayFixationBannerAd()
     }
 
     if (showDniPicker) {

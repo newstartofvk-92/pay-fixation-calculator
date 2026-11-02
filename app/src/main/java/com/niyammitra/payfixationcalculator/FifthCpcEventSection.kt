@@ -121,6 +121,13 @@ fun FifthCpcEventSection(
             DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 FifthToSixthCpcData.scales
                     .filter { it.title != currentScale.title }
+                    .filter { target ->
+                        val placementPay = eventFixation?.placementBasePay ?: calculateFifthCpcEventPlacementBasePay(
+                            currentPay, currentScale, eventType, placementMethod, implementationOption,
+                            eventDate, currentDni, omAdjustment
+                        )
+                        isEligibleFifthCpcEventTargetScale(target, placementPay)
+                    }
                     .forEach { scale ->
                         DropdownMenuItem(
                             text = { Text(scale.payBand + ": " + scale.title) },
@@ -178,6 +185,7 @@ fun FifthCpcEventSection(
                 target != null &&
                 fixedPay != null &&
                 implementationDate != null &&
+                implementationDate >= eventDate!! &&
                 newDni != null &&
                 (implementationOption != "From DNI" || currentDni != null),
             modifier = Modifier.fillMaxWidth()
@@ -223,18 +231,41 @@ internal fun calculateFifthCpcEventFixation(
     currentDni: Long?,
     omAdjustment: FifthCpcOmAdjustmentSnapshot?
 ): FifthCpcEventPayFixation {
+    val placementBasePay = calculateFifthCpcEventPlacementBasePay(
+        currentPay, currentScale, eventType, placementMethod, implementationOption,
+        eventDate, currentDni, omAdjustment
+    )
     val implementationDate = if (implementationOption == "From DNI") currentDni else eventDate
     val appliedOm = omAdjustment?.takeIf { implementationDate != null && implementationDate > it.incrementDateMillis }
     val upstreamPay = appliedOm?.adjustedBasicPay ?: currentPay
-    val currentStages = parseFifthCpcScaleStagesForEvent(currentScale.title)
+    val feederPay = parseFifthCpcScaleStagesForEvent(currentScale.title).firstOrNull { it > upstreamPay } ?: upstreamPay
     val targetStages = parseFifthCpcScaleStagesForEvent(targetScale.title)
-    val feederPay = currentStages.firstOrNull { it > upstreamPay } ?: upstreamPay
-    val placementBasePay = if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") upstreamPay else feederPay
     val fixedPay = targetStages.takeIf { it.isNotEmpty() }?.let { stages ->
-        stages.firstOrNull { it >= placementBasePay } ?: stages.last()
+        stages.firstOrNull { it >= placementBasePay }
     }
     return FifthCpcEventPayFixation(upstreamPay, feederPay, placementBasePay, fixedPay, appliedOm)
 }
+
+private fun calculateFifthCpcEventPlacementBasePay(
+    currentPay: Int,
+    currentScale: FifthCpcScale,
+    eventType: String,
+    placementMethod: String,
+    implementationOption: String,
+    eventDate: Long?,
+    currentDni: Long?,
+    omAdjustment: FifthCpcOmAdjustmentSnapshot?
+): Int {
+    val implementationDate = if (implementationOption == "From DNI") currentDni else eventDate
+    val upstreamPay = omAdjustment
+        ?.takeIf { implementationDate != null && implementationDate > it.incrementDateMillis }
+        ?.adjustedBasicPay ?: currentPay
+    if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") return upstreamPay
+    return parseFifthCpcScaleStagesForEvent(currentScale.title).firstOrNull { it > upstreamPay } ?: upstreamPay
+}
+
+internal fun isEligibleFifthCpcEventTargetScale(targetScale: FifthCpcScale, placementBasePay: Int): Boolean =
+    parseFifthCpcScaleStagesForEvent(targetScale.title).any { it >= placementBasePay }
 
 private fun parseFifthCpcScaleStagesForEvent(scale: String): List<Int> {
     val body = scale.removePrefix("Rs. ").substringBefore(" (").trim()

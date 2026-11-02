@@ -43,7 +43,6 @@ private val NiyamHeaderBlue = Color(0xFF1976B8)
 private val NiyamBackground = Color(0xFFF7FAFC)
 private val NiyamTextPrimary = Color(0xFF172B4D)
 private val NiyamTextSecondary = Color(0xFF5B6B7A)
-private const val BANNER_AD_UNIT_ID = "ca-app-pub-1512519890788753/1856516842"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,6 +50,13 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         BillingManager.initialize(this)
         MobileAds.initialize(this)
+        if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
+            MobileAds.setRequestConfiguration(
+                com.google.android.gms.ads.RequestConfiguration.Builder()
+                    .setTestDeviceIds(listOf("64F7C8063B861E3F6C1A5FFB216A0B6B"))
+                    .build()
+            )
+        }
         HistoryInterstitialAd.load(this)
         setContent { PayFixationCalculatorTheme { V2AppScreen() } }
     }
@@ -108,6 +114,8 @@ fun PayFixationCalculatorScreen(
     var showStartingDniPicker by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var selectedHistory by remember { mutableStateOf<CalculationHistory?>(null) }
+    var showSaveHistoryDialog by remember { mutableStateOf(false) }
+    var saveDialogEmployeeName by remember { mutableStateOf("") }
     var showAdFreeDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
 
@@ -199,9 +207,9 @@ fun PayFixationCalculatorScreen(
             subtitle = "NiyamMitra",
             onBack = onBack,
             onHome = onHome,
+            onHistory = { showHistoryHub = true },
             branded = true,
             actions = {
-                PayFixationHeaderIconAction("History", Icons.Default.History) { showHistoryHub = true }
                 PayFixationHeaderIconAction("About", Icons.Default.Info) { showAboutDialog = true }
             }
         )
@@ -379,11 +387,123 @@ fun PayFixationCalculatorScreen(
                     }
                 }
 
-                if (!completeJourneyMode) Button(onClick = {
-                    val now = System.currentTimeMillis()
-                    HistoryStore.add(context, CalculationHistory(id = now, savedAt = now, officialName = officialName.trim(), employeeCategory = employeeCategory, currentLevel = currentLevel!!, currentPay = currentPay!!, promotedLevel = promotedLevel!!, promotionDate = promotionDate, dniDate = dniDate, option1FinalPay = result.option1.finalFixedPay, option2FinalPay = result.option2.finalFixedPay))
-                    history = HistoryStore.getAll(context)
-                }, modifier = Modifier.fillMaxWidth()) { Text("Save Calculation to History") }
+                if (!completeJourneyMode) {
+                    ExportPayJourneyPdf(
+                        lines = buildList {
+                            val name = officialName.trim().takeIf { it.isNotBlank() }
+                            if (name != null) add("Employee Name: $name")
+                            add("Employee Category: ${employeeCategory.displayName}")
+                            add("## Current Status")
+                            add("Present Pay Level: Level $currentLevel")
+                            add("Current Basic Pay: ${formatCurrency(currentPay!!)}")
+                            add("## Promotion / MACP Details")
+                            add("Promoted / Upgraded Level: Level $promotedLevel")
+                            add("Date of Promotion / MACP: ${promotionDate?.let(::formatDate) ?: "Not selected"}")
+                            add("Selected DNI: ${dniDate?.let(::formatDate) ?: "Not selected"}")
+                            add("## Option 1: Fixation from Date of Promotion / MACP")
+                            add("Pay in lower Level ($currentLevel): ${formatCurrency(result.option1.lowerLevelPay)}")
+                            add("Add one increment in lower Level ($currentLevel): ${formatCurrency(result.option1.payWithIncrement)}")
+                            add("Placement in promoted Level ($promotedLevel): ${formatCurrency(result.option1.finalFixedPay)}")
+                            result.option1.nextDni?.let { add("Next DNI: ${formatDate(it)}") }
+                            result.option1.payAfterNextDni?.let { add("Pay after next DNI: ${formatCurrency(it)}") }
+                            add("## Option 2: Fixation from Date of Next Increment")
+                            add("Pay until DNI: ${formatCurrency(result.option2.payUntilDni)}")
+                            add("On DNI, annual increment in lower Level ($currentLevel): ${formatCurrency(result.option2.payWithAnnualIncrement)}")
+                            add("On DNI, promotion increment in lower Level ($currentLevel): ${formatCurrency(result.option2.payWithPromotionIncrement)}")
+                            add("Final placement in promoted Level ($promotedLevel): ${formatCurrency(result.option2.finalFixedPay)}")
+                            result.option2.nextDni?.let { add("Next DNI: ${formatDate(it)}") }
+                            result.option2.payAfterNextDni?.let { add("Pay after next DNI: ${formatCurrency(it)}") }
+                            add("## Recommendation")
+                            add(recommendationText)
+                        },
+                        buttonText = "Export to PDF",
+                        title = "7th CPC Pay Fixation (Promotion / MACP)",
+                        fileNamePrefix = "7th_CPC_Pay_Fixation",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Button(
+                        onClick = {
+                            saveDialogEmployeeName = officialName
+                            showSaveHistoryDialog = true
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Save to History", fontWeight = FontWeight.Bold) }
+
+                    if (showSaveHistoryDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showSaveHistoryDialog = false },
+                            title = { Text("Save Pay Fixation") },
+                            text = {
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text("Enter employee name to identify this calculation in History, or save without a name.")
+                                    OutlinedTextField(
+                                        value = saveDialogEmployeeName,
+                                        onValueChange = { saveDialogEmployeeName = it },
+                                        label = { Text("Employee Name (optional)") },
+                                        placeholder = { Text("Enter name, if required") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            },
+                            confirmButton = {
+                                Button(onClick = {
+                                    val now = System.currentTimeMillis()
+                                    val name = saveDialogEmployeeName.trim()
+                                    HistoryStore.add(
+                                        context,
+                                        CalculationHistory(
+                                            id = now,
+                                            savedAt = now,
+                                            officialName = name,
+                                            employeeCategory = employeeCategory,
+                                            currentLevel = currentLevel!!,
+                                            currentPay = currentPay!!,
+                                            promotedLevel = promotedLevel!!,
+                                            promotionDate = promotionDate,
+                                            dniDate = dniDate,
+                                            option1FinalPay = result.option1.finalFixedPay,
+                                            option2FinalPay = result.option2.finalFixedPay
+                                        )
+                                    )
+                                    history = HistoryStore.getAll(context)
+                                    Toast.makeText(context, "Pay fixation saved to history", Toast.LENGTH_SHORT).show()
+                                    (context as? Activity)?.let { HistoryInterstitialAd.showIfDue(it) {} }
+                                    showSaveHistoryDialog = false
+                                }) { Text("Save") }
+                            },
+                            dismissButton = {
+                                Row {
+                                    TextButton(onClick = {
+                                        val now = System.currentTimeMillis()
+                                        HistoryStore.add(
+                                            context,
+                                            CalculationHistory(
+                                                id = now,
+                                                savedAt = now,
+                                                officialName = "",
+                                                employeeCategory = employeeCategory,
+                                                currentLevel = currentLevel!!,
+                                                currentPay = currentPay!!,
+                                                promotedLevel = promotedLevel!!,
+                                                promotionDate = promotionDate,
+                                                dniDate = dniDate,
+                                                option1FinalPay = result.option1.finalFixedPay,
+                                                option2FinalPay = result.option2.finalFixedPay
+                                            )
+                                        )
+                                        history = HistoryStore.getAll(context)
+                                        Toast.makeText(context, "Pay fixation saved to history", Toast.LENGTH_SHORT).show()
+                                        (context as? Activity)?.let { HistoryInterstitialAd.showIfDue(it) {} }
+                                        showSaveHistoryDialog = false
+                                    }) { Text("Save Without Name") }
+                                    TextButton(onClick = { showSaveHistoryDialog = false }) { Text("Cancel") }
+                                }
+                            }
+                        )
+                    }
+                }
             }
 
             if (completeJourneyMode && journeyStarted && journeySnapshot != null && journeyPosition != null) {
@@ -431,6 +551,34 @@ fun PayFixationCalculatorScreen(
                         enabled = matrix.getNextIncrement(journeyPosition.level, journeyPosition.pay) != null,
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Add Next Annual Increment") }
+                    ExportPayJourneyPdf(
+                        lines = buildList {
+                            add("## 7th CPC Pay Fixation Journey")
+                            add("Starting date: ${formatDate(journeySnapshot.conversionDateMillis)}")
+                            add("Starting pay: Level ${journeySnapshot.startingLevel}, ${formatCurrency(journeySnapshot.startingBasicPay)}")
+                            add("Current pay position: Level ${journeyPosition.level}, ${formatCurrency(journeyPosition.pay)}")
+                            add("Next increment date: ${formatDate(journeyPosition.dni)}")
+                            if (journeyIncrements.isNotEmpty()) {
+                                add("## Annual Increments")
+                                journeyIncrements.forEachIndexed { index, increment ->
+                                    add("Increment ${index + 1} — ${formatDate(increment.date)}: ${formatCurrency(increment.pay)}")
+                                }
+                            }
+                            if (journeyPromotions.isNotEmpty()) {
+                                add("## Promotion / MACP Events")
+                                flattenSeventhPromotions(journeyPromotions).sortedBy { it.sequence }.forEach { event ->
+                                    add("${event.eventKind.name.replace('_', ' ')} — ${event.promotionDateMillis?.let(::formatDate) ?: "Not specified"}: Level ${event.currentLevel} → Level ${event.promotedLevel ?: "—"}, pay ${event.resultingPay?.let(::formatCurrency) ?: "—"}")
+                                    event.postIncrements.forEachIndexed { index, increment ->
+                                        add("  Post-event increment ${index + 1} — ${formatDate(increment.dateMillis)}: ${formatCurrency(increment.pay)}")
+                                    }
+                                }
+                            }
+                        },
+                        buttonText = "Export to PDF",
+                        title = "7th CPC Pay Fixation Journey",
+                        fileNamePrefix = "7th_CPC_Journey",
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     SaveCompleteJourneyButton(
                         CompleteJourneySnapshot(
                             startingCpc = CpcHistoryStage.SEVENTH,
@@ -446,7 +594,7 @@ fun PayFixationCalculatorScreen(
             Spacer(Modifier.height(30.dp))
         }
 
-        if (!BillingManager.isPremium) BannerAd(Modifier.fillMaxWidth().navigationBarsPadding())
+        PayFixationBannerAd()
     }
 
     if (showDatePicker) {
@@ -488,12 +636,21 @@ private fun AdFreePurchaseDialog(context: android.content.Context, onClose: () -
 }
 
 @Composable
-fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit, onDelete: (Long) -> Unit, onClear: () -> Unit, onOpen: (CalculationHistory) -> Unit, onAbout: () -> Unit) {
+fun HistoryScreen(
+    history: List<CalculationHistory>,
+    onBack: () -> Unit,
+    onDelete: (Long) -> Unit,
+    onClear: () -> Unit,
+    onOpen: (CalculationHistory) -> Unit,
+    onAbout: () -> Unit,
+    onHome: (() -> Unit)? = null
+) {
     Column(Modifier.fillMaxSize().background(NiyamBackground)) {
         PayFixationAppHeader(
             title = "Calculation History",
             subtitle = "Saved calculations",
             onBack = onBack,
+            onHome = onHome,
             actions = { PayFixationHeaderIconAction("About", Icons.Default.Info, onAbout) }
         )
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -506,10 +663,11 @@ fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit, onDelet
                         Column(Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(entry.officialName.ifBlank { "Unnamed Official" }, fontWeight = FontWeight.Bold, color = NiyamBlue, fontSize = 16.sp)
+                                    Text(entry.officialName.ifBlank { "Unnamed Employee" }, fontWeight = FontWeight.Bold, color = NiyamBlue, fontSize = 16.sp)
                                     Text(entry.employeeCategory.displayName, color = NiyamTextSecondary, fontSize = 12.sp)
                                     Text("Level ${entry.currentLevel} → Level ${entry.promotedLevel}", color = NiyamTextPrimary, fontSize = 14.sp)
                                     Text("Current Pay: ${formatCurrency(entry.currentPay)}", color = NiyamTextPrimary, fontSize = 14.sp)
+                                    Text("Fixation Date: ${entry.promotionDate?.let(::formatDate) ?: "Not specified"}", color = NiyamTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                     Text("Saved: ${formatDateTime(entry.savedAt)}", color = NiyamTextSecondary, fontSize = 12.sp)
                                 }
                                 TextButton(onClick = { onDelete(entry.id) }) { Text("Delete", color = Color(0xFFD64545)) }
@@ -520,6 +678,7 @@ fun HistoryScreen(history: List<CalculationHistory>, onBack: () -> Unit, onDelet
                 Spacer(Modifier.height(20.dp))
             }
         }
+        PayFixationBannerAd()
     }
 }
 
@@ -550,24 +709,41 @@ fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) {
             ResultCard("Option 1: Fixation from Date of Promotion / MACP", entry.promotionDate, listOf("Pay in lower Level (${entry.currentLevel})" to result.option1.lowerLevelPay, "Add one increment in lower Level (${entry.currentLevel})" to result.option1.payWithIncrement, "Placement in promoted Level (${entry.promotedLevel})" to result.option1.finalFixedPay), result.option1.finalFixedPay, result.option1.nextDni, result.option1.payAfterNextDni)
             ResultCard("Option 2: Fixation from Date of Next Increment", entry.dniDate, listOf("Pay from date of promotion / MACP until DNI (placed at next higher cell in Level ${entry.promotedLevel})" to result.option2.payUntilDni, "On DNI, annual increment in lower Level (${entry.currentLevel})" to result.option2.payWithAnnualIncrement, "On DNI, one increment on account of Promotion / MACP in Level ${entry.currentLevel}" to result.option2.payWithPromotionIncrement, "Final placement in promoted Level (${entry.promotedLevel})" to result.option2.finalFixedPay), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni, entry.promotionDate)
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFE8F5E9))) { Text(recommendationText, Modifier.padding(16.dp), color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold) }
+            ExportPayJourneyPdf(
+                lines = buildList {
+                    if (entry.officialName.isNotBlank()) add("Employee Name: ${entry.officialName}")
+                    add("Employee Category: ${entry.employeeCategory.displayName}")
+                    add("## Current Status")
+                    add("Present Pay Level: Level ${entry.currentLevel}")
+                    add("Current Basic Pay: ${formatCurrency(entry.currentPay)}")
+                    add("## Promotion / MACP Details")
+                    add("Promoted / Upgraded Level: Level ${entry.promotedLevel}")
+                    add("Date of Promotion / MACP: ${entry.promotionDate?.let(::formatDate) ?: "Not selected"}")
+                    add("Selected DNI: ${entry.dniDate?.let(::formatDate) ?: "Not selected"}")
+                    add("## Option 1: Fixation from Date of Promotion / MACP")
+                    add("Pay in lower Level (${entry.currentLevel}): ${formatCurrency(result.option1.lowerLevelPay)}")
+                    add("Add one increment in lower Level (${entry.currentLevel}): ${formatCurrency(result.option1.payWithIncrement)}")
+                    add("Placement in promoted Level (${entry.promotedLevel}): ${formatCurrency(result.option1.finalFixedPay)}")
+                    result.option1.nextDni?.let { add("Next DNI: ${formatDate(it)}") }
+                    result.option1.payAfterNextDni?.let { add("Pay after next DNI: ${formatCurrency(it)}") }
+                    add("## Option 2: Fixation from Date of Next Increment")
+                    add("Pay until DNI: ${formatCurrency(result.option2.payUntilDni)}")
+                    add("On DNI, annual increment in lower Level (${entry.currentLevel}): ${formatCurrency(result.option2.payWithAnnualIncrement)}")
+                    add("On DNI, promotion increment in lower Level (${entry.currentLevel}): ${formatCurrency(result.option2.payWithPromotionIncrement)}")
+                    add("Final placement in promoted Level (${entry.promotedLevel}): ${formatCurrency(result.option2.finalFixedPay)}")
+                    result.option2.nextDni?.let { add("Next DNI: ${formatDate(it)}") }
+                    result.option2.payAfterNextDni?.let { add("Pay after next DNI: ${formatCurrency(it)}") }
+                    add("## Recommendation")
+                    add(recommendationText)
+                },
+                buttonText = "Export to PDF",
+                title = if (entry.officialName.isNotBlank()) "${entry.officialName} — 7th CPC Fixation" else "7th CPC Pay Fixation",
+                fileNamePrefix = "7th_CPC_${entry.officialName.filter { it.isLetterOrDigit() }.ifBlank { "Fixation" }}",
+                modifier = Modifier.fillMaxWidth()
+            )
         } },
         confirmButton = { TextButton(onClick = onClose) { Text("Close") } }
     )
-}
-
-@Composable
-private fun BannerAd(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
-    if (BillingManager.isPremium) return
-    val adView = remember(context) { AdView(context).apply {
-        adUnitId = BANNER_AD_UNIT_ID
-        val displayMetrics = context.resources.displayMetrics
-        val adWidth = (displayMetrics.widthPixels / displayMetrics.density).toInt()
-        setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, adWidth))
-        loadAd(AdRequest.Builder().build())
-    } }
-    DisposableEffect(adView) { onDispose { adView.destroy() } }
-    AndroidView(modifier = modifier.wrapContentHeight(), factory = { adView })
 }
 
 @Composable

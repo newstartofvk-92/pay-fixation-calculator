@@ -137,7 +137,7 @@ fun CpcConversionOnlyScreen(
             subtitle = "Standalone pay conversion",
             onBack = onBack,
             onHome = onHome,
-            actions = { onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } } }
+            onHistory = onHistory
         )
 
         Column(
@@ -392,6 +392,62 @@ fun CpcConversionOnlyScreen(
                     RuleBasis(result.ruleBasis)
                 }
             }
+            if (fourthResult != null || fifthResult != null || sixthResult != null) {
+                ExportPayJourneyPdf(
+                    lines = buildList {
+                        val name = officialName.trim().takeIf { it.isNotBlank() }
+                        val desig = designation.trim().takeIf { it.isNotBlank() }
+                        if (name != null) add("Official Name: $name")
+                        if (desig != null) add("Designation: $desig")
+                        add("## Conversion: ${conversion?.title ?: "CPC Conversion"}")
+                        when (conversion) {
+                            StandaloneCpcConversion.FOURTH_TO_FIFTH -> fourthResult?.let { res ->
+                                add("Existing 4th CPC Scale: ${res.scale.existingScale} (${res.scale.grade})")
+                                add("Existing Basic Pay: ${formatStandaloneCpcMoney(res.existingBasicPay)}")
+                                add("Dearness Allowance: ${formatStandaloneCpcMoney(res.dearnessAllowance)}")
+                                add("Interim Relief: IR1 ${formatStandaloneCpcMoney(res.firstInterimRelief)}, IR2 ${formatStandaloneCpcMoney(res.secondInterimRelief)}")
+                                add("Total Emoluments: ${formatStandaloneCpcMoney(res.existingEmoluments)}")
+                                add("40% Fitment Weightage: ${formatStandaloneCpcMoney(res.fitmentWeightage)}")
+                                add("Aggregated Total: ${formatStandaloneCpcMoney(res.fitmentTotal)}")
+                                add("Revised 5th CPC Scale: ${res.scale.revisedScale}")
+                                add("Revised Basic Pay Fixed: ${formatStandaloneCpcMoney(res.revisedBasicPay)}")
+                                add("Next Increment Note: ${res.nextIncrementNote}")
+                            }
+                            StandaloneCpcConversion.FIFTH_TO_SIXTH -> fifthResult?.let { res ->
+                                add("Existing 5th CPC Scale: ${res.scale.title}")
+                                add("Existing Basic Pay: ${formatStandaloneCpcMoney(fifthPay ?: 0)}")
+                                fifthOmAdjustment?.let { om ->
+                                    add("Special OM Increment: ₹${om.incrementAmount} (adjusted pay ${formatStandaloneCpcMoney(om.adjustedBasicPay)})")
+                                }
+                                add("Fitment Multiplier: 1.86")
+                                add("Revised Pay Band: ${res.scale.payBand}")
+                                add("Grade Pay: ${formatStandaloneCpcMoney(res.scale.gradePay)}")
+                                add("Pay in Pay Band: ${formatStandaloneCpcMoney(res.payInPayBand)}")
+                                add("Revised Basic Pay Fixed: ${formatStandaloneCpcMoney(res.revisedBasicPay)}")
+                                fifthNormalDni?.let { add("5th CPC DNI: ${formatStandaloneCpcDate(it)}") }
+                            }
+                            StandaloneCpcConversion.SIXTH_TO_SEVENTH -> sixthResult?.let { res ->
+                                add("6th CPC Pay Band: ${sixthBand?.title?.substringBefore(":")?.trim()}")
+                                add("Pay in Pay Band: ${formatStandaloneCpcMoney(sixthPay ?: 0)}")
+                                add("Grade Pay: ${formatStandaloneCpcMoney(sixthGradePay ?: 0)}")
+                                add("Existing Basic Pay: ${formatStandaloneCpcMoney(res.existingPay)}")
+                                add("Fitment Factor: ${res.fitmentFactor}")
+                                add("Multiplied Pay: ${formatStandaloneCpcDecimal(res.multipliedPay)}")
+                                add("Rounded Pay: ${formatStandaloneCpcMoney(res.roundedPay)}")
+                                add("7th CPC Pay Matrix Level: Level ${res.level}")
+                                add("Revised Basic Pay Fixed: ${formatStandaloneCpcMoney(res.revisedBasicPay)}")
+                                add("## Rule Basis")
+                                res.ruleBasis.forEachIndexed { i, rule -> add("${i + 1}. $rule") }
+                            }
+                            null -> Unit
+                        }
+                    },
+                    buttonText = "Export to PDF",
+                    title = "CPC Conversion — ${conversion?.title ?: "Conversion"}",
+                    fileNamePrefix = "CPC_Conversion_${conversion?.name ?: "Pay"}",
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
             if (onSaveRecord != null && (fourthResult != null || fifthResult != null || sixthResult != null)) {
                 OutlinedButton(
                     onClick = {
@@ -406,33 +462,47 @@ fun CpcConversionOnlyScreen(
                         snapshot?.let { saveSnapshot = it; saveError = false }
                     },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("Save Conversion to CPC History") }
+                ) { Text("Save to History", fontWeight = FontWeight.Bold) }
             }
             Spacer(Modifier.height(12.dp))
         }
+        PayFixationBannerAd()
     }
     saveSnapshot?.let { snapshot ->
         AlertDialog(
             onDismissRequest = { saveSnapshot = null },
-            title = { Text("Save CPC Conversion") },
+            title = { Text("Save Pay Fixation") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(value = officialName, onValueChange = { officialName = it; saveError = false }, label = { Text("Official Name") }, singleLine = true)
-                    OutlinedTextField(value = designation, onValueChange = { designation = it; saveError = false }, label = { Text("Designation") }, singleLine = true)
-                    if (saveError) ValidationText("Enter the official name and designation to save this calculation.")
+                    Text("Enter employee name to identify this calculation in History, or save without a name.")
+                    OutlinedTextField(value = officialName, onValueChange = { officialName = it; saveError = false }, label = { Text("Employee Name (optional)") }, placeholder = { Text("Enter name, if required") }, singleLine = true)
+                    OutlinedTextField(value = designation, onValueChange = { designation = it; saveError = false }, label = { Text("Designation (optional)") }, placeholder = { Text("Enter designation, if required") }, singleLine = true)
                 }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    if (officialName.isBlank() || designation.isBlank()) saveError = true
-                    else {
-                        val conversionName = snapshot.kind.name.replace('_', ' ')
-                        onSaveRecord?.invoke(snapshot, initialRecordId, "${officialName.trim()} — ${designation.trim()} — $conversionName", officialName.trim(), designation.trim())
-                        saveSnapshot = null
+                Button(onClick = {
+                    val conversionName = snapshot.kind.name.replace('_', ' ')
+                    val name = officialName.trim().takeIf { it.isNotBlank() }
+                    val desig = designation.trim().takeIf { it.isNotBlank() }
+                    val title = when {
+                        name != null && desig != null -> "$name — $desig — $conversionName"
+                        name != null -> "$name — $conversionName"
+                        else -> conversionName
                     }
+                    onSaveRecord?.invoke(snapshot, initialRecordId, title, name ?: "", desig ?: "")
+                    saveSnapshot = null
                 }) { Text("Save") }
             },
-            dismissButton = { TextButton(onClick = { saveSnapshot = null }) { Text("Cancel") } }
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        val conversionName = snapshot.kind.name.replace('_', ' ')
+                        onSaveRecord?.invoke(snapshot, initialRecordId, conversionName, "", "")
+                        saveSnapshot = null
+                    }) { Text("Save Without Name") }
+                    TextButton(onClick = { saveSnapshot = null }) { Text("Cancel") }
+                }
+            }
         )
     }
     if (showFifthDniPicker) {

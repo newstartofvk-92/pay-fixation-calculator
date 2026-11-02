@@ -16,21 +16,35 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun ExportPayJourneyPdf(lines: List<String>, modifier: Modifier = Modifier) {
+fun ExportPayJourneyPdf(
+    lines: List<String>,
+    modifier: Modifier = Modifier,
+    buttonText: String = "Export to PDF",
+    title: String = "Pay Fixation Calculation",
+    fileNamePrefix: String = "Pay_Fixation"
+) {
     val context = LocalContext.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
         if (uri != null) {
             try {
-                context.contentResolver.openOutputStream(uri)?.use { PayJourneyPdf.write(it, lines) }
+                context.contentResolver.openOutputStream(uri)?.use { PayJourneyPdf.write(it, lines, title) }
                     ?: throw IOException("Could not open the selected file.")
-                Toast.makeText(context, "Pay journey PDF saved", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, "PDF saved successfully", Toast.LENGTH_SHORT).show()
+                (context as? android.app.Activity)?.let { HistoryInterstitialAd.showIfDue(it) {} }
             } catch (error: Exception) {
                 Toast.makeText(context, "Could not save PDF: ${error.localizedMessage ?: "unknown error"}", Toast.LENGTH_LONG).show()
             }
         }
     }
-    OutlinedButton(onClick = { launcher.launch("Pay_Fixation_Journey_${SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())}.pdf") }, modifier = modifier) {
-        Text("Export Complete Journey PDF")
+    OutlinedButton(
+        onClick = {
+            val dateStr = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+            val cleanPrefix = fileNamePrefix.filter { it.isLetterOrDigit() || it == '_' }.ifBlank { "Pay_Fixation" }
+            launcher.launch("${cleanPrefix}_$dateStr.pdf")
+        },
+        modifier = modifier
+    ) {
+        Text(buttonText)
     }
 }
 
@@ -40,7 +54,7 @@ private object PayJourneyPdf {
     private const val LEFT = 42f
     private const val RIGHT = 553f
 
-    fun write(output: java.io.OutputStream, lines: List<String>) {
+    fun write(output: java.io.OutputStream, lines: List<String>, documentTitle: String = "Pay Fixation Calculation") {
         val document = PdfDocument()
         val bodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.rgb(35, 49, 66); textSize = 10f }
         val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.rgb(23, 105, 170); textSize = 18f; typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD) }
@@ -55,7 +69,7 @@ private object PayJourneyPdf {
             pageNumber++
             page = document.startPage(PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create())
             val canvas = page!!.canvas
-            canvas.drawText("Complete Pay Fixation Journey", LEFT, 38f, titlePaint)
+            canvas.drawText(documentTitle.take(65), LEFT, 38f, titlePaint)
             canvas.drawText("Generated ${SimpleDateFormat("dd MMM yyyy, HH:mm", Locale.ENGLISH).format(Date())}", LEFT, 55f, footerPaint)
             y = 82f
         }

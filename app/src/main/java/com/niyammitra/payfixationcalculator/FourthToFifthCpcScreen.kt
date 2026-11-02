@@ -39,6 +39,7 @@ fun resetFourthJourneyAfterStartingDateEdit() = FourthStartingDateEditReset(empt
 @Composable
 fun FourthToFifthCpcScreen(
     onBack: () -> Unit,
+    onHome: (() -> Unit)? = null,
     onContinueToSeventh: ((String, Int, Int, Long, CompleteJourneySnapshot) -> Unit)? = null,
     restoredSnapshot: FourthCpcJourneySnapshot? = null,
     restoredFifthSnapshot: FifthCpcJourneySnapshot? = null,
@@ -146,7 +147,8 @@ fun FourthToFifthCpcScreen(
             title = "4th CPC → 5th CPC",
             subtitle = "Pay Revision",
             onBack = onBack,
-            actions = { onHistory?.let { TextButton(onClick = it) { Text("History", color = Color.White, fontWeight = FontWeight.Bold) } } }
+            onHome = onHome,
+            onHistory = onHistory
         )
 
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -503,6 +505,62 @@ fun FourthToFifthCpcScreen(
                 Text("This calculator implements the standard Rule 7 replacement-scale calculation. Special pay, NPA, personal pay, bunching, stagnation increments and post-01.01.1996 fixation require case-specific verification.", Modifier.padding(16.dp), color = FourFiveTextPrimary, fontSize = 12.sp)
             }
             if (validStartingPosition && journeyReplaySucceeded && selectedScale != null && basicPay != null && payDate != null) {
+                ExportPayJourneyPdf(
+                    lines = buildList {
+                        add("## 4th CPC Starting Position")
+                        add("Starting scale: ${selectedScale!!.existingScale} (${selectedScale!!.grade})")
+                        add("Starting basic pay: ${formatFourFiveCurrency(basicPay!!)}")
+                        add("Starting date: ${formatFourthFiveDate(payDate!!)}")
+                        parsedNextIncrementDate?.let { add("Starting DNI: ${formatFourthFiveDate(it)}") }
+
+                        if (incrementSteps.isNotEmpty()) {
+                            add("## 4th CPC Annual Increments")
+                            incrementSteps.forEachIndexed { index, step ->
+                                add("Increment ${index + 1} — ${formatFourthFiveDate(step.date)}: ${formatFourFiveCurrency(step.pay)}")
+                            }
+                        }
+
+                        if (acceptedEvents.isNotEmpty()) {
+                            add("## 4th CPC Promotion / Upgradation Events")
+                            acceptedEvents.forEachIndexed { index, event ->
+                                add("Event ${index + 1} — ${formatFourthFiveDate(event.eventDateMillis)}: ${event.eventType.name.replace('_', ' ')} to scale ${event.targetScaleId}, resulting pay ${formatFourFiveCurrency(event.resultingPay)}")
+                            }
+                        }
+
+                        result?.let { res ->
+                            add("## 5th CPC Conversion (${res.conversionDate})")
+                            add("Existing 4th CPC basic pay: ${formatFourFiveCurrency(res.existingBasicPay)}")
+                            add("Dearness Allowance: ${formatFourFiveCurrency(res.dearnessAllowance)}")
+                            add("Interim Relief: IR1 ${formatFourFiveCurrency(res.firstInterimRelief)}, IR2 ${formatFourFiveCurrency(res.secondInterimRelief)}")
+                            add("Total Emoluments: ${formatFourFiveCurrency(res.existingEmoluments)}")
+                            add("40% Fitment weightage: ${formatFourFiveCurrency(res.fitmentWeightage)}")
+                            add("Aggregated total: ${formatFourFiveCurrency(res.fitmentTotal)}")
+                            add("Revised 5th CPC scale: ${res.scale.revisedScale}")
+                            add("Revised basic pay fixed: ${formatFourFiveCurrency(res.revisedBasicPay)}")
+                            add("Next increment note: ${res.nextIncrementNote}")
+                        }
+
+                        val fifthSnapshot = fifthHistorySnapshot
+                        if (fifthSnapshot != null) {
+                            if (fifthSnapshot.increments.isNotEmpty()) {
+                                add("## 5th CPC Annual Increments")
+                                fifthSnapshot.increments.forEachIndexed { index, step ->
+                                    add("Increment ${index + 1} — ${formatFourthFiveDate(step.dateMillis)}: ${formatFourFiveCurrency(step.pay)}")
+                                }
+                            }
+                            if (fifthSnapshot.events.isNotEmpty()) {
+                                add("## 5th CPC Promotion / Upgradation Events")
+                                fifthSnapshot.events.forEachIndexed { index, event ->
+                                    add("Event ${index + 1} — ${formatFourthFiveDate(event.eventDateMillis)}: ${event.eventType.name.replace('_', ' ')} to ${event.targetScaleId}, resulting pay ${formatFourFiveCurrency(event.resultingPay)}")
+                                }
+                            }
+                        }
+                    },
+                    buttonText = "Export to PDF",
+                    title = "4th to 5th CPC Pay Fixation",
+                    fileNamePrefix = "4th_to_5th_CPC_Fixation",
+                    modifier = Modifier.fillMaxWidth()
+                )
                 SaveCompleteJourneyButton(CompleteJourneySnapshot(
                     startingCpc = CpcHistoryStage.FOURTH,
                     startingDateMillis = payDate,
@@ -521,6 +579,7 @@ fun FourthToFifthCpcScreen(
             }
             Spacer(Modifier.height(20.dp))
         }
+        PayFixationBannerAd()
     }
 }
 

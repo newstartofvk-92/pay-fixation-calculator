@@ -69,8 +69,9 @@ fun calculateFourthCpcEventPosition(
         is FourthCpcNextIncrementResolution.InvalidPosition -> return FourthCpcEventPositionResolution.Unresolved(next.message)
     }
     val fixedPay = targetScale.existingStages.firstOrNull { it >= oneIncrement }
-        ?: targetScale.existingStages.lastOrNull()
-        ?: return FourthCpcEventPositionResolution.Unresolved("The target scale has no verified pay stage for this event.")
+        ?: return FourthCpcEventPositionResolution.Unresolved(
+            "${targetScale.grade} has no verified pay stage at or above ₹$oneIncrement for this event."
+        )
     return FourthCpcEventPositionResolution.Available(FourthCpcEventPosition(targetScale, fixedPay))
 }
 

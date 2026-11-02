@@ -104,6 +104,30 @@ class FourthCpcScaleProgressionTest {
     }
 
     @Test
+    fun eventPlacementWithNoTargetStageAtOrAbovePayIsUnresolvedInsteadOfReducingPay() {
+        val s15 = scales.single { it.grade == "S-15 (I)" }
+        val s1 = scales.single { it.grade == "S-1" }
+
+        val result = calculateFourthCpcEventPosition(4000, s15, s1)
+
+        assertTrue(result is FourthCpcEventPositionResolution.Unresolved)
+        assertTrue((result as FourthCpcEventPositionResolution.Unresolved).message.contains("at or above ₹4000"))
+    }
+
+    @Test
+    fun eventPlacementKeepsExactAndNextHigherTargetStageSelection() {
+        val s1 = scales.single { it.grade == "S-1" }
+        val exactTarget = FourthCpcScale("Test exact", "762 fixed", "762 fixed", 762, 762, 0, fixed = true)
+        val betweenTargetStages = FourthCpcScale("Test interval", "700-100-900", "700-100-900", 700, 900, 100)
+
+        val exact = calculateFourthCpcEventPosition(750, s1, exactTarget) as FourthCpcEventPositionResolution.Available
+        val nextHigher = calculateFourthCpcEventPosition(750, s1, betweenTargetStages) as FourthCpcEventPositionResolution.Available
+
+        assertEquals(762, exact.position.pay)
+        assertEquals(800, nextHigher.position.pay)
+    }
+
+    @Test
     fun replayStopsAtRangeOnlyEventWithoutAdvancingItsDateOrLaterIncrement() {
         val s1 = scales.single { it.grade == "S-1" }
         val event = FourthCpcEventSnapshot(1, 100L, CpcJourneyEventKind.PROMOTION, s14.existingScale, 9999, 2)

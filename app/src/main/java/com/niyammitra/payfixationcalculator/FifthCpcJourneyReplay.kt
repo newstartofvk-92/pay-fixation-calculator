@@ -106,7 +106,7 @@ internal fun replayFifthCpcJourney(
         dni ?: increments[entry.index].date
     } else {
         val event = events[entry.index]
-        if (event.implementationOption.equals("From DNI", ignoreCase = true)) dni ?: event.implementationDate
+        if (event.implementationOption.equals("From DNI", ignoreCase = true)) maxOf(dni ?: event.implementationDate, event.eventDate)
         else event.eventDate
     }
 
@@ -148,7 +148,7 @@ internal fun replayFifthCpcJourney(
             val event = events[entry.index]
             val targetScale = findFifthScaleForHistoricalJourney(event.scale) ?: continue
             val fromDni = event.implementationOption.equals("From DNI", ignoreCase = true)
-            val implementationDate = if (fromDni) dni ?: event.implementationDate else event.eventDate
+            val implementationDate = if (fromDni) maxOf(dni ?: event.implementationDate, event.eventDate) else event.eventDate
             applyOmBefore(implementationDate)
             eventInputs[entry.index] = FifthCpcEventReplayInput(pay, scale, date, dni)
             val fixation = calculateFifthCpcEventFixation(

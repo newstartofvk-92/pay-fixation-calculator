@@ -98,6 +98,7 @@ private fun formatStartDate(dateMillis: Long): String {
 fun PayFixationStartDateScreen(
     onBack: () -> Unit,
     onHome: () -> Unit,
+    onHistory: (() -> Unit)? = null,
     initialStartDateMillis: Long? = null,
     onContinue: (startDateMillis: Long, commission: PayCommission) -> Unit
 ) {
@@ -116,6 +117,7 @@ fun PayFixationStartDateScreen(
             subtitle = "NiyamMitra",
             onBack = onBack,
             onHome = onHome,
+            onHistory = onHistory,
             branded = true
         )
 
@@ -241,6 +243,7 @@ fun PayFixationStartDateScreen(
 
             Spacer(Modifier.height(20.dp))
         }
+        PayFixationBannerAd()
     }
 
     if (showDatePicker) {

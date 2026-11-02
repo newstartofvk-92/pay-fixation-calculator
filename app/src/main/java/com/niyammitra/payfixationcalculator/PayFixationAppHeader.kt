@@ -21,6 +21,8 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Home
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -44,6 +46,7 @@ fun PayFixationAppHeader(
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
     onHome: (() -> Unit)? = null,
+    onHistory: (() -> Unit)? = null,
     branded: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {}
 ) {
@@ -73,7 +76,7 @@ fun PayFixationAppHeader(
                 Text(
                     title,
                     color = Color.White,
-                    fontSize = 20.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -82,7 +85,12 @@ fun PayFixationAppHeader(
                     Text(it, color = Color.White.copy(alpha = .88f), fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            onHome?.let { TextButton(onClick = it) { Text("Home", color = Color.White, fontWeight = FontWeight.Bold) } }
+            if (onHome != null) {
+                PayFixationHeaderIconAction("Home", Icons.Default.Home, onHome)
+            }
+            if (onHistory != null) {
+                PayFixationHeaderIconAction("History", Icons.Default.History, onHistory)
+            }
             actions()
         }
     }
