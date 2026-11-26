@@ -31,6 +31,16 @@ class StandaloneCpcConversionUtilsTest {
     }
 
     @Test
+    fun fifth_to_sixth_fitment_rounds_the_productDirectlyToTheNextTen() {
+        val scale = FifthToSixthCpcData.scales.first()
+        val result = calculateFifthToSixthCpc(existingBasicPay = 7_570, scale = scale)
+
+        assertEquals(14_080.2, result.multipliedPay, 0.0001)
+        assertEquals(14_090, result.roundedPay)
+        assertEquals(14_090, result.payInPayBand)
+    }
+
+    @Test
     fun sixth_to_seventh_mapped_position_converts_and_invalid_inputs_return_null() {
         val band = SixthToSeventhCpcData.payBands.first { it.title.startsWith("PB-1") }
         val result = calculateSixthToSeventhCpc(payInPayBand = 10160, gradePay = 2400, payBand = band)

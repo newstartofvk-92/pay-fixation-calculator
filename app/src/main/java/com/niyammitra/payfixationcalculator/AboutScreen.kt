@@ -1,5 +1,6 @@
 package com.niyammitra.payfixationcalculator
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -12,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -74,7 +76,16 @@ fun AboutDialog(onClose: () -> Unit) {
 
                 // Keep the About screen synchronized with the Gradle app version so
                 // the version shown to users matches the release being tested.
-                Text("Version 1.1", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+
+                if (AdMobRuntime.privacyOptionsRequired) {
+                    OutlinedButton(
+                        onClick = { (context as? Activity)?.let(AdMobRuntime::showPrivacyOptions) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Privacy Options")
+                    }
+                }
 
                 // Opens the already-published privacy policy in the user's default browser.
                 Button(onClick = {

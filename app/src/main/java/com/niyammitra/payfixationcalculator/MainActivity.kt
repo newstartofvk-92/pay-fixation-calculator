@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -38,18 +39,13 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 
-private val NiyamBlue = Color(0xFF1769AA)
-private val NiyamHeaderBlue = Color(0xFF1976B8)
-private val NiyamBackground = Color(0xFFF7FAFC)
-private val NiyamTextPrimary = Color(0xFF172B4D)
-private val NiyamTextSecondary = Color(0xFF5B6B7A)
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         BillingManager.initialize(this)
-        MobileAds.initialize(this)
         if ((applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0) {
             MobileAds.setRequestConfiguration(
                 com.google.android.gms.ads.RequestConfiguration.Builder()
@@ -57,8 +53,26 @@ class MainActivity : ComponentActivity() {
                     .build()
             )
         }
+        AdMobRuntime.initialize(this)
         HistoryInterstitialAd.load(this)
         setContent { PayFixationCalculatorTheme { V2AppScreen() } }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        AdMobRuntime.initialize(this)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        // Apply a pending History destination before Compose saves restorable state.
+        HistoryInterstitialAd.onActivityInterrupted(this)
+        super.onSaveInstanceState(outState)
+    }
+
+    override fun onDestroy() {
+        HistoryInterstitialAd.onActivityInterrupted(this)
+        AdMobRuntime.onActivityDestroyed(this)
+        super.onDestroy()
     }
 }
 
@@ -95,8 +109,8 @@ fun PayFixationCalculatorScreen(
     var journeyPromotions by remember(completeJourneyStartDateMillis, restoredSeventhSnapshot) { mutableStateOf(restoredSeventhSnapshot?.promotions.orEmpty()) }
     var journeyFixationBasis by remember(restoredSeventhSnapshot) { mutableStateOf(CpcFixationBasis.EVENT_DATE) }
     var journeyEventKind by remember { mutableStateOf(CpcJourneyEventKind.PROMOTION) }
-    var showHistory by remember { mutableStateOf(false) }
-    var showHistoryHub by remember { mutableStateOf(false) }
+    var showHistory by rememberSaveable { mutableStateOf(false) }
+    var showHistoryHub by rememberSaveable { mutableStateOf(false) }
     var history by remember { mutableStateOf(HistoryStore.getAll(context)) }
     var officialName by remember { mutableStateOf("") }
     var employeeCategory by remember { mutableStateOf(EmployeeCategory.ORDINARY) }
@@ -132,7 +146,7 @@ fun PayFixationCalculatorScreen(
                     history = HistoryStore.getAll(context)
                     showHistoryHub = false
                     val activity = context as? Activity
-                    if (activity != null) HistoryInterstitialAd.showIfDue(activity) { showHistory = true } else showHistory = true
+                    if (activity != null) HistoryInterstitialAd.handleHistoryEntry(activity) { showHistory = true } else showHistory = true
                 }) { Text("7th CPC Pay Fixation History") }
             }
         )
@@ -140,13 +154,13 @@ fun PayFixationCalculatorScreen(
     if (showHistory) {
         androidx.activity.compose.BackHandler {
             val activity = context as? Activity
-            if (activity != null) HistoryInterstitialAd.showOnHistoryBack(activity) { showHistory = false } else showHistory = false
+            if (activity != null) HistoryInterstitialAd.handleHistoryEntry(activity) { showHistory = false } else showHistory = false
         }
         HistoryScreen(
             history = history,
             onBack = {
                 val activity = context as? Activity
-                if (activity != null) HistoryInterstitialAd.showOnHistoryBack(activity) { showHistory = false } else showHistory = false
+                if (activity != null) HistoryInterstitialAd.handleHistoryEntry(activity) { showHistory = false } else showHistory = false
             },
             onDelete = { id -> HistoryStore.delete(context, id); history = HistoryStore.getAll(context) },
             onClear = { showClearHistoryDialog = true },
@@ -201,7 +215,7 @@ fun PayFixationCalculatorScreen(
         calculatePayFixation(currentLevel!!, currentPay!!, promotedLevel!!, promotionDate, dniDate, employeeCategory)
     } else null
 
-    Column(Modifier.fillMaxSize().imePadding().background(NiyamBackground)) {
+    Column(Modifier.fillMaxSize().imePadding().background(MaterialTheme.colorScheme.background)) {
         PayFixationAppHeader(
             title = "Pay Fixation Calculator",
             subtitle = "NiyamMitra",
@@ -221,12 +235,12 @@ fun PayFixationCalculatorScreen(
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(Color(0xFFEAF5FC))) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("Go Ad-Free", color = NiyamBlue, fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
+                            Text("Go Ad-Free", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold, fontSize = 19.sp)
                             Spacer(Modifier.height(4.dp))
-                            Text("Remove all ads permanently for ${BillingManager.getPrice()} one time.", color = NiyamTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text("Remove all ads permanently for ${BillingManager.getPrice()} one time.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
                         Spacer(Modifier.width(12.dp))
-                        Button(onClick = { showAdFreeDialog = true }, shape = RoundedCornerShape(24.dp), colors = ButtonDefaults.buttonColors(containerColor = NiyamBlue), contentPadding = PaddingValues(horizontal = 18.dp, vertical = 11.dp)) { Text("Remove Ads", fontWeight = FontWeight.Bold) }
+                        Button(onClick = { showAdFreeDialog = true }, shape = RoundedCornerShape(24.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary), contentPadding = PaddingValues(horizontal = 18.dp, vertical = 11.dp)) { Text("Remove Ads", fontWeight = FontWeight.Bold) }
                     }
                 }
             }
@@ -234,11 +248,11 @@ fun PayFixationCalculatorScreen(
             if (completeJourneyMode) {
                 Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Complete Journey — 7th CPC", color = NiyamTextPrimary, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
-                        Text("Journey starting date: ${completeJourneyStartDateMillis?.let(::formatDate).orEmpty()}", color = NiyamTextSecondary, fontSize = 14.sp)
+                        Text("Complete Journey — 7th CPC", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
+                        Text("Journey starting date: ${completeJourneyStartDateMillis?.let(::formatDate).orEmpty()}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
                         if (!journeyStarted) {
-                            Text("Select the starting pay below using the existing calculator controls, then enter the DNI known for that starting position.", color = NiyamTextSecondary, fontSize = 13.sp)
-                            Text("Starting position DNI", color = NiyamTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("Select the starting pay below using the existing calculator controls, then enter the DNI known for that starting position.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                            Text("Starting position DNI", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             OutlinedButton(onClick = { showStartingDniPicker = true }, modifier = Modifier.fillMaxWidth()) {
                                 Text(journeyStartingDni?.let(::formatDate) ?: "Select starting DNI", Modifier.weight(1f))
                             }
@@ -255,9 +269,9 @@ fun PayFixationCalculatorScreen(
                                 Text("Starting DNI must be on or after the journey starting date.", color = Color(0xFFC62828), fontSize = 12.sp)
                             }
                         } else {
-                            Text("Starting position: Level ${journeyStartingLevel}, ${journeyStartingPay?.let(::formatCurrency)}", color = NiyamTextPrimary, fontWeight = FontWeight.Bold)
-                            Text("Starting DNI: ${journeyStartingDni?.let(::formatDate) ?: "Not available in this saved record"}", color = NiyamTextSecondary, fontSize = 13.sp)
-                            Text("Current journey position: Level ${journeyPosition?.level ?: currentLevel}, ${journeyPosition?.pay?.let(::formatCurrency) ?: currentPay?.let(::formatCurrency)}", color = NiyamBlue, fontWeight = FontWeight.Bold)
+                            Text("Starting position: Level ${journeyStartingLevel}, ${journeyStartingPay?.let(::formatCurrency)}", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold)
+                            Text("Starting DNI: ${journeyStartingDni?.let(::formatDate) ?: "Not available in this saved record"}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                            Text("Current journey position: Level ${journeyPosition?.level ?: currentLevel}, ${journeyPosition?.pay?.let(::formatCurrency) ?: currentPay?.let(::formatCurrency)}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -284,18 +298,18 @@ fun PayFixationCalculatorScreen(
                 if (completeJourneyMode && journeyStarted) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = journeyEventKind == CpcJourneyEventKind.PROMOTION, onClick = { journeyEventKind = CpcJourneyEventKind.PROMOTION })
-                        Text("Promotion", color = NiyamTextPrimary, fontSize = 13.sp)
+                        Text("Promotion", color = MaterialTheme.colorScheme.onBackground, fontSize = 13.sp)
                         RadioButton(selected = journeyEventKind == CpcJourneyEventKind.MACP, onClick = { journeyEventKind = CpcJourneyEventKind.MACP })
-                        Text("MACP / Financial Upgradation", color = NiyamTextPrimary, fontSize = 13.sp)
+                        Text("MACP / Financial Upgradation", color = MaterialTheme.colorScheme.onBackground, fontSize = 13.sp)
                     }
-                    Text("Fixation basis for this journey event", color = NiyamTextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("Fixation basis for this journey event", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = journeyFixationBasis == CpcFixationBasis.EVENT_DATE, onClick = { journeyFixationBasis = CpcFixationBasis.EVENT_DATE })
-                        Text("From Event Date", color = NiyamTextPrimary, fontSize = 13.sp)
+                        Text("From Event Date", color = MaterialTheme.colorScheme.onBackground, fontSize = 13.sp)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         RadioButton(selected = journeyFixationBasis == CpcFixationBasis.DNI, onClick = { journeyFixationBasis = CpcFixationBasis.DNI })
-                        Text("From DNI", color = NiyamTextPrimary, fontSize = 13.sp)
+                        Text("From DNI", color = MaterialTheme.colorScheme.onBackground, fontSize = 13.sp)
                     }
                 }
                 DropdownField("Promoted / Upgraded Pay Level", promotedLevel?.let { "Level $it" } ?: "Select your Promoted / Upgraded Pay Level", matrix.levels, promotedMenu, { promotedMenu = it }, { level -> promotedLevel = level })
@@ -316,7 +330,7 @@ fun PayFixationCalculatorScreen(
             }
 
             if (result != null) {
-                Text("Fixation Illustrations — Promotion / MACP", color = NiyamTextPrimary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                Text("Fixation Illustrations — Promotion / MACP", color = MaterialTheme.colorScheme.onBackground, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                 ResultCard("Option 1: Fixation from Date of Promotion / MACP", promotionDate, listOf(
                     "Pay in lower Level ($currentLevel)" to result.option1.lowerLevelPay,
                     "Add one increment in lower Level ($currentLevel)" to result.option1.payWithIncrement,
@@ -469,7 +483,7 @@ fun PayFixationCalculatorScreen(
                                     )
                                     history = HistoryStore.getAll(context)
                                     Toast.makeText(context, "Pay fixation saved to history", Toast.LENGTH_SHORT).show()
-                                    (context as? Activity)?.let { HistoryInterstitialAd.showIfDue(it) {} }
+                                    (context as? Activity)?.let { HistoryInterstitialAd.handleHistoryEntry(it) {} }
                                     showSaveHistoryDialog = false
                                 }) { Text("Save") }
                             },
@@ -495,7 +509,7 @@ fun PayFixationCalculatorScreen(
                                         )
                                         history = HistoryStore.getAll(context)
                                         Toast.makeText(context, "Pay fixation saved to history", Toast.LENGTH_SHORT).show()
-                                        (context as? Activity)?.let { HistoryInterstitialAd.showIfDue(it) {} }
+                                        (context as? Activity)?.let { HistoryInterstitialAd.handleHistoryEntry(it) {} }
                                         showSaveHistoryDialog = false
                                     }) { Text("Save Without Name") }
                                     TextButton(onClick = { showSaveHistoryDialog = false }) { Text("Cancel") }
@@ -508,22 +522,22 @@ fun PayFixationCalculatorScreen(
 
             if (completeJourneyMode && journeyStarted && journeySnapshot != null && journeyPosition != null) {
                 SelectionCard("Chronological 7th CPC Journey") {
-                    Text("Starting date: ${formatDate(journeySnapshot.conversionDateMillis)}", color = NiyamTextSecondary, fontSize = 13.sp)
-                    Text("Starting pay: Level ${journeySnapshot.startingLevel}, ${formatCurrency(journeySnapshot.startingBasicPay)}", color = NiyamTextPrimary, fontWeight = FontWeight.Bold)
-                    Text("Current pay position: Level ${journeyPosition.level}, ${formatCurrency(journeyPosition.pay)}", color = NiyamBlue, fontWeight = FontWeight.Bold)
-                    Text("Next increment date: ${formatDate(journeyPosition.dni)}", color = NiyamTextSecondary, fontSize = 13.sp)
+                    Text("Starting date: ${formatDate(journeySnapshot.conversionDateMillis)}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                    Text("Starting pay: Level ${journeySnapshot.startingLevel}, ${formatCurrency(journeySnapshot.startingBasicPay)}", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold)
+                    Text("Current pay position: Level ${journeyPosition.level}, ${formatCurrency(journeyPosition.pay)}", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text("Next increment date: ${formatDate(journeyPosition.dni)}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                     if (journeyIncrements.isNotEmpty()) {
-                        Text("Annual increments", color = NiyamTextPrimary, fontWeight = FontWeight.Bold)
+                        Text("Annual increments", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold)
                         journeyIncrements.forEachIndexed { index, increment ->
-                            Text("Increment ${index + 1}: ${formatDate(increment.date)} — ${formatCurrency(increment.pay)}", color = NiyamTextSecondary, fontSize = 13.sp)
+                            Text("Increment ${index + 1}: ${formatDate(increment.date)} — ${formatCurrency(increment.pay)}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                         }
                     }
                     if (journeyPromotions.isNotEmpty()) {
-                        Text("Promotion / MACP events", color = NiyamTextPrimary, fontWeight = FontWeight.Bold)
+                        Text("Promotion / MACP events", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold)
                         flattenSeventhPromotions(journeyPromotions).sortedBy { it.sequence }.forEach { event ->
-                            Text("${event.eventKind.name.replace('_', ' ')} — ${event.promotionDateMillis?.let(::formatDate)}; Level ${event.currentLevel} → ${event.promotedLevel}; pay ${event.resultingPay?.let(::formatCurrency)}", color = NiyamTextSecondary, fontSize = 13.sp)
+                            Text("${event.eventKind.name.replace('_', ' ')} — ${event.promotionDateMillis?.let(::formatDate)}; Level ${event.currentLevel} → ${event.promotedLevel}; pay ${event.resultingPay?.let(::formatCurrency)}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                             event.postIncrements.forEachIndexed { index, increment ->
-                                Text("  Post-event increment ${index + 1}: ${formatDate(increment.dateMillis)} — ${formatCurrency(increment.pay)}", color = NiyamTextSecondary, fontSize = 12.sp)
+                                Text("  Post-event increment ${index + 1}: ${formatDate(increment.dateMillis)} — ${formatCurrency(increment.pay)}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                             }
                         }
                     }
@@ -617,9 +631,9 @@ fun PayFixationCalculatorScreen(
 private fun PayFixationDisclaimer() {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(Color(0xFFFFF8E1))) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Important Disclaimer", color = NiyamTextPrimary, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-            Text("This application is intended solely as an assistive and reference tool for working out indicative pay-fixation calculations based on the information and rules provided by the user. The results are not an official determination of pay, entitlement, or financial benefit and should not be treated as a substitute for applicable Government rules, regulations, orders, clarifications, or decisions of the competent authority.", color = NiyamTextPrimary, fontSize = 12.sp)
-            Text("Users should verify the results with the applicable rules/orders and the competent administrative or accounts authority before using them for any official, service, or financial purpose. The developer does not assume responsibility for any decision, claim, loss, liability, or consequence arising from reliance solely on the calculations provided by this application.", color = NiyamTextSecondary, fontSize = 12.sp)
+            Text("Important Disclaimer", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            Text("This application is intended solely as an assistive and reference tool for working out indicative pay-fixation calculations based on the information and rules provided by the user. The results are not an official determination of pay, entitlement, or financial benefit and should not be treated as a substitute for applicable Government rules, regulations, orders, clarifications, or decisions of the competent authority.", color = MaterialTheme.colorScheme.onBackground, fontSize = 12.sp)
+            Text("Users should verify the results with the applicable rules/orders and the competent administrative or accounts authority before using them for any official, service, or financial purpose. The developer does not assume responsibility for any decision, claim, loss, liability, or consequence arising from reliance solely on the calculations provided by this application.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
         }
     }
 }
@@ -629,7 +643,7 @@ private fun AdFreePurchaseDialog(context: android.content.Context, onClose: () -
     AlertDialog(
         onDismissRequest = onClose,
         title = { Text("NiyamMitra Ad-Free") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Remove all advertisements from Pay Fixation Calculator permanently."); Text("Lifetime ad-free access", fontWeight = FontWeight.Bold, color = NiyamBlue); Text("One-time purchase: ${BillingManager.getPrice()}", fontSize = 16.sp, fontWeight = FontWeight.Bold); Text("No subscription. Your purchase can be restored on this Google Play account.", color = NiyamTextSecondary, fontSize = 13.sp) } },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Remove all advertisements from Pay Fixation Calculator permanently."); Text("Lifetime ad-free access", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary); Text("One-time purchase: ${BillingManager.getPrice()}", fontSize = 16.sp, fontWeight = FontWeight.Bold); Text("No subscription. Your purchase can be restored on this Google Play account.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp) } },
         confirmButton = { Button(onClick = { val activity = context as? Activity; if (activity == null || BillingManager.launchPurchase(activity) == null) Toast.makeText(context, "Google Play purchase is not ready yet. Please try again in a moment.", Toast.LENGTH_SHORT).show() }) { Text("Buy Ad-Free") } },
         dismissButton = { Row { TextButton(onClick = { BillingManager.restorePurchases(context) }) { Text("Restore Purchase") }; TextButton(onClick = onClose) { Text("Cancel") } } }
     )
@@ -645,7 +659,7 @@ fun HistoryScreen(
     onAbout: () -> Unit,
     onHome: (() -> Unit)? = null
 ) {
-    Column(Modifier.fillMaxSize().background(NiyamBackground)) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         PayFixationAppHeader(
             title = "Calculation History",
             subtitle = "Saved calculations",
@@ -656,19 +670,19 @@ fun HistoryScreen(
         Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).navigationBarsPadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (history.isNotEmpty()) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { TextButton(onClick = onClear) { Text("Clear", color = Color(0xFFD64545), fontWeight = FontWeight.Bold) } }
             if (history.isEmpty()) {
-                Box(Modifier.fillMaxSize().padding(top = 80.dp), contentAlignment = Alignment.Center) { Text("No saved calculations yet.", color = NiyamTextSecondary, fontSize = 16.sp) }
+                Box(Modifier.fillMaxSize().padding(top = 80.dp), contentAlignment = Alignment.Center) { Text("No saved calculations yet.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp) }
             } else {
                 history.forEach { entry ->
                     Card(Modifier.fillMaxWidth().clickable { onOpen(entry) }, colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(16.dp)) {
                         Column(Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(entry.officialName.ifBlank { "Unnamed Employee" }, fontWeight = FontWeight.Bold, color = NiyamBlue, fontSize = 16.sp)
-                                    Text(entry.employeeCategory.displayName, color = NiyamTextSecondary, fontSize = 12.sp)
-                                    Text("Level ${entry.currentLevel} → Level ${entry.promotedLevel}", color = NiyamTextPrimary, fontSize = 14.sp)
-                                    Text("Current Pay: ${formatCurrency(entry.currentPay)}", color = NiyamTextPrimary, fontSize = 14.sp)
-                                    Text("Fixation Date: ${entry.promotionDate?.let(::formatDate) ?: "Not specified"}", color = NiyamTextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                    Text("Saved: ${formatDateTime(entry.savedAt)}", color = NiyamTextSecondary, fontSize = 12.sp)
+                                    Text(entry.officialName.ifBlank { "Unnamed Employee" }, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 16.sp)
+                                    Text(entry.employeeCategory.displayName, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                    Text("Level ${entry.currentLevel} → Level ${entry.promotedLevel}", color = MaterialTheme.colorScheme.onBackground, fontSize = 14.sp)
+                                    Text("Current Pay: ${formatCurrency(entry.currentPay)}", color = MaterialTheme.colorScheme.onBackground, fontSize = 14.sp)
+                                    Text("Fixation Date: ${entry.promotionDate?.let(::formatDate) ?: "Not specified"}", color = MaterialTheme.colorScheme.onBackground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("Saved: ${formatDateTime(entry.savedAt)}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                                 }
                                 TextButton(onClick = { onDelete(entry.id) }) { Text("Delete", color = Color(0xFFD64545)) }
                             }
@@ -702,10 +716,10 @@ fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) {
         onDismissRequest = onClose,
         title = { Text(if (entry.officialName.isBlank()) "Saved Calculation" else entry.officialName) },
         text = { Column(modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("Employee Category", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp); Text(entry.employeeCategory.displayName)
-            Text("Current Status", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp); Text("Present Pay Level: Level ${entry.currentLevel}"); Text("Current Basic Pay: ${formatCurrency(entry.currentPay)}")
-            Text("Promotion / MACP Details", color = NiyamBlue, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.padding(top = 4.dp)); Text("Promoted / Upgraded Pay Level: Level ${entry.promotedLevel}"); Text("Date of Promotion / MACP: ${entry.promotionDate?.let { formatDate(it) } ?: "Not selected"}"); Text("Selected DNI: ${entry.dniDate?.let { formatDate(it) } ?: "Not selected"}")
-            HorizontalDivider(Modifier.padding(vertical = 4.dp)); Text("Fixation Illustrations — Promotion / MACP", color = NiyamTextPrimary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+            Text("Employee Category", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 17.sp); Text(entry.employeeCategory.displayName)
+            Text("Current Status", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 17.sp); Text("Present Pay Level: Level ${entry.currentLevel}"); Text("Current Basic Pay: ${formatCurrency(entry.currentPay)}")
+            Text("Promotion / MACP Details", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 17.sp, modifier = Modifier.padding(top = 4.dp)); Text("Promoted / Upgraded Pay Level: Level ${entry.promotedLevel}"); Text("Date of Promotion / MACP: ${entry.promotionDate?.let { formatDate(it) } ?: "Not selected"}"); Text("Selected DNI: ${entry.dniDate?.let { formatDate(it) } ?: "Not selected"}")
+            HorizontalDivider(Modifier.padding(vertical = 4.dp)); Text("Fixation Illustrations — Promotion / MACP", color = MaterialTheme.colorScheme.onBackground, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
             ResultCard("Option 1: Fixation from Date of Promotion / MACP", entry.promotionDate, listOf("Pay in lower Level (${entry.currentLevel})" to result.option1.lowerLevelPay, "Add one increment in lower Level (${entry.currentLevel})" to result.option1.payWithIncrement, "Placement in promoted Level (${entry.promotedLevel})" to result.option1.finalFixedPay), result.option1.finalFixedPay, result.option1.nextDni, result.option1.payAfterNextDni)
             ResultCard("Option 2: Fixation from Date of Next Increment", entry.dniDate, listOf("Pay from date of promotion / MACP until DNI (placed at next higher cell in Level ${entry.promotedLevel})" to result.option2.payUntilDni, "On DNI, annual increment in lower Level (${entry.currentLevel})" to result.option2.payWithAnnualIncrement, "On DNI, one increment on account of Promotion / MACP in Level ${entry.currentLevel}" to result.option2.payWithPromotionIncrement, "Final placement in promoted Level (${entry.promotedLevel})" to result.option2.finalFixedPay), result.option2.finalFixedPay, result.option2.nextDni, result.option2.payAfterNextDni, result.option2.payUntilDni, entry.promotionDate)
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color(0xFFE8F5E9))) { Text(recommendationText, Modifier.padding(16.dp), color = Color(0xFF2E7D32), fontWeight = FontWeight.Bold) }
@@ -749,7 +763,7 @@ fun HistoryDetailDialog(entry: CalculationHistory, onClose: () -> Unit) {
 @Composable
 private fun SelectionCard(title: String, content: @Composable ColumnScope.() -> Unit) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(Color.White)) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { Text(title, fontWeight = FontWeight.Bold, color = NiyamBlue); content() }
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) { Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary); content() }
     }
 }
 
@@ -757,7 +771,7 @@ private fun SelectionCard(title: String, content: @Composable ColumnScope.() -> 
 private fun DropdownField(label: String, value: String, options: List<String>, expanded: Boolean, onExpandedChange: (Boolean) -> Unit, onSelected: (String) -> Unit, enabled: Boolean = true) {
     Box {
         OutlinedButton(onClick = { onExpandedChange(true) }, enabled = enabled && options.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) { Text(label, fontSize = 12.sp, color = NiyamTextSecondary); Text(value, color = NiyamTextPrimary, fontSize = 15.sp) }
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) { Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(value, color = MaterialTheme.colorScheme.onBackground, fontSize = 15.sp) }
             Text("▼")
         }
         DropdownMenu(expanded = expanded && enabled, onDismissRequest = { onExpandedChange(false) }) { options.forEach { option -> DropdownMenuItem(text = { Text(option) }, onClick = { onSelected(option); onExpandedChange(false) }) } }
@@ -768,7 +782,7 @@ private fun DropdownField(label: String, value: String, options: List<String>, e
 private fun DateField(label: String, millis: Long?, onClick: () -> Unit, modifier: Modifier) {
     Column(modifier) {
         Text(label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-        Box(Modifier.fillMaxWidth().padding(top = 8.dp).border(1.dp, Color.LightGray, RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(14.dp)) { Text(millis?.let { formatDate(it) } ?: "Select", color = if (millis != null) NiyamTextPrimary else Color.Gray, fontSize = 14.sp) }
+        Box(Modifier.fillMaxWidth().padding(top = 8.dp).border(1.dp, Color.LightGray, RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(14.dp)) { Text(millis?.let { formatDate(it) } ?: "Select", color = if (millis != null) MaterialTheme.colorScheme.onBackground else Color.Gray, fontSize = 14.sp) }
     }
 }
 
@@ -776,25 +790,25 @@ private fun DateField(label: String, millis: Long?, onClick: () -> Unit, modifie
 private fun ResultCard(title: String, date: Long?, steps: List<Pair<String, Int>>, finalPay: Int, futureDni: Long?, futurePay: Int?, interimPay: Int? = null, periodStartDate: Long? = null) {
     Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(Color.White), elevation = CardDefaults.cardElevation(2.dp)) {
         Column(Modifier.padding(16.dp)) {
-            Text(title, fontWeight = FontWeight.Bold, color = NiyamBlue, fontSize = 16.sp)
+            Text(title, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, fontSize = 16.sp)
             date?.let { Text(if (title.startsWith("Option 1")) "Date of Promotion / MACP: ${formatDate(it)}" else "Selected DNI: ${formatDate(it)}", fontSize = 12.sp, color = Color.Gray) }
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
             steps.forEachIndexed { index, (description, pay) ->
                 Column(Modifier.padding(vertical = 6.dp)) {
-                    Text(description, fontSize = 13.sp, color = NiyamTextPrimary)
+                    Text(description, fontSize = 13.sp, color = MaterialTheme.colorScheme.onBackground)
                     date?.let {
                         val dateText = if (periodStartDate != null && index == 0) "Date: From ${formatDate(periodStartDate)} to ${formatDate(it)}" else "Date: ${formatDate(it)}"
-                        Text(dateText, fontSize = 11.sp, color = NiyamTextSecondary, modifier = Modifier.padding(top = 2.dp))
+                        Text(dateText, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(top = 2.dp))
                     }
-                    Text("Pay: ${formatCurrency(pay)}", fontSize = 13.sp, color = NiyamBlue, fontWeight = FontWeight.Bold)
+                    Text("Pay: ${formatCurrency(pay)}", fontSize = 13.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 }
             }
-            Surface(Modifier.padding(top = 10.dp), color = NiyamBlue.copy(alpha = .05f), shape = RoundedCornerShape(12.dp)) {
+            Surface(Modifier.padding(top = 10.dp), color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(12.dp)) {
                 Column(Modifier.padding(12.dp).fillMaxWidth()) {
-                    interimPay?.let { Text("Interim Pay: ${formatCurrency(it)}", fontSize = 13.sp, color = NiyamTextSecondary) }
-                    Text("Final Fixed Pay: ${formatCurrency(finalPay)}", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = NiyamBlue)
+                    interimPay?.let { Text("Interim Pay: ${formatCurrency(it)}", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    Text("Final Fixed Pay: ${formatCurrency(finalPay)}", fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
                     if (futureDni != null && futurePay != null) {
-                        HorizontalDivider(Modifier.padding(vertical = 8.dp)); Text("Next DNI: ${formatDate(futureDni)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = NiyamTextPrimary); Text("Pay thereon: ${formatCurrency(futurePay)}", fontSize = 13.sp, color = NiyamTextSecondary)
+                        HorizontalDivider(Modifier.padding(vertical = 8.dp)); Text("Next DNI: ${formatDate(futureDni)}", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground); Text("Pay thereon: ${formatCurrency(futurePay)}", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

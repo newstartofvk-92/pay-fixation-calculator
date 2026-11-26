@@ -1,6 +1,8 @@
 package com.niyammitra.payfixationcalculator
 
 import android.app.Activity
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
@@ -8,39 +10,43 @@ import com.google.android.gms.ads.FullScreenContentCallback
 import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
+import java.lang.ref.WeakReference
 
 /**
- * Manages the History-screen interstitial advertisement.
- *
- * Premium/ad-free users are excluded from all interstitial loading and display.
- * Free users get a two-minute cooldown when entering History, while returning
- * from History is treated as a separate explicit ad opportunity.
+ * Manages History interstitials. Navigation is coalesced while a single ad is
+ * visible; a timeout releases navigation without opening a second ad.
  */
 object HistoryInterstitialAd {
-    // Production interstitial ID created for the NiyamMitra Pay Fixation Calculator.
     private const val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-1512519890788753/3097446327"
+    private const val NAVIGATION_FALLBACK_MS = 12_000L
 
-    // Prevents the History-entry ad from appearing too frequently for free users.
-    private const val COOLDOWN_MILLIS = 2 * 60 * 1000L
-
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val navigation = HistoryNavigationState()
+    private val cooldown = HistoryAdCooldown()
     private var interstitialAd: InterstitialAd? = null
-    private var lastShownAt = 0L
     private var isLoading = false
+    private var presentationActivity = WeakReference<Activity>(null)
+    private var presentationGeneration = 0L
+    private var fallback: Runnable? = null
 
-    /** Preloads an interstitial so it is ready when a permitted History action occurs. */
+    /** Preloads only after UMP permits ads and premium entitlement is false. */
     fun load(activity: Activity) {
-        // Never load an ad for a user who has purchased lifetime ad removal.
-        if (BillingManager.isPremium || interstitialAd != null || isLoading) return
+        if (BillingManager.isPremium || !AdMobRuntime.canShowAds || interstitialAd != null || isLoading) return
+        if (activity.isFinishing || activity.isDestroyed) return
 
         isLoading = true
         InterstitialAd.load(
-            activity,
+            activity.applicationContext,
             INTERSTITIAL_AD_UNIT_ID,
             AdRequest.Builder().build(),
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
                     isLoading = false
-                    interstitialAd = ad
+                    if (BillingManager.isPremium || !AdMobRuntime.canShowAds) {
+                        interstitialAd = null
+                    } else {
+                        interstitialAd = ad
+                    }
                 }
 
                 override fun onAdFailedToLoad(error: LoadAdError) {
@@ -51,71 +57,86 @@ object HistoryInterstitialAd {
         )
     }
 
-    /**
-     * Handles entering History. The normal two-minute cooldown is applied here.
-     * If no ad is ready, navigation continues immediately and another ad is loaded.
-     */
-    fun showIfDue(activity: Activity, onContinue: () -> Unit) {
-        // Purchased ad-free access always bypasses the interstitial.
-        if (BillingManager.isPremium) {
+    /** Drops a cached ad immediately if consent or premium eligibility changes. */
+    fun onAdEligibilityChanged(eligible: Boolean) {
+        if (!eligible) interstitialAd = null
+    }
+
+    fun handleHistoryEntry(activity: Activity, onContinue: () -> Unit) {
+        if (navigation.isPresenting) {
+            navigation.request(onContinue)
+            return
+        }
+        if (BillingManager.isPremium || !AdMobRuntime.canShowAds) {
             onContinue()
             return
         }
-
-        val now = SystemClock.elapsedRealtime()
-        val cooldownActive = now - lastShownAt < COOLDOWN_MILLIS
-        show(activity, cooldownActive, onContinue)
-    }
-
-    /**
-     * Handles leaving History. This is intentionally not subject to the normal
-     * entry cooldown because the app currently treats Back as another explicit
-     * ad opportunity, as requested for the app's free version.
-     */
-    fun showOnHistoryBack(activity: Activity, onContinue: () -> Unit) {
-        if (BillingManager.isPremium) {
+        if (activity.isFinishing || activity.isDestroyed) {
             onContinue()
             return
         }
-
-        show(activity, false, onContinue)
-    }
-
-    /** Displays the currently loaded ad, or continues immediately when unavailable. */
-    private fun show(activity: Activity, cooldownActive: Boolean, onContinue: () -> Unit) {
-        // Re-check entitlement immediately before showing an ad so a purchase
-        // made since the previous check is respected.
-        if (BillingManager.isPremium) {
+        if (!cooldown.isEligible(SystemClock.elapsedRealtime())) {
             onContinue()
             return
         }
 
         val ad = interstitialAd
-
-        if (cooldownActive || ad == null) {
+        if (ad == null) {
             onContinue()
             load(activity)
             return
         }
 
-        // Interstitials are single-use. Remove the reference before displaying it.
-        interstitialAd = null
-        lastShownAt = SystemClock.elapsedRealtime()
-
-        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
-            override fun onAdDismissedFullScreenContent() {
-                // Preload the next ad and then continue the user's navigation.
-                load(activity)
-                onContinue()
-            }
-
-            override fun onAdFailedToShowFullScreenContent(adError: AdError) {
-                // Navigation must not get stuck if an ad fails to display.
-                load(activity)
-                onContinue()
-            }
+        // Re-check immediately before display; entitlement or consent may have changed.
+        if (BillingManager.isPremium || !AdMobRuntime.canShowAds) {
+            interstitialAd = null
+            onContinue()
+            return
         }
 
-        ad.show(activity)
+        interstitialAd = null
+        if (!navigation.begin(onContinue)) return
+        presentationActivity = WeakReference(activity)
+        val generation = ++presentationGeneration
+        fallback = Runnable {
+            if (generation == presentationGeneration) navigation.releaseNavigationFallback()
+        }.also { mainHandler.postDelayed(it, NAVIGATION_FALLBACK_MS) }
+
+        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            private fun finish() = finishPresentation(generation, activity)
+
+            override fun onAdDismissedFullScreenContent() = finish()
+
+            override fun onAdFailedToShowFullScreenContent(adError: AdError) = finish()
+        }
+        cooldown.recordShown(SystemClock.elapsedRealtime())
+        try {
+            ad.show(activity)
+        } catch (_: RuntimeException) {
+            finishPresentation(generation, activity)
+        }
+    }
+
+    /** Called by the owning Activity so callbacks cannot retain its destroyed instance. */
+    fun onActivityInterrupted(activity: Activity) {
+        if (presentationActivity.get() !== activity) return
+        presentationGeneration++
+        cancelFallback()
+        presentationActivity.clear()
+        navigation.finishPresentation()
+    }
+
+    private fun finishPresentation(generation: Long, activity: Activity) {
+        if (generation != presentationGeneration || !navigation.isPresenting) return
+        presentationGeneration++
+        cancelFallback()
+        presentationActivity.clear()
+        navigation.finishPresentation()
+        if (!activity.isFinishing && !activity.isDestroyed && AdMobRuntime.canShowAds) load(activity)
+    }
+
+    private fun cancelFallback() {
+        fallback?.let(mainHandler::removeCallbacks)
+        fallback = null
     }
 }

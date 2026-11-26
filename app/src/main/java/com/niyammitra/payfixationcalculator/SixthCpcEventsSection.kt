@@ -52,9 +52,9 @@ data class SixthCpcEventChain(
     val sequence: Int = 0
 )
 
-private val EventBlue = Color(0xFF1769AA)
-private val EventPrimary = Color(0xFF172B4D)
-private val EventSecondary = Color(0xFF5B6B7A)
+
+
+
 
 private fun january2006Date() = Calendar.getInstance().apply { clear(); set(2006, Calendar.JANUARY, 1) }.timeInMillis
 private fun august2008NotificationDate() = Calendar.getInstance().apply { clear(); set(2008, Calendar.AUGUST, 29) }.timeInMillis
@@ -75,9 +75,7 @@ private fun historical7450Minimum(): Int = 13860
 private fun calculate6500Fitment(existingPayInBand: Int): Int = maxOf(existingPayInBand, historical6500Minimum())
 private fun calculate7450Fitment(existingPayInBand: Int): Int = maxOf(existingPayInBand, historical7450Minimum())
 private fun calculateRule13Increment(payInPayBand: Int, gradePay: Int): Pair<Int, Int> {
-    val basic = payInPayBand + gradePay
-    val wholeRupees = floor(basic * 0.03).toInt()
-    val increment = (ceil(wholeRupees / 10.0) * 10.0).toInt()
+    val increment = calculateSixthCpcIncrement(payInPayBand, gradePay)
     return (payInPayBand + increment) to increment
 }
 
@@ -203,33 +201,33 @@ fun SixthCpcEventsSection(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("6th CPC Events", color = EventPrimary, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
-        Text("Add promotion, financial-upgradation or pay-scale events chronologically. The latest result becomes the input for the next event.", color = EventSecondary, fontSize = 12.sp)
+        Text("6th CPC Events", color = MaterialTheme.colorScheme.onBackground, fontSize = 19.sp, fontWeight = FontWeight.ExtraBold)
+        Text("Add promotion, financial-upgradation or pay-scale events chronologically. The latest result becomes the input for the next event.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
 
         events.forEachIndexed { index, chain ->
             val nextIncrement = planNextSixthCpcEventIncrement(chain, july2015Date())
-            EventCard(chain, index, nextIncrement, onDelete = { events = events.take(index) }, onIncrementDeleted = { updatedIncrements -> events = events.toMutableList().also { it[index] = chain.copy(increments = updatedIncrements) } }, onNextIncrement = {
+            EventElevatedCard(chain, index, nextIncrement, onDelete = { events = events.take(index) }, onIncrementDeleted = { updatedIncrements -> events = events.toMutableList().also { it[index] = chain.copy(increments = updatedIncrements) } }, onNextIncrement = {
                 nextIncrement.increment?.let { increment ->
                     events = events.toMutableList().also { it[index] = chain.copy(increments = chain.increments + increment) }
                 }
             }, onAddEvent = { showForm = true })
         }
 
-        if (events.isEmpty()) Button(onClick = { showForm = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(12.dp)) { Text("Add Event", fontWeight = FontWeight.Bold) }
+        if (events.isEmpty()) Button(onClick = { showForm = true }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer), shape = RoundedCornerShape(12.dp)) { Text("Add Event", fontWeight = FontWeight.Bold) }
         if (latest != null && latestDate != null && latestDate >= july2015Date() && onContinueToSeventh != null) {
-            Button(onClick = { onContinueToSeventh(payBand, gradePay, payInBand, latestDate) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(12.dp)) { Text("Continue to 7th CPC", fontWeight = FontWeight.Bold) }
+            Button(onClick = { onContinueToSeventh(payBand, gradePay, payInBand, latestDate) }, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer), shape = RoundedCornerShape(12.dp)) { Text("Continue to 7th CPC", fontWeight = FontWeight.Bold) }
         }
 
         if (showForm) {
-            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+            ElevatedCard(Modifier.fillMaxWidth(), colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp), elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("New 6th CPC Event", color = EventBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-                    Text("Current position: $payBand | Pay in Pay Band ${money(payInBand)} | GP ${money(gradePay)} | Basic ${money(basicPay)}", color = EventSecondary, fontSize = 12.sp)
-                    OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(eventDate?.let(::dateText) ?: "Select Event Date") }
+                    Text("New 6th CPC Event", color = MaterialTheme.colorScheme.primary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                    Text("Current position: $payBand | Pay in Pay Band ${money(payInBand)} | GP ${money(gradePay)} | Basic ${money(basicPay)}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                    ElevatedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(eventDate?.let(::dateText) ?: "Select Event Date") }
                     if (eventDate != null && !eventDateInRange) {
                         Text(
                             "Event date must be on or after the current 6th CPC position and on or before ${latestAllowedEventDate?.let(::dateText) ?: "the end of the 6th CPC period"}.",
-                            color = Color(0xFFC62828), fontSize = 12.sp
+                            color = MaterialTheme.colorScheme.error, fontSize = 12.sp
                         )
                     }
 
@@ -238,54 +236,79 @@ fun SixthCpcEventsSection(
                     EventRadio("Pay Scale Upgradation / Revision", eventKind == SixthCpcEventKind.PAY_SCALE_UPGRADATION) { eventKind = SixthCpcEventKind.PAY_SCALE_UPGRADATION; targetGp = null; targetBand = null }
 
                     if (eventKind == SixthCpcEventKind.FINANCIAL_UPGRADATION && eventDate != null) {
-                        Text(if (financialScheme == SixthCpcFinancialUpgradation.ACP) "ACP — applicable up to 31 August 2008" else "MACP — applicable from 01 September 2008", color = EventBlue, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text(if (financialScheme == SixthCpcFinancialUpgradation.ACP) "ACP — applicable up to 31 August 2008" else "MACP — applicable from 01 September 2008", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
 
                     if (eventKind == SixthCpcEventKind.PAY_SCALE_UPGRADATION) {
-                        Box(Modifier.fillMaxWidth()) {
-                            OutlinedButton(onClick = { bandMenu = true }, modifier = Modifier.fillMaxWidth()) { Text(targetBand?.title ?: "Select upgraded / revised pay band", Modifier.weight(1f)); Text("▼") }
-                            DropdownMenu(expanded = bandMenu, onDismissRequest = { bandMenu = false }) { SixthToSeventhCpcData.payBands.forEach { band -> DropdownMenuItem(text = { Text(band.title) }, onClick = { targetBand = band; targetGp = null; bandMenu = false }) } }
+                        ExposedDropdownMenuBox(expanded = bandMenu, onExpandedChange = { bandMenu = it }, modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = targetBand?.title ?: "Select upgraded / revised pay band",
+                                onValueChange = {},
+                                readOnly = true,
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = bandMenu) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                            )
+                            ExposedDropdownMenu(expanded = bandMenu, onDismissRequest = { bandMenu = false }) { SixthToSeventhCpcData.payBands.forEach { band -> DropdownMenuItem(text = { Text(band.title) }, onClick = { targetBand = band; targetGp = null; bandMenu = false }) } }
                         }
                         targetBand?.let { band ->
-                            Box(Modifier.fillMaxWidth()) {
-                                OutlinedButton(onClick = { gpMenu = true }, modifier = Modifier.fillMaxWidth()) { Text(targetGp?.let(::money) ?: "Select Grade Pay", Modifier.weight(1f)); Text("▼") }
-                                DropdownMenu(expanded = gpMenu, onDismissRequest = { gpMenu = false }) { band.gradePays.forEach { gp -> DropdownMenuItem(text = { Text(money(gp)) }, onClick = { targetGp = gp; gpMenu = false }) } }
+                            ExposedDropdownMenuBox(expanded = gpMenu, onExpandedChange = { gpMenu = it }, modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = targetGp?.let(::money) ?: "Select Grade Pay",
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = gpMenu) },
+                                    modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                                )
+                                ExposedDropdownMenu(expanded = gpMenu, onDismissRequest = { gpMenu = false }) { band.gradePays.forEach { gp -> DropdownMenuItem(text = { Text(money(gp)) }, onClick = { targetGp = gp; gpMenu = false }) } }
                             }
                         }
                     } else {
-                        Box(Modifier.fillMaxWidth()) {
-                            OutlinedButton(onClick = { gpMenu = true }, modifier = Modifier.fillMaxWidth()) { Text(targetGp?.let(::money) ?: "Select Grade Pay", Modifier.weight(1f)); Text("▼") }
-                            DropdownMenu(expanded = gpMenu, onDismissRequest = { gpMenu = false }) { SixthToSeventhCpcData.payBands.flatMap { it.gradePays }.distinct().filter { it > gradePay }.forEach { gp -> DropdownMenuItem(text = { Text(money(gp)) }, onClick = { targetGp = gp; gpMenu = false }) } }
+                        ExposedDropdownMenuBox(expanded = gpMenu, onExpandedChange = { gpMenu = it }, modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = targetGp?.let(::money) ?: "Select Grade Pay",
+                                onValueChange = {},
+                                readOnly = true,
+                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = gpMenu) },
+                                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                            )
+                            ExposedDropdownMenu(expanded = gpMenu, onDismissRequest = { gpMenu = false }) { SixthToSeventhCpcData.payBands.flatMap { it.gradePays }.distinct().filter { it > gradePay }.forEach { gp -> DropdownMenuItem(text = { Text(money(gp)) }, onClick = { targetGp = gp; gpMenu = false }) } }
                         }
                     }
 
                     if (!isInterim && eventKind != SixthCpcEventKind.PAY_SCALE_UPGRADATION) {
-                        Text("Fixation option", color = EventPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                        EventRadio("From Date of Event", fixationOption == SixthCpcFixationOption.FROM_EVENT_DATE) { fixationOption = SixthCpcFixationOption.FROM_EVENT_DATE }
-                        EventRadio("From Date of DNI (1 July)", fixationOption == SixthCpcFixationOption.FROM_DNI) { fixationOption = SixthCpcFixationOption.FROM_DNI }
+                        OutlinedCard(Modifier.fillMaxWidth(), colors = CardDefaults.outlinedCardColors(containerColor = Color.Transparent)) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Fixation option", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                EventRadio("From Date of Event", fixationOption == SixthCpcFixationOption.FROM_EVENT_DATE) { fixationOption = SixthCpcFixationOption.FROM_EVENT_DATE }
+                                EventRadio("From Date of DNI (1 July)", fixationOption == SixthCpcFixationOption.FROM_DNI) { fixationOption = SixthCpcFixationOption.FROM_DNI }
+                            }
+                        }
                     }
 
                     if (eventKind == SixthCpcEventKind.PAY_SCALE_UPGRADATION) {
-                        Surface(Modifier.fillMaxWidth(), color = EventBlue.copy(alpha = .08f), shape = RoundedCornerShape(14.dp)) {
+                        Surface(Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.primaryContainer, shape = RoundedCornerShape(14.dp)) {
                             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("Historical / scale-upgradation route", color = EventBlue, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
+                                Text("Historical / scale-upgradation route", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold, fontSize = 13.sp)
                                 EventRadio("15.09.2006: ₹5500–9000 → ₹6500–10500", historicalRoute == HistoricalSixthCpcRoute.SCALE_6500_10500_FROM_5500_9000) { historicalRoute = HistoricalSixthCpcRoute.SCALE_6500_10500_FROM_5500_9000 }
                                 EventRadio("13.11.2009: ₹6500–10500 → ₹7450–11500 / GP ₹4600", historicalRoute == HistoricalSixthCpcRoute.SCALE_7450_11500_FROM_6500_10500) { historicalRoute = HistoricalSixthCpcRoute.SCALE_7450_11500_FROM_6500_10500 }
                                 EventRadio("Other historical event: 6th CPC Rule 13", historicalRoute == HistoricalSixthCpcRoute.RULE_13_IN_SIXTH_CPC) { historicalRoute = HistoricalSixthCpcRoute.RULE_13_IN_SIXTH_CPC }
                                 when (historicalRoute) {
                                     HistoricalSixthCpcRoute.SCALE_6500_10500_FROM_5500_9000 -> {
-                                        Text("For the ₹10,230 Pay-in-Pay-Band case, use the ₹6500–10500 fitment-table minimum of ₹12,090. Do NOT multiply ₹10,230 by 1.86 again.", color = EventSecondary, fontSize = 12.sp)
-                                        Text("Expected: ₹10,230 + GP ₹4,200 → ₹12,090 + GP ₹4,200 = ₹16,290.", color = EventPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Text("For the ₹10,230 Pay-in-Pay-Band case, use the ₹6500–10500 fitment-table minimum of ₹12,090. Do NOT multiply ₹10,230 by 1.86 again.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                        Text("Expected: ₹10,230 + GP ₹4,200 → ₹12,090 + GP ₹4,200 = ₹16,290.", color = MaterialTheme.colorScheme.onBackground, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     }
                                     HistoricalSixthCpcRoute.SCALE_7450_11500_FROM_6500_10500 -> {
-                                        Text("Use the ₹7450–11500 fitment-table minimum of ₹13,860 in PB-2.", color = EventSecondary, fontSize = 12.sp)
-                                        Text("Expected minimum: ₹13,860 + GP ₹4,600 = ₹18,460.", color = EventPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Text("Use the ₹7450–11500 fitment-table minimum of ₹13,860 in PB-2.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                                        Text("Expected minimum: ₹13,860 + GP ₹4,600 = ₹18,460.", color = MaterialTheme.colorScheme.onBackground, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     }
                                     HistoricalSixthCpcRoute.RULE_13_IN_SIXTH_CPC -> {
                                         val raw = basicPay * .03
                                         val whole = floor(raw).toInt()
-                                        val increment = (ceil(whole / 10.0) * 10.0).toInt()
-                                        Text("Rule 13: 3% of Basic = ${String.format(Locale.US, "%.1f", raw)} → decimal ignored = ₹$whole → fixation increment = ₹$increment.", color = EventSecondary, fontSize = 12.sp)
+                                        val increment = calculateSixthCpcIncrement(payInBand, gradePay)
+                                        Text("Rule 13: 3% of Basic = ${String.format(Locale.US, "%.1f", raw)} → decimal ignored = ₹$whole → fixation increment = ₹$increment.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                                     }
                                 }
                             }
@@ -347,7 +370,7 @@ fun SixthCpcEventsSection(
                         targetGp = null
                         eventDate = null
                         fifthBasicText = ""
-                    }, enabled = canSave, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = EventBlue), shape = RoundedCornerShape(12.dp)) { Text("Save Event", fontWeight = FontWeight.Bold) }
+                    }, enabled = canSave, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer), shape = RoundedCornerShape(12.dp)) { Text("Save Event", fontWeight = FontWeight.Bold) }
                 }
             }
         }
@@ -380,55 +403,55 @@ internal fun planNextSixthCpcEventIncrement(chain: SixthCpcEventChain, cutoffDat
 }
 
 @Composable
-private fun EventCard(chain: SixthCpcEventChain, index: Int, nextIncrement: SixthCpcNextIncrementPlan, onDelete: () -> Unit, onIncrementDeleted: (List<SixthCpcEventIncrement>) -> Unit, onNextIncrement: () -> Unit, onAddEvent: () -> Unit) {
-    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(Color.White), shape = RoundedCornerShape(18.dp)) {
+private fun EventElevatedCard(chain: SixthCpcEventChain, index: Int, nextIncrement: SixthCpcNextIncrementPlan, onDelete: () -> Unit, onIncrementDeleted: (List<SixthCpcEventIncrement>) -> Unit, onNextIncrement: () -> Unit, onAddEvent: () -> Unit) {
+    ElevatedCard(Modifier.fillMaxWidth(), colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp), elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Event ${index + 1}: ${when (chain.kind) { SixthCpcEventKind.PROMOTION -> "Promotion"; SixthCpcEventKind.FINANCIAL_UPGRADATION -> "Financial Upgradation"; SixthCpcEventKind.PAY_SCALE_UPGRADATION -> "Pay Scale Upgradation / Revision" }}", Modifier.weight(1f), color = EventBlue, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                Text("Event ${index + 1}: ${when (chain.kind) { SixthCpcEventKind.PROMOTION -> "Promotion"; SixthCpcEventKind.FINANCIAL_UPGRADATION -> "Financial Upgradation"; SixthCpcEventKind.PAY_SCALE_UPGRADATION -> "Pay Scale Upgradation / Revision" }}", Modifier.weight(1f), color = MaterialTheme.colorScheme.primary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
                 TextButton(onClick = onDelete) { Text("Delete") }
             }
             chain.result?.let { r ->
-                Text("Date: ${dateText(r.eventDate)}", color = EventPrimary, fontWeight = FontWeight.Bold)
-                Text("Fixation option: ${if (r.fixationOption == SixthCpcFixationOption.FROM_DNI) "From DNI" else "From event date"}", color = EventSecondary, fontSize = 12.sp)
+                Text("Date: ${dateText(r.eventDate)}", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold)
+                Text("Fixation option: ${if (r.fixationOption == SixthCpcFixationOption.FROM_DNI) "From DNI" else "From event date"}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 if (r.fixationOption == SixthCpcFixationOption.FROM_DNI && r.fixationEffectiveDate != r.eventDate) {
-                    Text("DNI fixation effective: ${dateText(r.fixationEffectiveDate)}", color = EventPrimary, fontWeight = FontWeight.Bold)
+                    Text("DNI fixation effective: ${dateText(r.fixationEffectiveDate)}", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold)
                 }
                 RowValue("Old Pay in Pay Band", r.oldPayInPayBand); RowValue("Old Grade Pay", r.oldGradePay); RowValue("Fixation Increment(s)", r.increment)
                 RowValue(if (r.fixationEffectiveDate == r.eventDate) "New Pay in Pay Band" else "Pay in Pay Band after DNI fixation", r.newPayInPayBand); RowValue("New Grade Pay", r.newGradePay); RowValue("New Basic Pay", r.revisedBasicPay)
-                Text("Pay Band: ${r.newPayBand}", color = EventSecondary, fontSize = 12.sp); Text("Next DNI: ${dateText(r.nextIncrementDate)}", color = EventSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Pay Band: ${r.newPayBand}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp); Text("Next DNI: ${dateText(r.nextIncrementDate)}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             chain.scaleUpgrade?.let { r ->
-                Text("Date: ${dateText(r.eventDate)}", color = EventPrimary, fontWeight = FontWeight.Bold)
-                Text(when (r.historicalRoute) { HistoricalSixthCpcRoute.SCALE_6500_10500_FROM_5500_9000 -> "Historical — 5500–9000 to 6500–10500"; HistoricalSixthCpcRoute.SCALE_7450_11500_FROM_6500_10500 -> "Historical — 6500–10500 to 7450–11500 / GP 4600"; HistoricalSixthCpcRoute.RULE_13_IN_SIXTH_CPC -> "Historical — 6th CPC Rule 13"; null -> "Ordinary scale placement" }, color = EventBlue, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
+                Text("Date: ${dateText(r.eventDate)}", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold)
+                Text(when (r.historicalRoute) { HistoricalSixthCpcRoute.SCALE_6500_10500_FROM_5500_9000 -> "Historical — 5500–9000 to 6500–10500"; HistoricalSixthCpcRoute.SCALE_7450_11500_FROM_6500_10500 -> "Historical — 6500–10500 to 7450–11500 / GP 4600"; HistoricalSixthCpcRoute.RULE_13_IN_SIXTH_CPC -> "Historical — 6th CPC Rule 13"; null -> "Ordinary scale placement" }, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.ExtraBold, fontSize = 12.sp)
                 r.sourcePreRevisedBasicPay?.let { RowValue("Source 5th CPC basic", it) }
                 r.fixationIncrement?.takeIf { it > 0 }?.let { RowValue("Fixation Increment", it) }
                 RowValue("Old Pay in Pay Band", r.oldPayInPayBand); RowValue("Old Grade Pay", r.oldGradePay); RowValue("Placed Pay in Pay Band", r.newPayInPayBand); RowValue("New Grade Pay", r.newGradePay); RowValue("Revised Basic Pay", r.revisedBasicPay)
-                Text("Pay Band: ${r.newPayBand}", color = EventSecondary, fontSize = 12.sp); Text("Next DNI: ${dateText(r.nextIncrementDate)}", color = EventSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text("Pay Band: ${r.newPayBand}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp); Text("Next DNI: ${dateText(r.nextIncrementDate)}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
             chain.increments.forEachIndexed { i, inc ->
                 Surface(
                     Modifier.fillMaxWidth(),
-                    color = EventBlue.copy(alpha = .06f),
+                    color = MaterialTheme.colorScheme.primaryContainer,
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Row(Modifier.fillMaxWidth().padding(14.dp)) {
                         Column(Modifier.weight(1f)) {
                             Text(
                                 "Increment " + (i + 1),
-                                color = EventSecondary,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 "Date: " + dateText(inc.date),
-                                color = EventPrimary,
+                                color = MaterialTheme.colorScheme.onBackground,
                                 fontSize = 13.sp
                             )
                             Text(
                                 "Pay in Pay Band: " + money(inc.payInPayBand) +
                                     " + GP " + money(inc.gradePay) +
                                     " = " + money(inc.payInPayBand + inc.gradePay),
-                                color = EventBlue,
+                                color = MaterialTheme.colorScheme.primary,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.ExtraBold
                             )
@@ -451,16 +474,16 @@ private fun EventCard(chain: SixthCpcEventChain, index: Int, nextIncrement: Sixt
                 onClick = onNextIncrement,
                 enabled = nextIncrement.increment != null,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = EventBlue),
+                colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer),
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Text("Next Increment", fontWeight = FontWeight.Bold)
             }
-            nextIncrement.unavailableReason?.let { Text(it, color = EventSecondary, fontSize = 12.sp) }
+            nextIncrement.unavailableReason?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp) }
             Button(
                 onClick = onAddEvent,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = EventBlue),
+                colors = ButtonDefaults.filledTonalButtonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer),
                 shape = RoundedCornerShape(10.dp)
             ) {
                 Text("Add Another Event", fontWeight = FontWeight.Bold)
@@ -475,10 +498,10 @@ private fun EventCard(chain: SixthCpcEventChain, index: Int, nextIncrement: Sixt
         verticalAlignment = Alignment.Top
     ) {
         RadioButton(selected = selected, onClick = null)
-        Text(label, Modifier.padding(top = 12.dp), color = EventPrimary, fontSize = 13.sp)
+        Text(label, Modifier.padding(top = 12.dp), color = MaterialTheme.colorScheme.onBackground, fontSize = 13.sp)
     }
 }
-@Composable private fun RowValue(label: String, value: Int) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(label, color = EventSecondary, fontSize = 12.sp); Text(money(value), color = EventPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp) } }
+@Composable private fun RowValue(label: String, value: Int) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp); Text(money(value), color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Bold, fontSize = 13.sp) } }
 private fun money(value: Int): String = NumberFormat.getIntegerInstance(Locale("en", "IN")).format(value).let { "₹$it" }
 private fun dateText(value: Long): String = SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(value))
 private fun nextJuly(date: Long): Long { val c = Calendar.getInstance().apply { timeInMillis = date }; val year = c.get(Calendar.YEAR); val july = Calendar.getInstance().apply { clear(); set(year, Calendar.JULY, 1) }; return if (date <= july.timeInMillis) july.timeInMillis else Calendar.getInstance().apply { clear(); set(year + 1, Calendar.JULY, 1) }.timeInMillis }

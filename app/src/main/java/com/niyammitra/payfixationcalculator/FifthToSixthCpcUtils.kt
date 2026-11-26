@@ -1,7 +1,6 @@
 package com.niyammitra.payfixationcalculator
 
 import kotlin.math.ceil
-import kotlin.math.floor
 
 data class FifthCpcScale(val title: String, val payBand: String, val payBandMinimum: Int, val payBandMaximum: Int, val gradePay: Int)
 data class FifthToSixthResult(val scale: FifthCpcScale, val existingBasicPay: Int, val multipliedPay: Double, val roundedPay: Int, val payInPayBand: Int, val gradePay: Int, val revisedBasicPay: Int, val conversionDate: String, val nextIncrementDate: String, val ruleBasis: List<String>)
@@ -64,10 +63,7 @@ fun calculateFifthToSixthCpc(existingBasicPay: Int, scale: FifthCpcScale): Fifth
  */
 fun calculateSixthCpcNextIncrement(payInPayBand: Int, gradePay: Int, payBandMaximum: Int): Int? {
     if (payInPayBand >= payBandMaximum) return null
-    val incrementBase = payInPayBand + gradePay
-    val threePercent = incrementBase * 0.03
-    val wholeRupeeIncrement = floor(threePercent).toInt()
-    val increment = (ceil(wholeRupeeIncrement / 10.0) * 10.0).toInt()
+    val increment = calculateSixthCpcIncrement(payInPayBand, gradePay)
     val nextPayInBand = minOf(payInPayBand + increment, payBandMaximum)
     return if (nextPayInBand > payInPayBand) nextPayInBand + gradePay else null
 }

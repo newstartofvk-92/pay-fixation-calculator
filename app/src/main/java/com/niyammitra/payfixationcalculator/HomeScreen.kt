@@ -27,6 +27,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Card
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -46,11 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 
-private val HomeNiyamBlue = Color(0xFF1769AA)
-private val HomeNiyamHeaderBlue = Color(0xFF1976B8)
-private val HomeNiyamBackground = Color(0xFFF7FAFC)
-private val HomeNiyamTextPrimary = Color(0xFF172B4D)
-private val HomeNiyamTextSecondary = Color(0xFF5B6B7A)
+
 
 private enum class PayFixationMode {
     COMPLETE_JOURNEY,
@@ -441,7 +439,7 @@ fun V2AppScreen() {
                     ))
                     cpcHistory = CpcHistoryStore.getAll(context)
                     android.widget.Toast.makeText(context, "Pay fixation saved to history", android.widget.Toast.LENGTH_SHORT).show()
-                    (context as? android.app.Activity)?.let { HistoryInterstitialAd.showIfDue(it) {} }
+                    (context as? android.app.Activity)?.let { HistoryInterstitialAd.handleHistoryEntry(it) {} }
                 }
             ) }
         }
@@ -461,7 +459,7 @@ private fun PayFixationModeSelectionScreen(
     onAbout: () -> Unit
 ) {
         Column(
-            modifier = Modifier.fillMaxSize().background(HomeNiyamBackground),
+            modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         HomeHeader(onHistory = onHistory, onAbout = onAbout)
@@ -476,13 +474,13 @@ private fun PayFixationModeSelectionScreen(
             }
             Text(
                 "Pay Fixation Calculator",
-                color = HomeNiyamTextPrimary,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.ExtraBold
             )
             Text(
                 "Choose how you want to calculate or convert pay.",
-                color = HomeNiyamTextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = 14.sp
             )
 
@@ -518,11 +516,11 @@ private fun PayFixationModeCard(
     badge: String,
     onClick: () -> Unit
 ) {
-    Card(
+    ElevatedCard(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(20.dp),
@@ -530,14 +528,14 @@ private fun PayFixationModeCard(
         ) {
             Box(
                 modifier = Modifier.size(58.dp).background(
-                    HomeNiyamBlue.copy(alpha = 0.10f),
+                    MaterialTheme.colorScheme.primaryContainer,
                     RoundedCornerShape(15.dp)
                 ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     badge,
-                    color = HomeNiyamBlue,
+                    color = MaterialTheme.colorScheme.primary,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
@@ -546,14 +544,14 @@ private fun PayFixationModeCard(
             Column(Modifier.weight(1f)) {
                 Text(
                     title,
-                    color = HomeNiyamTextPrimary,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.ExtraBold
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
                     description,
-                    color = HomeNiyamTextSecondary,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = 13.sp
                 )
             }
@@ -573,7 +571,7 @@ private fun PayFixationModeJourneyEntryScreen(
 ) {
     BackHandler(onBack = onHome)
     Column(
-        modifier = Modifier.fillMaxSize().background(HomeNiyamBackground),
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         HomeHeader(onHistory = onHistory, onAbout = onAbout, onHome = onHome)
@@ -582,8 +580,8 @@ private fun PayFixationModeJourneyEntryScreen(
                 .navigationBarsPadding().padding(horizontal = 20.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Complete Pay Fixation Journey", color = HomeNiyamTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-            Text("Start with the date of your choice. The applicable CPC will be detected automatically.", color = HomeNiyamTextSecondary, fontSize = 14.sp)
+            Text("Complete Pay Fixation Journey", color = MaterialTheme.colorScheme.onBackground, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+            Text("Start with the date of your choice. The applicable CPC will be detected automatically.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
 
             PayFixationModeCard(
                 title = "Start from a Date",
@@ -599,9 +597,9 @@ private fun PayFixationModeJourneyEntryScreen(
                     colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Detected starting CPC", color = HomeNiyamTextSecondary, fontSize = 13.sp)
-                        Text(detectedCommission.displayName(), color = HomeNiyamBlue, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
-                        Text("The existing CPC workflow will be opened next.", color = HomeNiyamTextSecondary, fontSize = 13.sp)
+                        Text("Detected starting CPC", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                        Text(detectedCommission.displayName(), color = MaterialTheme.colorScheme.primary, fontSize = 21.sp, fontWeight = FontWeight.ExtraBold)
+                        Text("The existing CPC workflow will be opened next.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
                     }
                 }
             }
@@ -612,11 +610,11 @@ private fun PayFixationModeJourneyEntryScreen(
 
 @Composable
 private fun HomeFixationSelectionScreen(onSelected: (FixationType) -> Unit, onHistory: () -> Unit, onAbout: () -> Unit, onHome: (() -> Unit)? = null) {
-    Column(modifier = Modifier.fillMaxSize().background(HomeNiyamBackground), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), horizontalAlignment = Alignment.CenterHorizontally) {
         HomeHeader(onHistory = onHistory, onAbout = onAbout, onHome = onHome)
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text("Select Fixation Type", color = HomeNiyamTextPrimary, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-            Text("Choose the pay-revision or pay-fixation workflow you want to work out.", color = HomeNiyamTextSecondary, fontSize = 14.sp)
+            Text("Select Fixation Type", color = MaterialTheme.colorScheme.onBackground, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+            Text("Choose the pay-revision or pay-fixation workflow you want to work out.", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp)
             FixationType.values().forEach { type -> FixationTypeCard(type = type, enabled = true, onClick = { onSelected(type) }) }
         }
         PayFixationBannerAd()
@@ -625,11 +623,11 @@ private fun HomeFixationSelectionScreen(onSelected: (FixationType) -> Unit, onHi
 
 @Composable
 private fun FixationTypeCard(type: FixationType, enabled: Boolean, onClick: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick), shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (enabled) Color.White else Color(0xFFF0F2F5)), elevation = CardDefaults.cardElevation(defaultElevation = if (enabled) 2.dp else 0.dp)) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, onClick = onClick), shape = RoundedCornerShape(18.dp), colors = CardDefaults.elevatedCardColors(containerColor = if (enabled) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant), elevation = CardDefaults.elevatedCardElevation(defaultElevation = if (enabled) 2.dp else 0.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.size(46.dp).background(if (enabled) HomeNiyamBlue.copy(alpha = 0.10f) else Color(0xFFE1E4E8), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Text(when (type) { FixationType.FOURTH_TO_FIFTH -> "4→5"; FixationType.FIFTH_TO_SIXTH -> "5→6"; FixationType.SIXTH_TO_SEVENTH -> "6→7"; FixationType.SEVENTH_CPC -> "7th" }, color = if (enabled) HomeNiyamBlue else HomeNiyamTextSecondary, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold) }
+            Box(modifier = Modifier.size(46.dp).background(if (enabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Text(when (type) { FixationType.FOURTH_TO_FIFTH -> "4→5"; FixationType.FIFTH_TO_SIXTH -> "5→6"; FixationType.SIXTH_TO_SEVENTH -> "6→7"; FixationType.SEVENTH_CPC -> "7th" }, color = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold) }
             Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) { Text(type.title, color = if (enabled) HomeNiyamTextPrimary else HomeNiyamTextSecondary, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold); Spacer(Modifier.height(4.dp)); Text(type.description, color = HomeNiyamTextSecondary, fontSize = 13.sp) }
+            Column(Modifier.weight(1f)) { Text(type.title, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold); Spacer(Modifier.height(4.dp)); Text(type.description, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp) }
         }
     }
 }
@@ -650,10 +648,10 @@ private fun HomeHeader(onHistory: (() -> Unit)? = null, onAbout: (() -> Unit)? =
 
 @Composable
 private fun HistoryHubScreen(onBack: () -> Unit, onLegacy: () -> Unit, onCpc: () -> Unit, onHome: (() -> Unit)? = null) {
-    Column(Modifier.fillMaxSize().background(HomeNiyamBackground)) {
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         PayFixationAppHeader("History", onBack = onBack, onHome = onHome)
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("Choose saved calculations", color = HomeNiyamTextSecondary)
+            Text("Choose saved calculations", color = MaterialTheme.colorScheme.onSurfaceVariant)
             androidx.compose.material3.OutlinedButton(onClick = onLegacy, modifier = Modifier.fillMaxWidth()) { Text("7th CPC Pay Fixation History") }
             androidx.compose.material3.OutlinedButton(onClick = onCpc, modifier = Modifier.fillMaxWidth()) { Text("CPC Journeys & Conversions") }
         }

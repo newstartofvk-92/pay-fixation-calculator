@@ -35,9 +35,9 @@ private data class FifthCpcTimelineItem(
     val eventDate: Long? = null
 )
 
-private val FifthHistoricalBlue = Color(0xFF1769AA)
-private val FifthHistoricalText = Color(0xFF172B4D)
-private val FifthHistoricalSecondary = Color(0xFF5B6B7A)
+
+
+
 
 @Composable
 fun FifthCpcHistoricalIncrementSection(
@@ -135,26 +135,26 @@ fun FifthCpcHistoricalIncrementSection(
     val canAdd = nextPay != null && nextDate != null && nextDate <= endDate
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Card(
+        ElevatedCard(
             Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(Color.White),
+            colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(18.dp)
         ) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("5th CPC Next Increment", color = FifthHistoricalBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                Text("5th CPC Next Increment", color = MaterialTheme.colorScheme.primary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                 Text(
                     "Continue the converted 5th CPC pay from 01 January 1996. Each increment moves to the next stage of the applicable 5th CPC scale.",
-                    color = FifthHistoricalSecondary, fontSize = 12.sp
+                    color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp
                 )
-                Text("Initial 5th CPC Scale: " + revisedScale, color = FifthHistoricalSecondary, fontSize = 13.sp)
-                Text("Active 5th CPC Scale: " + (currentScale?.title ?: "Not available"), color = FifthHistoricalText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                Text("Current 5th CPC Basic Pay: " + formatFifthHistoricalCurrency(currentPay), color = FifthHistoricalText, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                Text("Current effective date: " + formatFifthHistoricalDate(currentDate), color = FifthHistoricalSecondary, fontSize = 12.sp)
-                Text("Current DNI / Next Increment: " + (currentDni?.let(::formatFifthHistoricalDate) ?: "Not available"), color = FifthHistoricalSecondary, fontSize = 12.sp)
+                Text("Initial 5th CPC Scale: " + revisedScale, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+                Text("Active 5th CPC Scale: " + (currentScale?.title ?: "Not available"), color = MaterialTheme.colorScheme.onBackground, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("Current 5th CPC Basic Pay: " + formatFifthHistoricalCurrency(currentPay), color = MaterialTheme.colorScheme.onBackground, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text("Current effective date: " + formatFifthHistoricalDate(currentDate), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
+                Text("Current DNI / Next Increment: " + (currentDni?.let(::formatFifthHistoricalDate) ?: "Not available"), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                 if (nextDate != null && nextPay != null && nextDate <= endDate) {
                     Text(
                         "Next increment: " + formatFifthHistoricalDate(nextDate) + " → " + formatFifthHistoricalCurrency(nextPay),
-                        color = FifthHistoricalBlue, fontSize = 13.sp, fontWeight = FontWeight.Bold
+                        color = MaterialTheme.colorScheme.primary, fontSize = 13.sp, fontWeight = FontWeight.Bold
                     )
                 }
             }
@@ -195,22 +195,22 @@ fun FifthCpcHistoricalIncrementSection(
                 .thenBy { if (sequenceIntegrity == CpcSequenceIntegrity.ORIGINAL) it.sequence else if (it.kind == "event") 0 else 1 }
                 .thenBy { it.sequence })
 
-            Card(
+            ElevatedCard(
                 Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(Color.White),
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(18.dp)
             ) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text(
                         "5th CPC Pay Progression",
-                        color = FifthHistoricalBlue,
+                        color = MaterialTheme.colorScheme.primary,
                         fontSize = 17.sp,
                         fontWeight = FontWeight.ExtraBold
                     )
                     if (sequenceIntegrity == CpcSequenceIntegrity.INFERRED) {
                         Text(
                             "This saved journey predates shared event sequencing. The original order of same-date events and increments could not be recovered.",
-                            color = FifthHistoricalSecondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.sp
                         )
                     }
@@ -218,72 +218,72 @@ fun FifthCpcHistoricalIncrementSection(
                     timelineItems.forEach { item ->
                         Surface(
                             Modifier.fillMaxWidth(),
-                            color = FifthHistoricalBlue.copy(alpha = .06f),
+                            color = MaterialTheme.colorScheme.primaryContainer,
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Row(Modifier.fillMaxWidth().padding(14.dp)) {
                                 Column(Modifier.weight(1f)) {
                                     if (item.kind == "starting") {
-                                        Text("Starting position", color = FifthHistoricalSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                        Text("Effective date: ${formatFifthHistoricalDate(item.date)}", color = FifthHistoricalText, fontSize = 13.sp)
-                                        Text("Scale: ${initialScale?.title ?: revisedScale}", color = FifthHistoricalText, fontSize = 13.sp)
-                                        Text("5th CPC Basic Pay: ${formatFifthHistoricalCurrency(item.pay)}", color = FifthHistoricalBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                                        Text("Starting position", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Text("Effective date: ${formatFifthHistoricalDate(item.date)}", color = MaterialTheme.colorScheme.onBackground, fontSize = 13.sp)
+                                        Text("Scale: ${initialScale?.title ?: revisedScale}", color = MaterialTheme.colorScheme.onBackground, fontSize = 13.sp)
+                                        Text("5th CPC Basic Pay: ${formatFifthHistoricalCurrency(item.pay)}", color = MaterialTheme.colorScheme.primary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                                     } else if (item.kind == "om") {
-                                        Text("Special increment under O.M. dated 19 March 2012", color = FifthHistoricalSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                        Text("Effective date: ${formatFifthHistoricalDate(item.date)}", color = FifthHistoricalText, fontSize = 13.sp)
+                                        Text("Special increment under O.M. dated 19 March 2012", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Text("Effective date: ${formatFifthHistoricalDate(item.date)}", color = MaterialTheme.colorScheme.onBackground, fontSize = 13.sp)
                                         omAdjustment?.let { adjustment ->
-                                            Text("Normal DNI: ${formatFifthHistoricalDate(adjustment.normalDniMillis)}", color = FifthHistoricalText, fontSize = 12.sp)
-                                            Text("Pay before: ${formatFifthHistoricalCurrency(adjustment.basicPayBefore)} · Special increment: ${formatFifthHistoricalCurrency(adjustment.incrementAmount)}", color = FifthHistoricalText, fontSize = 12.sp)
-                                            Text("Next revised-pay increment: ${formatFifthHistoricalDate(adjustment.nextRevisedIncrementDateMillis)}", color = FifthHistoricalText, fontSize = 12.sp)
+                                            Text("Normal DNI: ${formatFifthHistoricalDate(adjustment.normalDniMillis)}", color = MaterialTheme.colorScheme.onBackground, fontSize = 12.sp)
+                                            Text("Pay before: ${formatFifthHistoricalCurrency(adjustment.basicPayBefore)} · Special increment: ${formatFifthHistoricalCurrency(adjustment.incrementAmount)}", color = MaterialTheme.colorScheme.onBackground, fontSize = 12.sp)
+                                            Text("Next revised-pay increment: ${formatFifthHistoricalDate(adjustment.nextRevisedIncrementDateMillis)}", color = MaterialTheme.colorScheme.onBackground, fontSize = 12.sp)
                                         }
-                                        Text("Adjusted 5th CPC Basic Pay: ${formatFifthHistoricalCurrency(item.pay)}", color = FifthHistoricalBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                                        Text("Adjusted 5th CPC Basic Pay: ${formatFifthHistoricalCurrency(item.pay)}", color = MaterialTheme.colorScheme.primary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                                     } else if (item.kind == "final") {
-                                        Text("Final 5th CPC position / 6th CPC conversion", color = FifthHistoricalSecondary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                        Text("Effective date: ${formatFifthHistoricalDate(item.date)}", color = FifthHistoricalText, fontSize = 13.sp)
-                                        Text("5th CPC Basic Pay: ${formatFifthHistoricalCurrency(item.pay)}", color = FifthHistoricalBlue, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                                        Text("Final 5th CPC position / 6th CPC conversion", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Text("Effective date: ${formatFifthHistoricalDate(item.date)}", color = MaterialTheme.colorScheme.onBackground, fontSize = 13.sp)
+                                        Text("5th CPC Basic Pay: ${formatFifthHistoricalCurrency(item.pay)}", color = MaterialTheme.colorScheme.primary, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
                                     } else if (item.kind == "event") {
                                         Text(
                                             item.eventType + " Event",
-                                            color = FifthHistoricalSecondary,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
                                             "Effective date: " + formatFifthHistoricalDate(item.date),
-                                            color = FifthHistoricalText,
+                                            color = MaterialTheme.colorScheme.onBackground,
                                             fontSize = 13.sp
                                         )
                                         item.eventDate?.takeIf { it != item.date }?.let { originalDate ->
-                                            Text("Event date: ${formatFifthHistoricalDate(originalDate)}", color = FifthHistoricalSecondary, fontSize = 12.sp)
+                                            Text("Event date: ${formatFifthHistoricalDate(originalDate)}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp)
                                         }
                                         item.scale?.let {
                                             Text(
                                                 "Scale: " + it,
-                                                color = FifthHistoricalText,
+                                                color = MaterialTheme.colorScheme.onBackground,
                                                 fontSize = 13.sp
                                             )
                                         }
                                         Text(
                                             "Fixed Basic Pay: " + formatFifthHistoricalCurrency(item.pay),
-                                            color = FifthHistoricalBlue,
+                                            color = MaterialTheme.colorScheme.primary,
                                             fontSize = 18.sp,
                                             fontWeight = FontWeight.ExtraBold
                                         )
                                     } else {
                                         Text(
                                             "Increment " + ((item.incrementIndex ?: 0) + 1),
-                                            color = FifthHistoricalSecondary,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.Bold
                                         )
                                         Text(
                                             "Date: " + formatFifthHistoricalDate(item.date),
-                                            color = FifthHistoricalText,
+                                            color = MaterialTheme.colorScheme.onBackground,
                                             fontSize = 13.sp
                                         )
                                         Text(
                                             "5th CPC Basic Pay: " + formatFifthHistoricalCurrency(item.pay),
-                                            color = FifthHistoricalBlue,
+                                            color = MaterialTheme.colorScheme.primary,
                                             fontSize = 18.sp,
                                             fontWeight = FontWeight.ExtraBold
                                         )
@@ -334,7 +334,7 @@ fun FifthCpcHistoricalIncrementSection(
                 onClick = { editingEventIdentity = null; showEventSection = true },
                 enabled = currentScale != null && currentPay > 0,
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = FifthHistoricalBlue),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Add 5th CPC Event", fontWeight = FontWeight.Bold)
@@ -342,9 +342,9 @@ fun FifthCpcHistoricalIncrementSection(
         }
 
         if (showEventSection && currentScale != null) {
-            Card(
+            ElevatedCard(
                 Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(Color.White),
+                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(18.dp)
             ) {
                 Column(Modifier.padding(14.dp)) {
@@ -354,7 +354,7 @@ fun FifthCpcHistoricalIncrementSection(
                     ) {
                         Text(
                             "5th CPC Event",
-                            color = FifthHistoricalBlue,
+                            color = MaterialTheme.colorScheme.primary,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
@@ -404,7 +404,7 @@ fun FifthCpcHistoricalIncrementSection(
             },
             enabled = canAdd,
             modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = FifthHistoricalBlue),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
             shape = RoundedCornerShape(12.dp)
         ) {
             Text(if (nextDate != null && nextDate > endDate) "01 January 2006 Reached" else "5th CPC Next Increment", fontWeight = FontWeight.Bold)
@@ -413,16 +413,16 @@ fun FifthCpcHistoricalIncrementSection(
         if (nextDate != null && nextDate > endDate) {
             Text(
                 "The 5th CPC timeline has reached the 01 January 2006 boundary. The next stage is the 5th CPC → 6th CPC fixation.",
-                color = FifthHistoricalSecondary, fontSize = 12.sp
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp
             )
         }
 
         if (currentDate >= endDate || (nextDate != null && nextDate > endDate)) {
             val mappedScale = currentScale
             if (mappedScale != null) {
-                Card(
+                ElevatedCard(
                     Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(Color(0xFFEAF5FC)),
+                    colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                     shape = RoundedCornerShape(18.dp)
                 ) {
                     Column(
@@ -431,13 +431,13 @@ fun FifthCpcHistoricalIncrementSection(
                     ) {
                         Text(
                             "5th CPC → 6th CPC",
-                            color = FifthHistoricalBlue,
+                            color = MaterialTheme.colorScheme.primary,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.ExtraBold
                         )
                         Text(
                             "The 5th CPC journey has reached the 01 January 2006 boundary. Continue with the existing 5th CPC → 6th CPC implementation using the final 5th CPC pay position.",
-                            color = FifthHistoricalSecondary,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.sp
                         )
                         if (omAdjustment == null && omEligible) {
@@ -446,7 +446,7 @@ fun FifthCpcHistoricalIncrementSection(
                         Button(
                             onClick = { continuationState = continuationState.copy(visible = true) },
                             modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = FifthHistoricalBlue),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Text("Continue to 6th CPC", fontWeight = FontWeight.Bold)

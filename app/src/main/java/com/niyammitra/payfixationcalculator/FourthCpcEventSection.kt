@@ -33,9 +33,16 @@ fun FourthCpcEventSection(
             TextButton(onClick = onCancel) { Text("Cancel Draft") }
         }
         OutlinedButton(onClick = { picker = true }, modifier = Modifier.fillMaxWidth()) { Text(eventDate?.let(::fourthEventDate) ?: "Select Event Date") }
-        Box {
-            OutlinedButton(onClick = { menu = true }, modifier = Modifier.fillMaxWidth()) { Text(target?.let { it.grade + ": " + it.existingScale } ?: "Select higher 4th CPC scale") }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+        ExposedDropdownMenuBox(expanded = menu, onExpandedChange = { menu = it }, modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = target?.let { it.grade + ": " + it.existingScale } ?: "Select higher 4th CPC scale",
+                onValueChange = {},
+                readOnly = true,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menu) },
+                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+            )
+            ExposedDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 FourthToFifthCpcData.scales.filter { it.grade != currentScale.grade }.forEach { s ->
                     DropdownMenuItem(
                         text = { Text(s.grade + ": " + s.existingScale + if (s.existingStages.isEmpty()) " (progression unavailable)" else "") },
@@ -46,8 +53,8 @@ fun FourthCpcEventSection(
             }
         }
         when (eventPosition) {
-            is FourthCpcEventPositionResolution.Unresolved -> Text(eventPosition.message, color = androidx.compose.ui.graphics.Color(0xFFC62828), fontSize = 12.sp)
-            else -> target?.progressionNote?.let { Text(it, color = androidx.compose.ui.graphics.Color(0xFFC62828), fontSize = 12.sp) }
+            is FourthCpcEventPositionResolution.Unresolved -> Text(eventPosition.message, color = androidx.compose.material3.MaterialTheme.colorScheme.error, fontSize = 12.sp)
+            else -> target?.progressionNote?.let { Text(it, color = androidx.compose.material3.MaterialTheme.colorScheme.error, fontSize = 12.sp) }
         }
         Button(onClick = {
             when (val resolved = eventPosition) {

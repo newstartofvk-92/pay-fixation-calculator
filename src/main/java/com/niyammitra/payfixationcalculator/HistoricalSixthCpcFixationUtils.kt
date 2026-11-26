@@ -1,6 +1,7 @@
 package com.niyammitra.payfixationcalculator
 
 import kotlin.math.ceil
+import kotlin.math.floor
 
 /**
  * Historical 6th CPC promotion/upgradation fixation for cases covered by Rule 5
@@ -96,8 +97,11 @@ object HistoricalSixthCpcFixationUtils {
     }
 
     /** 3% of basic pay, rounded up to the next multiple of Rs.10. */
-    private fun revisedPayIncrement(basicPay: Int): Int =
-        (ceil((basicPay * 0.03) / 10.0) * 10.0).toInt()
+    private fun revisedPayIncrement(basicPay: Int): Int {
+        val threePercent = basicPay * 0.03
+        val wholeRupeeIncrement = floor(threePercent).toInt()
+        return (ceil(wholeRupeeIncrement / 10.0) * 10.0).toInt()
+    }
 
     private fun nextJulyOnOrAfterEvent(eventDate: Long): Long {
         return java.util.Calendar.getInstance().apply {

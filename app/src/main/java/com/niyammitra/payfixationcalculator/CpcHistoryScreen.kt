@@ -50,6 +50,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.FileOutputStream
+import java.io.IOException
+import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -86,7 +88,6 @@ fun SaveCompleteJourneyButton(
             payload = CompleteJourneyPayload(assignJourneyApplicationSequence(snapshot.copy(sequenceIntegrity = sequenceIntegrity)))
         ))
         android.widget.Toast.makeText(context, "Pay fixation saved to history", android.widget.Toast.LENGTH_SHORT).show()
-        (context as? android.app.Activity)?.let { HistoryInterstitialAd.showIfDue(it) {} }
         showDialog = false
     }
 
@@ -169,11 +170,12 @@ fun CpcHistoryScreen(
         val report = selected?.let(PayJourneyReportBuilder::build)
         if (uri != null && report != null) {
             val result = runCatching {
-                context.contentResolver.openOutputStream(uri)?.use { PayJourneyReportPdf.write(it, report) }
+                writeCpcHistoryPdf(context.contentResolver.openOutputStream(uri)) { output ->
+                    PayJourneyReportPdf.write(output, report)
+                }
             }
             if (result.isSuccess) {
                 android.widget.Toast.makeText(context, "PDF saved successfully", android.widget.Toast.LENGTH_SHORT).show()
-                (context as? android.app.Activity)?.let { HistoryInterstitialAd.showIfDue(it) {} }
             } else {
                 android.widget.Toast.makeText(context, "Could not save PDF: ${result.exceptionOrNull()?.localizedMessage ?: "unknown error"}", android.widget.Toast.LENGTH_LONG).show()
             }
@@ -257,6 +259,14 @@ fun CpcHistoryScreen(
             confirmButton = { TextButton(onClick = { onDelete(record.uniqueId); pendingDelete = null; if (selected?.uniqueId == record.uniqueId) selected = null }) { Text("Delete") } },
             dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } })
     }
+}
+
+internal fun writeCpcHistoryPdf(
+    outputStream: OutputStream?,
+    writeDocument: (OutputStream) -> Unit
+) {
+    val stream = outputStream ?: throw IOException("Could not open the selected file.")
+    stream.use(writeDocument)
 }
 
 private fun historyDate(millis: Long?): String = millis?.let { SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).format(Date(it)) } ?: "Date not recorded"

@@ -1,6 +1,7 @@
 package com.niyammitra.payfixationcalculator
 
 import kotlin.math.ceil
+import kotlin.math.floor
 
 enum class SixthCpcFinancialUpgradation { ACP, MACP }
 
@@ -121,9 +122,10 @@ fun calculateSixthCpcPromotionOrMacp(
     )
 }
 
-private fun calculateSixthCpcIncrement(payInPayBand: Int, gradePay: Int): Int {
+internal fun calculateSixthCpcIncrement(payInPayBand: Int, gradePay: Int): Int {
     val base = payInPayBand + gradePay
-    return (ceil((base * 0.03) / 10.0) * 10.0).toInt()
+    val wholeRupeeIncrement = floor(base * 0.03).toInt()
+    return (ceil(wholeRupeeIncrement / 10.0) * 10.0).toInt()
 }
 
 fun bandForGradePay(gradePay: Int): SixthCpcPayBand = SixthToSeventhCpcData.payBands.firstOrNull { gradePay in it.gradePays }

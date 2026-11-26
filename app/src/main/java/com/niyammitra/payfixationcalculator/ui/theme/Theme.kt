@@ -12,25 +12,47 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = NiyamPrimary,
+    onPrimary = NiyamOnPrimary,
+    primaryContainer = NiyamPrimaryContainer,
+    onPrimaryContainer = NiyamOnPrimaryContainer,
+    secondary = NiyamSecondary,
+    onSecondary = NiyamOnSecondary,
+    secondaryContainer = NiyamSecondaryContainer,
+    onSecondaryContainer = NiyamOnSecondaryContainer,
+    tertiary = NiyamTertiary,
+    onTertiary = NiyamOnTertiary,
+    tertiaryContainer = NiyamTertiaryContainer,
+    onTertiaryContainer = NiyamOnTertiaryContainer,
+    background = NiyamOnSurfaceVariant,
+    onBackground = NiyamSurface,
+    surface = NiyamOnSurfaceVariant,
+    onSurface = NiyamSurface,
+    surfaceVariant = NiyamOnSurface,
+    onSurfaceVariant = NiyamSurfaceVariant,
+    outline = NiyamOutline
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primary = NiyamPrimary,
+    onPrimary = NiyamOnPrimary,
+    primaryContainer = NiyamPrimaryContainer,
+    onPrimaryContainer = NiyamOnPrimaryContainer,
+    secondary = NiyamSecondary,
+    onSecondary = NiyamOnSecondary,
+    secondaryContainer = NiyamSecondaryContainer,
+    onSecondaryContainer = NiyamOnSecondaryContainer,
+    tertiary = NiyamTertiary,
+    onTertiary = NiyamOnTertiary,
+    tertiaryContainer = NiyamTertiaryContainer,
+    onTertiaryContainer = NiyamOnTertiaryContainer,
+    background = NiyamBackground,
+    onBackground = NiyamOnBackground,
+    surface = NiyamSurface,
+    onSurface = NiyamOnSurface,
+    surfaceVariant = NiyamSurfaceVariant,
+    onSurfaceVariant = NiyamOnSurfaceVariant,
+    outline = NiyamOutline
 )
 
 @Composable

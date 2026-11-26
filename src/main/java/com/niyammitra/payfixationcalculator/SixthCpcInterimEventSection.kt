@@ -13,6 +13,7 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.ceil
+import kotlin.math.floor
 
 private val InterimBlue = Color(0xFF1769AA)
 private val InterimText = Color(0xFF172B4D)
@@ -85,7 +86,9 @@ private fun calculateInterimEvent(
     )
 
     val incrementBase = payInBandBeforeEvent + conversion.gradePay
-    val fixationIncrement = (ceil((incrementBase * 0.03) / 10.0) * 10.0).toInt()
+    val threePercent = incrementBase * 0.03
+    val wholeRupeeIncrement = floor(threePercent).toInt()
+    val fixationIncrement = (ceil(wholeRupeeIncrement / 10.0) * 10.0).toInt()
     val incrementedPayInBand = payInBandBeforeEvent + fixationIncrement
     val fixedPayInBand = maxOf(incrementedPayInBand, targetScale.payBandMinimum)
     val revisedBasicPay = fixedPayInBand + targetScale.gradePay

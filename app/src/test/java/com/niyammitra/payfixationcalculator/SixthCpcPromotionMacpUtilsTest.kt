@@ -178,6 +178,54 @@ class SixthCpcPromotionMacpUtilsTest {
         assertEquals(calendarDateAtMidnight(2016, Calendar.JULY, 1), result.nextIncrementDate)
     }
 
+    @Test
+    fun incrementOfThreePercentOfTenThousandThreeHundredFortyIsThreeHundredTen() {
+        assertEquals(310, calculateSixthCpcIncrement(payInPayBand = 8_540, gradePay = 1_800))
+        assertEquals(10_650, calculateSixthCpcNextIncrement(
+            payInPayBand = 8_540,
+            gradePay = 1_800,
+            payBandMaximum = 20_200
+        ))
+    }
+
+    @Test
+    fun promotionAndMacpPathsUseWholeRupeeFloorBeforeRounding() {
+        val eventDate = calendarDate(2012, Calendar.MARCH, 15)
+        val promotion = calculateSixthCpcPromotionOrMacp(
+            payInPayBand = 8_540,
+            currentGradePay = 1_800,
+            targetGradePay = 1_900,
+            eventDate = eventDate,
+            eventType = "Promotion"
+        )
+        assertEquals(310, promotion.increment)
+        assertEquals(8_850, promotion.newPayInPayBand)
+
+        val macpFromEvent = calculateSixthCpcPromotionOrMacp(
+            payInPayBand = 8_540,
+            currentGradePay = 1_800,
+            targetGradePay = 12_000,
+            eventDate = calendarDate(2012, Calendar.SEPTEMBER, 1),
+            eventType = "Financial Upgradation",
+            fixationOption = SixthCpcFixationOption.FROM_EVENT_DATE,
+            financialUpgradation = SixthCpcFinancialUpgradation.MACP
+        )
+        assertEquals(310, macpFromEvent.increment)
+        assertEquals(1_900, macpFromEvent.newGradePay)
+
+        val macpFromDni = calculateSixthCpcPromotionOrMacp(
+            payInPayBand = 8_540,
+            currentGradePay = 1_800,
+            targetGradePay = 12_000,
+            eventDate = calendarDate(2012, Calendar.MARCH, 15),
+            eventType = "Financial Upgradation",
+            fixationOption = SixthCpcFixationOption.FROM_DNI,
+            financialUpgradation = SixthCpcFinancialUpgradation.MACP
+        )
+        assertEquals(630, macpFromDni.increment)
+        assertEquals(9_170, macpFromDni.newPayInPayBand)
+    }
+
     private fun calendarDateAtMidnight(year: Int, month: Int, day: Int): Long = Calendar.getInstance().apply {
         clear()
         set(year, month, day, 0, 0, 0)

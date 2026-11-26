@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.sp
 import java.text.SimpleDateFormat
 import java.util.*
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FifthCpcEventSection(
     currentPay: Int,
@@ -114,11 +115,16 @@ fun FifthCpcEventSection(
             }
         }
 
-        Box {
-            OutlinedButton(onClick = { menuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                Text(targetScale?.let { it.payBand + ": " + it.title } ?: "Select higher 5th CPC scale")
-            }
-            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+        ExposedDropdownMenuBox(expanded = menuExpanded, onExpandedChange = { menuExpanded = it }, modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = targetScale?.let { it.payBand + ": " + it.title } ?: "Select higher 5th CPC scale",
+                onValueChange = {},
+                readOnly = true,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuExpanded) },
+                modifier = Modifier.menuAnchor().fillMaxWidth(),
+                colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+            )
+            ExposedDropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                 FifthToSixthCpcData.scales
                     .filter { it.title != currentScale.title }
                     .filter { target ->

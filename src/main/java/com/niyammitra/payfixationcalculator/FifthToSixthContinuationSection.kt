@@ -15,6 +15,7 @@ import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.math.ceil
+import kotlin.math.floor
 
 private val ContinuationBlue = Color(0xFF1769AA)
 private val ContinuationText = Color(0xFF172B4D)
@@ -197,7 +198,11 @@ private fun calculateInterimSixthFixation(eventDate: Long, oldPayInBand: Int, ol
     }
 }
 
-private fun sixthInterimIncrement(basicPay: Int): Int = (ceil((basicPay * 0.03) / 10.0) * 10.0).toInt()
+private fun sixthInterimIncrement(basicPay: Int): Int {
+    val threePercent = basicPay * 0.03
+    val wholeRupeeIncrement = floor(threePercent).toInt()
+    return (ceil(wholeRupeeIncrement / 10.0) * 10.0).toInt()
+}
 private fun nextInterimJulyAfter(date: Long): Long = Calendar.getInstance().apply { timeInMillis = date; val year = get(Calendar.YEAR); set(year, Calendar.JULY, 1, 0, 0, 0); if (timeInMillis <= date) add(Calendar.YEAR, 1) }.timeInMillis
 private fun parseInlineDate(value: String): Long? = runCatching { SimpleDateFormat("dd/MM/yyyy", Locale.ENGLISH).apply { isLenient = false }.parse(value)?.time }.getOrNull()
 private fun interimSixthStartDate(): Long = Calendar.getInstance().apply { clear(); set(2006, Calendar.JANUARY, 1) }.timeInMillis

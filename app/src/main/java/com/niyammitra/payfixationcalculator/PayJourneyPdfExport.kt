@@ -30,7 +30,6 @@ fun ExportPayJourneyPdf(
                 context.contentResolver.openOutputStream(uri)?.use { PayJourneyPdf.write(it, lines, title) }
                     ?: throw IOException("Could not open the selected file.")
                 Toast.makeText(context, "PDF saved successfully", Toast.LENGTH_SHORT).show()
-                (context as? android.app.Activity)?.let { HistoryInterstitialAd.showIfDue(it) {} }
             } catch (error: Exception) {
                 Toast.makeText(context, "Could not save PDF: ${error.localizedMessage ?: "unknown error"}", Toast.LENGTH_LONG).show()
             }
