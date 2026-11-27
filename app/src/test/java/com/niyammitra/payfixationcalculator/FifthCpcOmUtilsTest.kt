@@ -226,7 +226,8 @@ class FifthCpcOmUtilsTest {
 
         assertEquals(8_575, event.upstreamPay)
         assertEquals(8_825, event.feederIncrementedPay)
-        assertEquals(9_025, event.fixedPay)
+        val expectedFixedPay = if (option == "From DNI") 9_250 else 9_025
+        assertEquals(expectedFixedPay, event.fixedPay)
         assertEquals(adjustment, event.appliedOmAdjustment)
         val finalEventPay = event.fixedPay!!
 

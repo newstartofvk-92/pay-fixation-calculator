@@ -70,7 +70,7 @@ fun FifthCpcEventSection(
             }
         }
         Text(
-            "For a promotion/ACP in the 5th CPC period, one increment is allowed in the feeder scale and pay is then fixed at the equal or next higher stage in the higher scale.",
+            "For a promotion/ACP from event date, one increment is allowed in the feeder scale. If fixation is opted from DNI, the employee receives their normal annual increment plus the promotional increment in the feeder scale before placement in the higher scale.",
             fontSize = 12.sp
         )
 
@@ -155,7 +155,14 @@ fun FifthCpcEventSection(
                     eventFixation?.appliedOmAdjustment?.let { adjustment ->
                         Text("OM special increment effective ${formatFifthEventDate(adjustment.incrementDateMillis)} is included before this event (normal DNI ${formatFifthEventDate(adjustment.normalDniMillis)}).", fontSize = 12.sp)
                     }
-                    Text(if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") "Placement without feeder-scale increment" else "One feeder-scale increment: ₹" + feederIncrementedPay)
+                    if (eventFixation?.secondFeederIncrementedPay != null) {
+                        Text("First feeder-scale increment (Annual DNI): ₹" + eventFixation.feederIncrementedPay)
+                        Text("Second feeder-scale increment (Promotional): ₹" + eventFixation.secondFeederIncrementedPay)
+                    } else if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") {
+                        Text("Placement without feeder-scale increment")
+                    } else {
+                        Text("One feeder-scale increment: ₹" + feederIncrementedPay)
+                    }
                     Text("Pay fixed in higher scale: ₹" + fixedPay)
                     Text("Event date: " + (eventDate?.let(::formatFifthEventDate) ?: "Not selected"))
                     Text("Fixation implemented from: " + (implementationDate?.let(::formatFifthEventDate) ?: "Not selected"))
@@ -220,10 +227,17 @@ fun FifthCpcEventSection(
 internal data class FifthCpcEventPayFixation(
     val upstreamPay: Int,
     val feederIncrementedPay: Int,
+    val secondFeederIncrementedPay: Int? = null,
     val placementBasePay: Int,
     val fixedPay: Int?,
     val appliedOmAdjustment: FifthCpcOmAdjustmentSnapshot?
 )
+
+internal fun isTwoIncrementDniEvent(eventType: String, implementationOption: String): Boolean {
+    if (!implementationOption.equals("From DNI", ignoreCase = true)) return false
+    val normalized = eventType.trim().uppercase().replace('_', ' ')
+    return normalized == "PROMOTION" || normalized == "ACP" || normalized == "FINANCIAL UPGRADATION"
+}
 
 /** Applies a qualifying Jan 1 OM position before an event whose fixation date is later. */
 internal fun calculateFifthCpcEventFixation(
@@ -244,12 +258,23 @@ internal fun calculateFifthCpcEventFixation(
     val implementationDate = if (implementationOption == "From DNI") currentDni else eventDate
     val appliedOm = omAdjustment?.takeIf { implementationDate != null && implementationDate > it.incrementDateMillis }
     val upstreamPay = appliedOm?.adjustedBasicPay ?: currentPay
-    val feederPay = parseFifthCpcScaleStagesForEvent(currentScale.title).firstOrNull { it > upstreamPay } ?: upstreamPay
+    val stages = parseFifthCpcScaleStagesForEvent(currentScale.title)
+    val firstFeederPay = stages.firstOrNull { it > upstreamPay } ?: upstreamPay
+    val secondFeederPay = if (isTwoIncrementDniEvent(eventType, implementationOption)) {
+        stages.firstOrNull { it > firstFeederPay } ?: firstFeederPay
+    } else null
     val targetStages = parseFifthCpcScaleStagesForEvent(targetScale.title)
-    val fixedPay = targetStages.takeIf { it.isNotEmpty() }?.let { stages ->
-        stages.firstOrNull { it >= placementBasePay }
+    val fixedPay = targetStages.takeIf { it.isNotEmpty() }?.let { stagesList ->
+        stagesList.firstOrNull { it >= placementBasePay }
     }
-    return FifthCpcEventPayFixation(upstreamPay, feederPay, placementBasePay, fixedPay, appliedOm)
+    return FifthCpcEventPayFixation(
+        upstreamPay = upstreamPay,
+        feederIncrementedPay = firstFeederPay,
+        secondFeederIncrementedPay = secondFeederPay,
+        placementBasePay = placementBasePay,
+        fixedPay = fixedPay,
+        appliedOmAdjustment = appliedOm
+    )
 }
 
 private fun calculateFifthCpcEventPlacementBasePay(
@@ -267,7 +292,12 @@ private fun calculateFifthCpcEventPlacementBasePay(
         ?.takeIf { implementationDate != null && implementationDate > it.incrementDateMillis }
         ?.adjustedBasicPay ?: currentPay
     if (eventType == "Scale Upgradation" && placementMethod == "Next Higher Without Increment") return upstreamPay
-    return parseFifthCpcScaleStagesForEvent(currentScale.title).firstOrNull { it > upstreamPay } ?: upstreamPay
+    val stages = parseFifthCpcScaleStagesForEvent(currentScale.title)
+    val firstStage = stages.firstOrNull { it > upstreamPay } ?: upstreamPay
+    if (isTwoIncrementDniEvent(eventType, implementationOption)) {
+        return stages.firstOrNull { it > firstStage } ?: firstStage
+    }
+    return firstStage
 }
 
 internal fun isEligibleFifthCpcEventTargetScale(targetScale: FifthCpcScale, placementBasePay: Int): Boolean =

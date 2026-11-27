@@ -328,6 +328,281 @@ class FifthCpcJourneyReplayTest {
         assertEquals(replay.pay, report.finalPosition?.basicPay)
     }
 
+    @Test
+    fun promotionFromDniCoincidingWithDniAppliesTwoIncrementBenefitAndAdvancesToNextYear() {
+        val feederScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 5000-150-8000" }
+        val promotedScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 5500-175-9000" }
+        val startDate = date(2002, Calendar.FEBRUARY, 1)
+        val dniDate = date(2003, Calendar.FEBRUARY, 1)
+        val promotionDate = date(2003, Calendar.FEBRUARY, 1)
+        val startingPay = 6_050
+
+        // 1. Direct fixation calculation verification
+        val fixation = calculateFifthCpcEventFixation(
+            currentPay = startingPay,
+            currentScale = feederScale,
+            targetScale = promotedScale,
+            eventType = "Promotion",
+            placementMethod = "Next Higher After Increment",
+            implementationOption = "From DNI",
+            eventDate = promotionDate,
+            currentDni = dniDate,
+            omAdjustment = null
+        )
+
+        assertEquals(6_050, fixation.upstreamPay)
+        assertEquals(6_200, fixation.feederIncrementedPay)
+        assertEquals(6_350, fixation.secondFeederIncrementedPay)
+        assertEquals(6_350, fixation.placementBasePay)
+        assertEquals(6_375, fixation.fixedPay)
+
+        // 2. Journey replay verification
+        val event = FifthCpcHistoricalEventStep(
+            type = "Promotion",
+            scale = promotedScale.title,
+            pay = startingPay,
+            eventDate = promotionDate,
+            implementationDate = promotionDate,
+            dniDate = date(2004, Calendar.FEBRUARY, 1),
+            placementMethod = "Next Higher After Increment",
+            implementationOption = "From DNI",
+            sequence = 1
+        )
+        val replay = replayFifthCpcJourney(
+            initialPay = startingPay,
+            initialScale = feederScale,
+            initialDate = startDate,
+            initialDni = dniDate,
+            increments = emptyList(),
+            events = listOf(event),
+            sequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
+        )
+
+        assertEquals(6_375, replay.pay)
+        assertEquals(promotedScale.title, replay.scale.title)
+        assertEquals(promotionDate, replay.date)
+        assertEquals(date(2004, Calendar.FEBRUARY, 1), replay.dni)
+        assertEquals(promotionDate, replay.events.single().implementationDate)
+        assertEquals(6_375, replay.events.single().pay)
+        assertEquals(date(2004, Calendar.FEBRUARY, 1), replay.events.single().dniDate)
+
+        // 3. Subsequent annual increment on 01.02.2004
+        val subsequentIncrement = FifthCpcHistoricalIncrementStep(
+            pay = 0,
+            date = date(2004, Calendar.FEBRUARY, 1),
+            sequence = 2
+        )
+        val replayWithIncrement = replayFifthCpcJourney(
+            initialPay = startingPay,
+            initialScale = feederScale,
+            initialDate = startDate,
+            initialDni = dniDate,
+            increments = listOf(subsequentIncrement),
+            events = listOf(event),
+            sequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
+        )
+
+        assertEquals(6_550, replayWithIncrement.pay)
+        assertEquals(promotedScale.title, replayWithIncrement.scale.title)
+        assertEquals(date(2004, Calendar.FEBRUARY, 1), replayWithIncrement.date)
+        assertEquals(date(2005, Calendar.FEBRUARY, 1), replayWithIncrement.dni)
+        assertEquals(6_550, replayWithIncrement.increments.single().pay)
+        assertEquals(date(2004, Calendar.FEBRUARY, 1), replayWithIncrement.increments.single().date)
+    }
+
+    @Test
+    fun promotionFromDniPrecedingDniAppliesTwoIncrementBenefitOnDni() {
+        val feederScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 5000-150-8000" }
+        val promotedScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 5500-175-9000" }
+        val startDate = date(2002, Calendar.FEBRUARY, 1)
+        val dniDate = date(2003, Calendar.FEBRUARY, 1)
+        val promotionDate = date(2002, Calendar.AUGUST, 15)
+        val startingPay = 6_050
+
+        val fixation = calculateFifthCpcEventFixation(
+            currentPay = startingPay,
+            currentScale = feederScale,
+            targetScale = promotedScale,
+            eventType = "Promotion",
+            placementMethod = "Next Higher After Increment",
+            implementationOption = "From DNI",
+            eventDate = promotionDate,
+            currentDni = dniDate,
+            omAdjustment = null
+        )
+
+        assertEquals(6_200, fixation.feederIncrementedPay)
+        assertEquals(6_350, fixation.secondFeederIncrementedPay)
+        assertEquals(6_375, fixation.fixedPay)
+
+        val event = FifthCpcHistoricalEventStep(
+            type = "Promotion",
+            scale = promotedScale.title,
+            pay = startingPay,
+            eventDate = promotionDate,
+            implementationDate = dniDate,
+            dniDate = date(2004, Calendar.FEBRUARY, 1),
+            placementMethod = "Next Higher After Increment",
+            implementationOption = "From DNI",
+            sequence = 1
+        )
+        val replay = replayFifthCpcJourney(
+            initialPay = startingPay,
+            initialScale = feederScale,
+            initialDate = startDate,
+            initialDni = dniDate,
+            increments = emptyList(),
+            events = listOf(event),
+            sequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
+        )
+
+        assertEquals(6_375, replay.pay)
+        assertEquals(dniDate, replay.date)
+        assertEquals(date(2004, Calendar.FEBRUARY, 1), replay.dni)
+    }
+
+    @Test
+    fun acpFromDniAppliesTwoIncrementBenefitUnderFr221a1() {
+        val feederScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 5000-150-8000" }
+        val targetScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 5500-175-9000" }
+        val fixation = calculateFifthCpcEventFixation(
+            currentPay = 6_050,
+            currentScale = feederScale,
+            targetScale = targetScale,
+            eventType = "ACP",
+            placementMethod = "Next Higher After Increment",
+            implementationOption = "From DNI",
+            eventDate = date(2003, Calendar.FEBRUARY, 1),
+            currentDni = date(2003, Calendar.FEBRUARY, 1),
+            omAdjustment = null
+        )
+
+        assertEquals(6_200, fixation.feederIncrementedPay)
+        assertEquals(6_350, fixation.secondFeederIncrementedPay)
+        assertEquals(6_375, fixation.fixedPay)
+    }
+
+    @Test
+    fun scaleUpgradationFromDniDoesNotApplyTwoIncrementBenefit() {
+        val feederScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 5000-150-8000" }
+        val targetScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 5500-175-9000" }
+
+        val withoutIncrement = calculateFifthCpcEventFixation(
+            currentPay = 6_050,
+            currentScale = feederScale,
+            targetScale = targetScale,
+            eventType = "Scale Upgradation",
+            placementMethod = "Next Higher Without Increment",
+            implementationOption = "From DNI",
+            eventDate = date(2003, Calendar.FEBRUARY, 1),
+            currentDni = date(2003, Calendar.FEBRUARY, 1),
+            omAdjustment = null
+        )
+        assertNull(withoutIncrement.secondFeederIncrementedPay)
+        assertEquals(6_050, withoutIncrement.placementBasePay)
+        assertEquals(6_200, withoutIncrement.fixedPay)
+
+        val afterIncrement = calculateFifthCpcEventFixation(
+            currentPay = 6_050,
+            currentScale = feederScale,
+            targetScale = targetScale,
+            eventType = "Scale Upgradation",
+            placementMethod = "Next Higher After Increment",
+            implementationOption = "From DNI",
+            eventDate = date(2003, Calendar.FEBRUARY, 1),
+            currentDni = date(2003, Calendar.FEBRUARY, 1),
+            omAdjustment = null
+        )
+        assertNull(afterIncrement.secondFeederIncrementedPay)
+        assertEquals(6_200, afterIncrement.placementBasePay)
+        assertEquals(6_200, afterIncrement.fixedPay)
+    }
+
+    @Test
+    fun promotionFromEventDatePreservesSingleIncrementFixation() {
+        val feederScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 5000-150-8000" }
+        val promotedScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 5500-175-9000" }
+        val fixation = calculateFifthCpcEventFixation(
+            currentPay = 6_050,
+            currentScale = feederScale,
+            targetScale = promotedScale,
+            eventType = "Promotion",
+            placementMethod = "Next Higher After Increment",
+            implementationOption = "From Event Date",
+            eventDate = date(2003, Calendar.FEBRUARY, 1),
+            currentDni = date(2003, Calendar.FEBRUARY, 1),
+            omAdjustment = null
+        )
+
+        assertEquals(6_200, fixation.feederIncrementedPay)
+        assertNull(fixation.secondFeederIncrementedPay)
+        assertEquals(6_200, fixation.placementBasePay)
+        assertEquals(6_200, fixation.fixedPay)
+    }
+
+    @Test
+    fun editingAndDeletingFromDniPromotionReplaysCorrectly() {
+        val feederScale = FifthToSixthCpcData.scales.first { it.title == "Rs. 5000-150-8000" }
+        val firstTarget = FifthToSixthCpcData.scales.first { it.title == "Rs. 5500-175-9000" }
+        val secondTarget = FifthToSixthCpcData.scales.first { it.title == "Rs. 6500-200-10500" }
+        val startDate = date(2002, Calendar.FEBRUARY, 1)
+        val dniDate = date(2003, Calendar.FEBRUARY, 1)
+        val startingPay = 6_050
+
+        val originalEvent = FifthCpcHistoricalEventStep(
+            type = "Promotion",
+            scale = firstTarget.title,
+            pay = 6_375,
+            eventDate = dniDate,
+            implementationDate = dniDate,
+            dniDate = date(2004, Calendar.FEBRUARY, 1),
+            placementMethod = "Next Higher After Increment",
+            implementationOption = "From DNI",
+            sequence = 1
+        )
+        val replayOriginal = replayFifthCpcJourney(
+            initialPay = startingPay,
+            initialScale = feederScale,
+            initialDate = startDate,
+            initialDni = dniDate,
+            increments = emptyList(),
+            events = listOf(originalEvent),
+            sequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
+        )
+        assertEquals(6_375, replayOriginal.pay)
+
+        // Edit to higher scale Rs. 6500-200-10500
+        val editedEvent = originalEvent.copy(scale = secondTarget.title)
+        val rows = upsertFifthCpcHistoricalEvent(listOf(originalEvent), editedEvent, originalEvent.eventIdentity, 2)
+        val replayEdited = replayFifthCpcJourney(
+            initialPay = startingPay,
+            initialScale = feederScale,
+            initialDate = startDate,
+            initialDni = dniDate,
+            increments = emptyList(),
+            events = rows,
+            sequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
+        )
+        // In Rs. 6500-200-10500, minimum is 6500, which is >= 6350, so fixed pay is 6500
+        assertEquals(6_500, replayEdited.pay)
+        assertEquals(secondTarget.title, replayEdited.scale.title)
+
+        // Delete event and verify replay reverts to feeder scale
+        val remaining = deleteFifthCpcHistoricalEvent(rows, originalEvent.eventIdentity)
+        val replayDeleted = replayFifthCpcJourney(
+            initialPay = startingPay,
+            initialScale = feederScale,
+            initialDate = startDate,
+            initialDni = dniDate,
+            increments = emptyList(),
+            events = remaining,
+            sequenceIntegrity = CpcSequenceIntegrity.ORIGINAL
+        )
+        assertEquals(6_050, replayDeleted.pay)
+        assertEquals(feederScale.title, replayDeleted.scale.title)
+        assertEquals(dniDate, replayDeleted.dni)
+    }
+
     private fun replay(
         increments: List<FifthCpcHistoricalIncrementStep>,
         events: List<FifthCpcHistoricalEventStep>,
